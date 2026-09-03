@@ -5,6 +5,8 @@ import { Type } from "typebox";
 import type { SessionStore } from "./store.ts";
 
 export interface CreateSessionToolsOptions {
+  /** 默认不重复暴露当前上下文；调试或特殊工作流可显式启用。 */
+  includeContextTool?: boolean;
   /**
    * 当前 Agent 所绑定的 Session。
    */
@@ -32,7 +34,7 @@ export interface CreateSessionToolsOptions {
  *
  * - search_session
  * - read_session
- * - get_session_context
+ * - get_session_context（显式启用时）
  */
 export function createSessionTools(
   store: SessionStore,
@@ -76,6 +78,7 @@ export function createSessionTools(
 
       const hits = await store.search(params.query, {
         sessionId,
+        signal,
 
         limit: params.limit ?? searchLimit,
       });
@@ -314,7 +317,9 @@ export function createSessionTools(
     },
   };
 
-  return [searchSessionTool, readSessionTool, getSessionContextTool];
+  return options.includeContextTool
+    ? [searchSessionTool, readSessionTool, getSessionContextTool]
+    : [searchSessionTool, readSessionTool];
 }
 
 function formatMessage(message: AgentMessage): string {

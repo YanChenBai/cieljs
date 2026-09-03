@@ -1,31 +1,23 @@
 import { fileURLToPath } from "node:url";
 
-import { PGlite } from "@electric-sql/pglite";
-import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import { vector as pgvector } from "@electric-sql/pglite-pgvector";
+import type { PGlite } from "@electric-sql/pglite";
+
+import { and, asc, between, desc, eq, gt, sql } from "drizzle-orm";
+import { migrate } from "drizzle-orm/pglite/migrator";
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 
-import { and, asc, between, cosineDistance, desc, eq, gt, sql } from "drizzle-orm";
+import { retrievalChunks, sessionCompactions, sessionMessages, sessions } from "./schema.ts";
 
-import { drizzle } from "drizzle-orm/pglite";
-
-import { migrate } from "drizzle-orm/pglite/migrator";
-
-import {
-  EMBEDDING_DIMENSIONS,
-  retrievalChunks,
-  retrievalEmbeddings,
-  sessionCompactions,
-  sessionMessages,
-  sessions,
-} from "./schema.ts";
-
-import { chunkSearchText, messageToSearchText, normalizeSearchText } from "./search.ts";
+import { chunkSearchText, messageToSearchText } from "./search.ts";
+import { getCompactionBoundary } from "./compaction.ts";
+import { createDatabase, type Database } from "./database.ts";
+import { EmbeddingIndex, validateEmbeddingProvider } from "./embedding-index.ts";
+import { SessionRetrieval } from "./retrieval.ts";
 
 import type {
   AppendCompactionInput,
-  EmbeddingProvider,
+  CompactionOptions,
   RawSearchHit,
   SearchHit,
   SearchOptions,
@@ -35,59 +27,27 @@ import type {
 
 const MIGRATIONS_FOLDER = fileURLToPath(new URL("../migrations/", import.meta.url));
 
-function createDatabase(dataDir: string) {
-  /**
-   * PGlite 必须在启动时加载 WASM extension。
-   */
-  const client = new PGlite(dataDir, {
-    extensions: {
-      vector: pgvector,
-      pg_trgm,
-    },
-  });
-
-  const db = drizzle({
-    client,
-  });
-
-  return {
-    client,
-    db,
-  };
-}
-
-type Database = ReturnType<typeof createDatabase>["db"];
-
 export class SessionStore {
   readonly db: Database;
 
   private readonly client: PGlite;
 
-  private readonly embedding: EmbeddingProvider | undefined;
+  private readonly embeddingIndex: EmbeddingIndex;
 
-  private readonly onIndexError: ((error: unknown) => void) | undefined;
+  private readonly retrieval: SessionRetrieval;
 
-  /**
-   * Embedding 是派生索引，
-   * 用队列保证顺序并允许 close() flush。
-   */
-  private indexingQueue: Promise<void> = Promise.resolve();
+  private readonly compactions = new Map<string, Promise<void>>();
 
   private constructor(client: PGlite, db: Database, options: SessionStoreOptions) {
     this.client = client;
     this.db = db;
 
-    this.embedding = options.embedding;
-
-    this.onIndexError = options.onIndexError;
+    this.embeddingIndex = new EmbeddingIndex(db, options);
+    this.retrieval = new SessionRetrieval(db, this.embeddingIndex);
   }
 
   static async open(options: SessionStoreOptions): Promise<SessionStore> {
-    if (options.embedding && options.embedding.dimensions !== EMBEDDING_DIMENSIONS) {
-      throw new Error(
-        `Embedding dimensions mismatch: expected ${EMBEDDING_DIMENSIONS}, received ${options.embedding.dimensions}`,
-      );
-    }
+    validateEmbeddingProvider(options.embedding);
 
     const { client, db } = createDatabase(options.dataDir);
 
@@ -167,6 +127,7 @@ export class SessionStore {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
+    await this.flushIndexes();
     await this.db.delete(sessions).where(eq(sessions.id, sessionId));
   }
 
@@ -253,8 +214,8 @@ export class SessionStore {
     /**
      * Vector indexing 不属于事实写入。
      */
-    if (this.embedding && result.chunks.length) {
-      this.enqueueEmbedding(
+    if (result.chunks.length) {
+      this.embeddingIndex.enqueue(
         result.chunks.map((chunk) => ({
           id: chunk.id,
 
@@ -267,11 +228,7 @@ export class SessionStore {
   }
 
   async getMessages(sessionId: string) {
-    return this.db
-      .select()
-      .from(sessionMessages)
-      .where(eq(sessionMessages.sessionId, sessionId))
-      .orderBy(asc(sessionMessages.seq));
+    return this.getMessagesAfter(sessionId, 0);
   }
 
   async getMessagesAfter(sessionId: string, afterSeq: number) {
@@ -301,46 +258,70 @@ export class SessionStore {
   }
 
   async appendCompaction(sessionId: string, input: AppendCompactionInput) {
+    if (!input.summary.trim()) {
+      throw new TypeError("压缩摘要不能为空");
+    }
     if (!Number.isSafeInteger(input.throughSeq) || input.throughSeq < 1) {
       throw new TypeError(`Invalid throughSeq: ${input.throughSeq}`);
     }
 
-    const lastMessage = await this.getLastMessage(sessionId);
+    return this.db.transaction(async (tx) => {
+      // 锁住会话行，使边界校验与摘要写入保持原子性。
+      const [session] = await tx
+        .update(sessions)
+        .set({ nextMessageSeq: sql`${sessions.nextMessageSeq}` })
+        .where(eq(sessions.id, sessionId))
+        .returning({ nextMessageSeq: sessions.nextMessageSeq });
 
-    if (!lastMessage) {
-      throw new Error("Cannot compact an empty session");
-    }
+      if (!session || session.nextMessageSeq === 1) {
+        throw new Error("Cannot compact an empty session");
+      }
 
-    if (input.throughSeq > lastMessage.seq) {
-      throw new Error(`throughSeq ${input.throughSeq} exceeds last message seq ${lastMessage.seq}`);
-    }
+      if (input.throughSeq >= session.nextMessageSeq) {
+        throw new Error(
+          `throughSeq ${input.throughSeq} exceeds last message seq ${session.nextMessageSeq - 1}`,
+        );
+      }
 
-    const latest = await this.getLatestCompaction(sessionId);
+      const [latest] = await tx
+        .select()
+        .from(sessionCompactions)
+        .where(eq(sessionCompactions.sessionId, sessionId))
+        .orderBy(desc(sessionCompactions.throughSeq))
+        .limit(1);
 
-    if (latest && input.throughSeq <= latest.throughSeq) {
-      throw new Error(
-        `Compaction must advance throughSeq: previous=${latest.throughSeq}, next=${input.throughSeq}`,
-      );
-    }
+      if (
+        input.expectedThroughSeq !== undefined &&
+        input.expectedThroughSeq !== (latest?.throughSeq ?? 0)
+      ) {
+        throw new Error("压缩期间摘要已更新，请基于最新摘要重试");
+      }
 
-    const [row] = await this.db
-      .insert(sessionCompactions)
-      .values({
-        id: crypto.randomUUID(),
+      if (latest && input.throughSeq <= latest.throughSeq) {
+        throw new Error(
+          `Compaction must advance throughSeq: previous=${latest.throughSeq}, next=${input.throughSeq}`,
+        );
+      }
 
-        sessionId,
+      const [row] = await tx
+        .insert(sessionCompactions)
+        .values({
+          id: crypto.randomUUID(),
 
-        throughSeq: input.throughSeq,
+          sessionId,
 
-        summary: input.summary,
-      })
-      .returning();
+          throughSeq: input.throughSeq,
 
-    if (!row) {
-      throw new Error("Failed to append compaction");
-    }
+          summary: input.summary,
+        })
+        .returning();
 
-    return row;
+      if (!row) {
+        throw new Error("Failed to append compaction");
+      }
+
+      return row;
+    });
   }
 
   async getLatestCompaction(sessionId: string) {
@@ -382,12 +363,7 @@ export class SessionStore {
     };
   }
 
-  /**
-   * Compactor 用这个。
-   *
-   * 和 getContext() 不同：
-   * 这里保留 seq。
-   */
+  /** 返回尚未压缩的消息行，供需要消息序号的历史检查工具使用。 */
   async getActiveMessageRows(sessionId: string) {
     const compaction = await this.getLatestCompaction(sessionId);
 
@@ -396,229 +372,72 @@ export class SessionStore {
       : this.getMessages(sessionId);
   }
 
-  async searchFullText(query: string, options: SearchOptions = {}): Promise<RawSearchHit[]> {
-    const limit = options.ftsLimit ?? options.limit ?? 20;
+  /** 压缩旧消息并保存累计摘要；原始消息与检索索引保持完整。 */
+  async compactSession(sessionId: string, options: CompactionOptions) {
+    const previous = this.compactions.get(sessionId) ?? Promise.resolve();
+    const operation = previous.then(async () => {
+      options.signal?.throwIfAborted();
+      const latest = await this.getLatestCompaction(sessionId);
+      const rows = await this.getMessagesAfter(sessionId, latest?.throughSeq ?? 0);
+      // 保留的旧消息可能携带压缩前的用量，只信任摘要写入后产生的用量。
+      const usageStartIndex = latest
+        ? rows.findIndex((row) => row.createdAt.getTime() > latest.createdAt.getTime())
+        : 0;
+      const boundary = getCompactionBoundary(
+        { summary: latest?.summary ?? null, messages: rows.map((row) => row.message) },
+        options,
+        usageStartIndex < 0 ? rows.length : usageStartIndex,
+      );
 
-    const normalized = normalizeSearchText(query);
+      if (!boundary) {
+        return null;
+      }
 
-    if (!normalized) {
-      return [];
+      const summary = await options.summarize({
+        sessionId,
+        summary: latest?.summary ?? null,
+        messages: rows.slice(0, boundary).map((row) => row.message),
+        signal: options.signal,
+      });
+
+      options.signal?.throwIfAborted();
+
+      return this.appendCompaction(sessionId, {
+        summary: summary.trim(),
+        throughSeq: rows[boundary - 1]!.seq,
+        expectedThroughSeq: latest?.throughSeq ?? 0,
+      });
+    });
+
+    // 后续请求继续串行执行；本次错误仍由调用方收到。
+    const settled = operation.then(
+      () => {},
+      () => {},
+    );
+    this.compactions.set(sessionId, settled);
+    try {
+      return await operation;
+    } finally {
+      if (this.compactions.get(sessionId) === settled) {
+        this.compactions.delete(sessionId);
+      }
     }
+  }
 
-    const tsQuery = sql`
-        websearch_to_tsquery(
-          'simple',
-          ${normalized}
-        )
-      `;
-
-    const rank = sql<number>`
-        ts_rank_cd(
-          to_tsvector(
-            'simple',
-            ${retrievalChunks.searchText}
-          ),
-          ${tsQuery}
-        )
-      `;
-
-    return this.db
-      .select({
-        chunkId: retrievalChunks.id,
-
-        sessionId: retrievalChunks.sessionId,
-
-        messageId: retrievalChunks.messageId,
-
-        messageSeq: retrievalChunks.messageSeq,
-
-        content: retrievalChunks.content,
-
-        score: rank,
-      })
-      .from(retrievalChunks)
-      .where(
-        and(
-          options.sessionId ? eq(retrievalChunks.sessionId, options.sessionId) : undefined,
-
-          sql`
-            to_tsvector(
-              'simple',
-              ${retrievalChunks.searchText}
-            )
-            @@
-            ${tsQuery}
-          `,
-        ),
-      )
-      .orderBy(desc(rank))
-      .limit(limit);
+  async searchFullText(query: string, options: SearchOptions = {}): Promise<RawSearchHit[]> {
+    return this.retrieval.searchFullText(query, options);
   }
 
   async searchTrigram(query: string, options: SearchOptions = {}): Promise<RawSearchHit[]> {
-    const limit = options.trigramLimit ?? options.limit ?? 20;
-
-    const normalized = normalizeSearchText(query);
-
-    if (!normalized) {
-      return [];
-    }
-
-    const similarity = sql<number>`
-        similarity(
-          ${retrievalChunks.searchText},
-          ${normalized}
-        )
-      `;
-
-    return this.db
-      .select({
-        chunkId: retrievalChunks.id,
-
-        sessionId: retrievalChunks.sessionId,
-
-        messageId: retrievalChunks.messageId,
-
-        messageSeq: retrievalChunks.messageSeq,
-
-        content: retrievalChunks.content,
-
-        score: similarity,
-      })
-      .from(retrievalChunks)
-      .where(
-        and(
-          options.sessionId ? eq(retrievalChunks.sessionId, options.sessionId) : undefined,
-
-          /**
-           * % 是 pg_trgm similarity operator，
-           * 能利用 gin_trgm_ops。
-           */
-          sql`
-            ${retrievalChunks.searchText}
-            %
-            ${normalized}
-          `,
-        ),
-      )
-      .orderBy(desc(similarity))
-      .limit(limit);
+    return this.retrieval.searchTrigram(query, options);
   }
 
   async searchVector(query: string, options: SearchOptions = {}): Promise<RawSearchHit[]> {
-    if (!this.embedding) {
-      return [];
-    }
-
-    const normalized = normalizeSearchText(query);
-
-    if (!normalized) {
-      return [];
-    }
-
-    const queryEmbedding = await this.embedding.embed(normalized);
-
-    this.assertEmbedding(queryEmbedding);
-
-    const similarity = sql<number>`
-        1 - (
-          ${cosineDistance(retrievalEmbeddings.embedding, queryEmbedding)}
-        )
-      `;
-
-    const limit = options.vectorLimit ?? options.limit ?? 20;
-
-    const threshold = options.minVectorSimilarity ?? 0.35;
-
-    return this.db
-      .select({
-        chunkId: retrievalChunks.id,
-
-        sessionId: retrievalChunks.sessionId,
-
-        messageId: retrievalChunks.messageId,
-
-        messageSeq: retrievalChunks.messageSeq,
-
-        content: retrievalChunks.content,
-
-        score: similarity,
-      })
-      .from(retrievalEmbeddings)
-      .innerJoin(retrievalChunks, eq(retrievalChunks.id, retrievalEmbeddings.chunkId))
-      .where(
-        and(
-          eq(retrievalEmbeddings.model, this.embedding.model),
-
-          options.sessionId ? eq(retrievalChunks.sessionId, options.sessionId) : undefined,
-
-          gt(similarity, threshold),
-        ),
-      )
-      .orderBy(desc(similarity))
-      .limit(limit);
+    return this.retrieval.searchVector(query, options);
   }
 
-  /**
-   * FTS + trigram + Vector
-   *
-   * 用 RRF 融合，不直接混合不同 score。
-   */
   async search(query: string, options: SearchOptions = {}): Promise<SearchHit[]> {
-    const [fts, trigram, vector] = await Promise.all([
-      this.searchFullText(query, options),
-
-      this.searchTrigram(query, options),
-
-      this.searchVector(query, options),
-    ]);
-
-    const hits = new Map<string, SearchHit>();
-
-    const add = (rows: RawSearchHit[], source: "fts" | "trigram" | "vector", weight: number) => {
-      rows.forEach((row, index) => {
-        /**
-         * Reciprocal Rank Fusion。
-         */
-        const score = weight * (1 / (60 + index + 1));
-
-        const existing = hits.get(row.chunkId);
-
-        if (existing) {
-          existing.score += score;
-
-          if (!existing.sources.includes(source)) {
-            existing.sources.push(source);
-          }
-
-          return;
-        }
-
-        hits.set(row.chunkId, {
-          chunkId: row.chunkId,
-
-          sessionId: row.sessionId,
-
-          messageId: row.messageId,
-
-          messageSeq: row.messageSeq,
-
-          content: row.content,
-
-          score,
-
-          sources: [source],
-        });
-      });
-    };
-
-    add(fts, "fts", 1);
-
-    add(trigram, "trigram", 0.7);
-
-    add(vector, "vector", 1);
-
-    return [...hits.values()].sort((a, b) => b.score - a.score).slice(0, options.limit ?? 10);
+    return this.retrieval.search(query, options);
   }
 
   /**
@@ -627,6 +446,7 @@ export class SessionStore {
    * embedding 换模型时可以直接跑。
    */
   async rebuildIndex(sessionId: string): Promise<void> {
+    await this.flushIndexes();
     await this.db.transaction(async (tx) => {
       await tx.delete(retrievalChunks).where(eq(retrievalChunks.sessionId, sessionId));
 
@@ -665,107 +485,21 @@ export class SessionStore {
       }
     });
 
-    if (this.embedding) {
-      await this.rebuildEmbeddings(sessionId);
-    }
+    await this.rebuildEmbeddings(sessionId);
   }
 
   async rebuildEmbeddings(sessionId?: string): Promise<void> {
-    if (!this.embedding) {
-      return;
-    }
-
-    const chunks = await this.db
-      .select()
-      .from(retrievalChunks)
-      .where(sessionId ? eq(retrievalChunks.sessionId, sessionId) : undefined);
-
-    for (const chunk of chunks) {
-      const embedding = await this.embedding.embed(chunk.content);
-
-      this.assertEmbedding(embedding);
-
-      await this.db
-        .insert(retrievalEmbeddings)
-        .values({
-          chunkId: chunk.id,
-
-          model: this.embedding.model,
-
-          embedding,
-        })
-        .onConflictDoUpdate({
-          target: [retrievalEmbeddings.chunkId, retrievalEmbeddings.model],
-
-          set: {
-            embedding,
-
-            createdAt: new Date(),
-          },
-        });
-    }
+    await this.embeddingIndex.rebuild(sessionId);
   }
 
-  /**
-   * 等待 pending embedding 完成。
-   */
-  async flushIndexes() {
-    await this.indexingQueue;
+  /** 等待已排队的向量索引任务结束。 */
+  async flushIndexes(): Promise<void> {
+    await this.embeddingIndex.flush();
   }
 
-  async close() {
+  async close(): Promise<void> {
+    await Promise.all(this.compactions.values());
     await this.flushIndexes();
-
     await this.client.close();
-  }
-
-  private enqueueEmbedding(
-    chunks: Array<{
-      id: string;
-      content: string;
-    }>,
-  ) {
-    if (!this.embedding) {
-      return;
-    }
-
-    this.indexingQueue = this.indexingQueue
-      .then(async () => {
-        for (const chunk of chunks) {
-          const embedding = await this.embedding!.embed(chunk.content);
-
-          this.assertEmbedding(embedding);
-
-          await this.db
-            .insert(retrievalEmbeddings)
-            .values({
-              chunkId: chunk.id,
-
-              model: this.embedding!.model,
-
-              embedding,
-            })
-            .onConflictDoUpdate({
-              target: [retrievalEmbeddings.chunkId, retrievalEmbeddings.model],
-
-              set: {
-                embedding,
-
-                createdAt: new Date(),
-              },
-            });
-        }
-      })
-      .catch((error) => {
-        this.onIndexError?.(error);
-      });
-  }
-
-  private assertEmbedding(embedding: number[]) {
-    if (embedding.length !== EMBEDDING_DIMENSIONS) {
-      throw new Error(
-        `Invalid embedding dimensions: expected ${EMBEDDING_DIMENSIONS}, received ${embedding.length}`,
-      );
-    }
   }
 }

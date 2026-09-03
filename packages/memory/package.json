@@ -1,7 +1,7 @@
 {
-  "name": "memory",
+  "name": "@cieljs/memory",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
+  "description": "Scoped daily and long-term memory with PGlite hybrid search.",
   "homepage": "https://github.com/author/library#readme",
   "bugs": {
     "url": "https://github.com/author/library/issues"
@@ -13,7 +13,8 @@
     "url": "git+https://github.com/author/library.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "migrations"
   ],
   "type": "module",
   "exports": {
@@ -30,9 +31,17 @@
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "catalog:",
+    "@electric-sql/pglite": "catalog:",
+    "@electric-sql/pglite-pgvector": "catalog:",
+    "drizzle-orm": "catalog:",
+    "typebox": "catalog:"
+  },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "bumpp": "^11.1.0",
+    "drizzle-kit": "catalog:",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"

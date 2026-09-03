@@ -47,7 +47,7 @@ export function messageToSearchText(message: AgentMessage): string {
           try {
             parts.push(JSON.stringify(item.arguments));
           } catch {
-            // ignore
+            parts.push("[工具参数无法序列化]");
           }
         }
 
@@ -93,6 +93,15 @@ export interface TextChunk {
  * 大 toolResult 才会拆。
  */
 export function chunkSearchText(text: string, maxChars = 4_000, overlap = 300): TextChunk[] {
+  if (
+    !Number.isSafeInteger(maxChars) ||
+    maxChars < 1 ||
+    !Number.isSafeInteger(overlap) ||
+    overlap < 0 ||
+    overlap >= maxChars
+  ) {
+    throw new TypeError("分块长度必须是正整数，重叠长度必须是小于分块长度的非负整数");
+  }
   const normalized = normalizeSearchText(text);
 
   if (!normalized) {

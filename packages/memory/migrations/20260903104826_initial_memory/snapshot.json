@@ -1,36 +1,30 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "e8655204-c120-43e9-9a2a-fa02f46ddaa7",
+  "id": "d30bdf5f-9d33-4f7b-a479-df0ec527bcbd",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
       "isRlsEnabled": false,
-      "name": "retrieval_chunks",
+      "name": "memories",
       "entityType": "tables",
       "schema": "public"
     },
     {
       "isRlsEnabled": false,
-      "name": "retrieval_embeddings",
+      "name": "memory_chunks",
       "entityType": "tables",
       "schema": "public"
     },
     {
       "isRlsEnabled": false,
-      "name": "session_compactions",
+      "name": "memory_embeddings",
       "entityType": "tables",
       "schema": "public"
     },
     {
       "isRlsEnabled": false,
-      "name": "session_messages",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "sessions",
+      "name": "memory_sources",
       "entityType": "tables",
       "schema": "public"
     },
@@ -45,7 +39,7 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memories"
     },
     {
       "type": "text",
@@ -55,10 +49,10 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "session_id",
+      "name": "scope_type",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memories"
     },
     {
       "type": "text",
@@ -68,36 +62,49 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "message_id",
+      "name": "scope_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memories"
     },
     {
-      "type": "bigint",
+      "type": "text",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "message_seq",
+      "name": "layer",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memories"
     },
     {
-      "type": "integer",
+      "type": "date",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "date",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "text",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
-      "default": "0",
+      "default": null,
       "generated": null,
       "identity": null,
-      "name": "chunk_index",
+      "name": "kind",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memories"
     },
     {
       "type": "text",
@@ -110,7 +117,163 @@
       "name": "content",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memories"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'active'",
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "revision",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "occurred_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "dedupe_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "metadata",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memory_chunks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "memory_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memory_chunks"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "position",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memory_chunks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "content",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memory_chunks"
     },
     {
       "type": "text",
@@ -123,20 +286,20 @@
       "name": "search_text",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memory_chunks"
     },
     {
-      "type": "timestamp with time zone",
+      "type": "text",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
-      "default": "now()",
+      "default": null,
       "generated": null,
       "identity": null,
-      "name": "created_at",
+      "name": "token_text",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memory_chunks"
     },
     {
       "type": "text",
@@ -149,7 +312,7 @@
       "name": "chunk_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_embeddings"
+      "table": "memory_embeddings"
     },
     {
       "type": "text",
@@ -162,12 +325,25 @@
       "name": "model",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_embeddings"
+      "table": "memory_embeddings"
     },
     {
-      "type": "vector(1024)",
+      "type": "integer",
       "typeSchema": null,
       "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "dimensions",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memory_embeddings"
+    },
+    {
+      "type": "vector",
+      "typeSchema": null,
+      "notNull": false,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -175,20 +351,33 @@
       "name": "embedding",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_embeddings"
+      "table": "memory_embeddings"
     },
     {
-      "type": "timestamp with time zone",
+      "type": "text",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
-      "default": "now()",
+      "default": "'pending'",
       "generated": null,
       "identity": null,
-      "name": "created_at",
+      "name": "status",
       "entityType": "columns",
       "schema": "public",
-      "table": "retrieval_embeddings"
+      "table": "memory_embeddings"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "error",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memory_embeddings"
     },
     {
       "type": "text",
@@ -198,101 +387,23 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "id",
+      "name": "memory_id",
       "entityType": "columns",
       "schema": "public",
-      "table": "session_compactions"
+      "table": "memory_sources"
     },
     {
-      "type": "text",
+      "type": "integer",
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "session_id",
+      "name": "position",
       "entityType": "columns",
       "schema": "public",
-      "table": "session_compactions"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "through_seq",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "session_compactions"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "summary",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "session_compactions"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "session_compactions"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "session_messages"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "session_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "session_messages"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "seq",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "session_messages"
+      "table": "memory_sources"
     },
     {
       "type": "jsonb",
@@ -302,75 +413,30 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "message",
+      "name": "source",
       "entityType": "columns",
       "schema": "public",
-      "table": "session_messages"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "session_messages"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "sessions"
-    },
-    {
-      "type": "bigint",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "1",
-      "generated": null,
-      "identity": null,
-      "name": "next_message_seq",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "sessions"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "sessions"
+      "table": "memory_sources"
     },
     {
       "nameExplicit": true,
       "columns": [
         {
-          "value": "message_id",
+          "value": "scope_type",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
           "opclass": null
         },
         {
-          "value": "chunk_index",
+          "value": "scope_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "dedupe_key",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -382,23 +448,37 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "retrieval_chunks_message_chunk_unique",
+      "name": "memories_scope_dedupe_idx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memories"
     },
     {
       "nameExplicit": true,
       "columns": [
         {
-          "value": "session_id",
+          "value": "scope_type",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
           "opclass": null
         },
         {
-          "value": "message_seq",
+          "value": "scope_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "layer",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "date",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -410,16 +490,44 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "retrieval_chunks_session_seq_idx",
+      "name": "memories_scope_layer_date_idx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memories"
     },
     {
       "nameExplicit": true,
       "columns": [
         {
-          "value": "to_tsvector('simple', \"search_text\")",
+          "value": "memory_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "position",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "memory_chunks_position_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "memory_chunks"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "to_tsvector('simple', \"token_text\")",
           "isExpression": true,
           "asc": true,
           "nullsFirst": false,
@@ -431,10 +539,10 @@
       "with": "",
       "method": "gin",
       "concurrently": false,
-      "name": "retrieval_chunks_fts_idx",
+      "name": "memory_chunks_fts_idx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memory_chunks"
     },
     {
       "nameExplicit": true,
@@ -452,195 +560,172 @@
       "with": "",
       "method": "gin",
       "concurrently": false,
-      "name": "retrieval_chunks_trgm_idx",
+      "name": "memory_chunks_trgm_idx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memory_chunks"
     },
     {
       "nameExplicit": true,
       "columns": [
         {
-          "value": "embedding",
+          "value": "model",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
-          "opclass": {
-            "name": "vector_cosine_ops",
-            "default": false
-          }
+          "opclass": null
+        },
+        {
+          "value": "dimensions",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
         }
       ],
       "isUnique": false,
       "where": null,
       "with": "",
-      "method": "hnsw",
-      "concurrently": false,
-      "name": "retrieval_embeddings_hnsw_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "retrieval_embeddings"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "session_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "through_seq",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "session_compactions_session_through_unique",
+      "name": "memory_embeddings_jobs_idx",
       "entityType": "indexes",
       "schema": "public",
-      "table": "session_compactions"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "session_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "seq",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "session_messages_session_seq_unique",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "session_messages"
+      "table": "memory_embeddings"
     },
     {
       "nameExplicit": false,
-      "columns": ["session_id"],
+      "columns": ["memory_id"],
       "schemaTo": "public",
-      "tableTo": "sessions",
+      "tableTo": "memories",
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "retrieval_chunks_session_id_sessions_id_fkey",
+      "name": "memory_chunks_memory_id_memories_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "retrieval_chunks"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["message_id"],
-      "schemaTo": "public",
-      "tableTo": "session_messages",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "retrieval_chunks_message_id_session_messages_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "retrieval_chunks"
+      "table": "memory_chunks"
     },
     {
       "nameExplicit": false,
       "columns": ["chunk_id"],
       "schemaTo": "public",
-      "tableTo": "retrieval_chunks",
+      "tableTo": "memory_chunks",
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "retrieval_embeddings_chunk_id_retrieval_chunks_id_fkey",
+      "name": "memory_embeddings_chunk_id_memory_chunks_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "retrieval_embeddings"
+      "table": "memory_embeddings"
     },
     {
       "nameExplicit": false,
-      "columns": ["session_id"],
+      "columns": ["memory_id"],
       "schemaTo": "public",
-      "tableTo": "sessions",
+      "tableTo": "memories",
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "session_compactions_session_id_sessions_id_fkey",
+      "name": "memory_sources_memory_id_memories_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "session_compactions"
+      "table": "memory_sources"
     },
     {
+      "columns": ["chunk_id", "model", "dimensions"],
       "nameExplicit": false,
-      "columns": ["session_id"],
-      "schemaTo": "public",
-      "tableTo": "sessions",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "session_messages_session_id_sessions_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "session_messages"
-    },
-    {
-      "columns": ["chunk_id", "model"],
-      "nameExplicit": false,
-      "name": "retrieval_embeddings_pkey",
+      "name": "memory_embeddings_pkey",
       "entityType": "pks",
       "schema": "public",
-      "table": "retrieval_embeddings"
+      "table": "memory_embeddings"
+    },
+    {
+      "columns": ["memory_id", "position"],
+      "nameExplicit": false,
+      "name": "memory_sources_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "memory_sources"
     },
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "retrieval_chunks_pkey",
+      "name": "memories_pkey",
       "schema": "public",
-      "table": "retrieval_chunks",
+      "table": "memories",
       "entityType": "pks"
     },
     {
       "columns": ["id"],
       "nameExplicit": false,
-      "name": "session_compactions_pkey",
+      "name": "memory_chunks_pkey",
       "schema": "public",
-      "table": "session_compactions",
+      "table": "memory_chunks",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "session_messages_pkey",
+      "value": "(\"scope_type\" = 'global' AND \"scope_id\" = '') OR (\"scope_type\" = 'space' AND length(trim(\"scope_id\")) > 0)",
+      "name": "memories_scope_check",
+      "entityType": "checks",
       "schema": "public",
-      "table": "session_messages",
-      "entityType": "pks"
+      "table": "memories"
     },
     {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "sessions_pkey",
+      "value": "(\"layer\" = 'daily' AND \"date\" IS NOT NULL) OR (\"layer\" = 'long_term' AND \"date\" IS NULL)",
+      "name": "memories_layer_date_check",
+      "entityType": "checks",
       "schema": "public",
-      "table": "sessions",
-      "entityType": "pks"
+      "table": "memories"
+    },
+    {
+      "value": "\"kind\" IN ('event', 'fact', 'preference', 'summary')",
+      "name": "memories_kind_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "value": "\"status\" IN ('active', 'archived')",
+      "name": "memories_status_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "value": "length(trim(\"content\")) > 0",
+      "name": "memories_content_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "value": "\"revision\" > 0",
+      "name": "memories_revision_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "value": "\"dimensions\" BETWEEN 1 AND 16000 AND (\"embedding\" IS NULL OR vector_dims(\"embedding\") = \"dimensions\")",
+      "name": "memory_embeddings_dimensions_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "memory_embeddings"
+    },
+    {
+      "value": "(\"status\" = 'ready' AND \"embedding\" IS NOT NULL) OR (\"status\" IN ('pending', 'failed') AND \"embedding\" IS NULL)",
+      "name": "memory_embeddings_status_check",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "memory_embeddings"
     }
   ],
   "renames": []

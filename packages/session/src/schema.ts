@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  customType,
   index,
   integer,
   jsonb,
@@ -9,12 +10,16 @@ import {
   text,
   timestamp,
   uniqueIndex,
-  vector,
 } from "drizzle-orm/pg-core";
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 
-export const EMBEDDING_DIMENSIONS = 1024;
+// 不在列类型中固定维数，允许多个模型的派生索引共存。
+const embeddingVector = customType<{ data: number[]; driverData: string }>({
+  dataType: () => "vector",
+  toDriver: (value) => JSON.stringify(value),
+  fromDriver: (value) => JSON.parse(value) as number[],
+});
 
 /**
  * Session 本身。
@@ -189,9 +194,9 @@ export const retrievalEmbeddings = pgTable(
 
     model: text("model").notNull(),
 
-    embedding: vector("embedding", {
-      dimensions: EMBEDDING_DIMENSIONS,
-    }).notNull(),
+    dimensions: integer("dimensions").notNull(),
+
+    embedding: embeddingVector("embedding").notNull(),
 
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -201,9 +206,9 @@ export const retrievalEmbeddings = pgTable(
   },
   (table) => [
     primaryKey({
-      columns: [table.chunkId, table.model],
+      columns: [table.chunkId, table.model, table.dimensions],
     }),
 
-    index("retrieval_embeddings_hnsw_idx").using("hnsw", table.embedding.op("vector_cosine_ops")),
+    index("retrieval_embeddings_model_dimensions_idx").on(table.model, table.dimensions),
   ],
 );

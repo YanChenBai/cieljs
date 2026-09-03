@@ -31,6 +31,7 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
+    "@cieljs/memory": "workspace:*",
     "@cieljs/session": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",

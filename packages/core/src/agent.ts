@@ -6,6 +6,7 @@ import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 
 import type { Model } from "@earendil-works/pi-ai";
 import { xiaomi } from "./provider.ts";
+import { createMemoryIntegration, type MemoryAgentOptions } from "./memory.ts";
 
 export interface CreateSessionAgentOptions {
   store: SessionStore;
@@ -27,6 +28,8 @@ export interface CreateSessionAgentOptions {
    * @default true
    */
   useSessionTools?: boolean;
+
+  memory?: MemoryAgentOptions;
 }
 
 const models = createModels();
@@ -70,16 +73,17 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
       })
     : [];
 
-  console.log(restoredMessages);
+  const memory = options.memory ? createMemoryIntegration(options.memory, sessionId) : undefined;
 
   const agent = new Agent({
     sessionId: session.id,
     streamFn: models.streamSimple.bind(models),
+    transformContext: memory?.transformContext,
     initialState: {
       model,
       systemPrompt,
       messages: restoredMessages,
-      tools: [...tools, ...sessionTools],
+      tools: [...tools, ...sessionTools, ...(memory?.tools ?? [])],
     },
   });
 
@@ -110,6 +114,8 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
     agent,
 
     unsubscribe,
+
+    flushPersistence: () => persistence,
   };
 }
 
@@ -150,29 +156,3 @@ function createSummaryMessage(summary: string, _messages: AgentMessage[]): Agent
     timestamp: Date.now(),
   };
 }
-
-const store = await SessionStore.open({
-  dataDir: ".ciel/session",
-});
-
-const { agent } = await createSessionAgent({
-  sessionId: "732",
-  store,
-  systemPrompt: ``,
-});
-
-agent.subscribe((event) => {
-  if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-    process.stdout.write(event.assistantMessageEvent.delta);
-  }
-
-  if (event.type === "tool_execution_update") {
-    console.log(event);
-  }
-});
-
-console.log("start");
-await agent.prompt("你好");
-console.log("end");
-await agent.prompt("使用 read_session 查询");
-console.log("end");
