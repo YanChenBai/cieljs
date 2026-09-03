@@ -7,9 +7,10 @@ Agent 可以通过工具主动查找记忆，也可以在调用模型前获得�
 假定 `store` 已打开，为当前空间创建工具：
 
 ```ts
-import { createMemoryTools } from "@cieljs/memory";
+import { memoryTools } from "@cieljs/memory";
 
-const tools = createMemoryTools(store, {
+const tools = memoryTools({
+  store,
   scope: { type: "space", spaceId: "space-1" },
   includeGlobal: true,
   allowWrite: false,

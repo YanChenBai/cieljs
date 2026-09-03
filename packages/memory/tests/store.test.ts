@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
-import { MemoryStore, createMemoryTools, getMemoryContext } from "../src/index.ts";
+import { MemoryStore, memoryTools, getMemoryContext } from "../src/index.ts";
 import type { EmbeddingOptions, MemoryScope } from "../src/index.ts";
 
 const globalScope: MemoryScope = { type: "global" };
@@ -275,7 +275,8 @@ describe("工具和上下文", () => {
       layer: "daily",
       content: "secret",
     });
-    const tools = createMemoryTools(store, {
+    const tools = memoryTools({
+      store,
       scope,
       allowWrite: true,
       maxReadChars: 4,
@@ -296,7 +297,7 @@ describe("工具和上下文", () => {
       memory: { content: "efgh" },
       nextOffset: null,
     });
-    expect(createMemoryTools(store, { scope })).toHaveLength(2);
+    expect(memoryTools({ store, scope })).toHaveLength(2);
   });
 
   test("上下文包含近期每日与长期记忆，遵守预算且不包含旧日或其他空间", async () => {

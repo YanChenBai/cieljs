@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { createMemoryTools, getMemoryContext, getMemoryScopes } from "@cieljs/memory";
+import { memoryTools, getMemoryContext, getMemoryScopes } from "@cieljs/memory";
 import type { MemoryScope, MemoryStore } from "@cieljs/memory";
 
 export interface MemoryAgentOptions {
@@ -15,7 +15,8 @@ export interface MemoryAgentOptions {
 export function createMemoryIntegration(options: MemoryAgentOptions, sessionId: string) {
   const { store, maxTokens, recentDays, countTokens } = options;
   const scopes = getMemoryScopes(options.scope, options.includeGlobal ?? true);
-  const tools = createMemoryTools(store, {
+  const tools = memoryTools({
+    store,
     scope: options.scope,
     includeGlobal: options.includeGlobal,
     allowWrite: options.allowWrite,

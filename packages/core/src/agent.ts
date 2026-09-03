@@ -1,6 +1,6 @@
 import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 
-import { SessionStore, createSessionTools } from "@cieljs/session";
+import { SessionStore, sessionTools } from "@cieljs/session";
 import { createModels } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 
@@ -67,8 +67,9 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
     throw new Error("Model not found");
   }
 
-  const sessionTools = useSessionTools
-    ? createSessionTools(store, {
+  const sessionToolList = useSessionTools
+    ? sessionTools({
+        store,
         sessionId,
       })
     : [];
@@ -83,7 +84,7 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
       model,
       systemPrompt,
       messages: restoredMessages,
-      tools: [...tools, ...sessionTools, ...(memory?.tools ?? [])],
+      tools: [...tools, ...sessionToolList, ...(memory?.tools ?? [])],
     },
   });
 

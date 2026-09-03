@@ -21,11 +21,11 @@ export interface EmbeddingProvider {
    */
   readonly dimensions: number;
 
-  /** 统一批量接口，返回顺序必须与输入一致；查询也使用单元素数组。 */
-  embedBatch(texts: string[], options: EmbeddingOptions): Promise<number[][]>;
-
   /** 单次索引请求的最大文本数，默认 32。 */
   readonly batchSize?: number;
+
+  /** 统一批量接口，返回顺序必须与输入一致；查询也使用单元素数组。 */
+  embedBatch(texts: string[], options: EmbeddingOptions): Promise<number[][]>;
 }
 
 export interface SummarizeInput {

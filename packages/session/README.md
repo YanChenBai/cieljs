@@ -68,7 +68,7 @@ S2 + 最近保留的原文    → 当前上下文
 
 ## 找回之前聊过的内容
 
-通过 `createSessionTools(store, { sessionId })`，可以为 Agent 加入两个历史工具：
+通过 `sessionTools({ store, sessionId })`，可以为 Agent 加入两个历史工具：
 
 - `search_session`：找到相关的历史片段。
 - `read_session`：沿着消息序号，读取当时的完整上下文。

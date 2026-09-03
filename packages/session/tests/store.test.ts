@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vit
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { eq } from "drizzle-orm";
 
-import { SessionStore, createSessionSummarizer, createSessionTools } from "../src/index.ts";
+import { SessionStore, createSessionSummarizer, sessionTools } from "../src/index.ts";
 import { retrievalChunks, retrievalEmbeddings } from "../src/schema.ts";
 import type { EmbeddingOptions, SummarizeInput } from "../src/types.ts";
 import type { GenerateSummaryInput } from "../src/compaction.ts";
@@ -387,9 +387,9 @@ test("摘要适配器传递累计摘要并排除历史推理", async () => {
 });
 
 test("当前上下文工具需显式启用，默认仅提供历史搜索和读取", () => {
-  expect(createSessionTools(store, { sessionId }).map((tool) => tool.name)).toEqual([
+  expect(sessionTools({ store, sessionId }).map((tool) => tool.name)).toEqual([
     "search_session",
     "read_session",
   ]);
-  expect(createSessionTools(store, { sessionId, includeContextTool: true })).toHaveLength(3);
+  expect(sessionTools({ store, sessionId, includeContextTool: true })).toHaveLength(3);
 });

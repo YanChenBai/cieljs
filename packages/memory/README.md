@@ -64,7 +64,7 @@ try {
 
 ## 让 Agent 找回记忆
 
-`createMemoryTools(store, { scope })` 默认提供两个工具：
+`memoryTools({ store, scope })` 默认提供两个工具：
 
 - `search_memory`：在当前空间与全局记忆中搜索，支持层级和日期范围。
 - `read_memory`：读取命中记忆的正文与来源，长文本可分页。

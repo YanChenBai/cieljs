@@ -32,6 +32,7 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
+    "@cieljs/agent-kit": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@electric-sql/pglite": "catalog:",
     "@electric-sql/pglite-pgvector": "catalog:",

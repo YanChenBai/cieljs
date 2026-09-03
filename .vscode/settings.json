@@ -22,8 +22,10 @@
   },
   "js/ts.experimental.useTsgo": true,
   "cSpell.words": [
+    "bumpp",
     "Ciel",
     "cieljs",
+    "cilejs",
     "earendil",
     "genai",
     "hnsw",

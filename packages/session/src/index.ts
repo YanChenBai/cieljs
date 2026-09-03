@@ -1,5 +1,5 @@
 export { SessionStore } from "./store.ts";
-export * from "./tools.ts";
+export * from "./agent-tools/index.ts";
 export { createSessionSummarizer } from "./compaction.ts";
 export type { GenerateSummaryInput, SessionSummarizerOptions } from "./compaction.ts";
 export { estimateContextTokens, estimateTokens } from "./tokens.ts";
