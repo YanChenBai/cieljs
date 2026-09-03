@@ -83,6 +83,8 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
     },
   });
 
+  let persistence: Promise<any> = Promise.resolve();
+
   /**
    * Pi 的 message_end 包括：
    *
@@ -92,12 +94,16 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
    *
    * 所以这里统一持久化即可。
    */
-  const unsubscribe = agent.subscribe(async (event) => {
+  const unsubscribe = agent.subscribe((event) => {
     if (event.type !== "message_end") {
       return;
     }
 
-    await store.appendMessage(sessionId, event.message);
+    persistence = persistence
+      .then(() => store.appendMessage(sessionId, event.message))
+      .catch((error) => {
+        console.error("[session] Failed to persist message", error);
+      });
   });
 
   return {
@@ -166,5 +172,7 @@ agent.subscribe((event) => {
 });
 
 console.log("start");
-
+await agent.prompt("你好");
+console.log("end");
 await agent.prompt("使用 read_session 查询");
+console.log("end");
