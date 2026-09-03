@@ -1,0 +1,41 @@
+{
+  "npm.scriptRunner": "vp",
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "[javascript]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "oxc.disableNestedConfig": true,
+  "oxc.fmt.disableNestedConfig": true,
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "explicit"
+  },
+  "js/ts.experimental.useTsgo": true,
+  "cSpell.words": [
+    "Ciel",
+    "cieljs",
+    "earendil",
+    "genai",
+    "hnsw",
+    "mimo",
+    "pglite",
+    "pgvector",
+    "protobufjs",
+    "qwen",
+    "trgm",
+    "tsvector",
+    "typebox",
+    "voidzero",
+    "xhigh"
+  ]
+}
