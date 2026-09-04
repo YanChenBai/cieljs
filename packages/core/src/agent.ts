@@ -10,7 +10,7 @@ import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 
 import type { Model } from "@earendil-works/pi-ai";
 import { xiaomi } from "./provider.ts";
-import { createMemoryIntegration, type MemoryAgentOptions } from "./memory.ts";
+import { createMemory, type MemoryAgentOptions } from "./memory.ts";
 
 export interface CreateSessionAgentOptions {
   manager: SessionManager;
@@ -44,10 +44,9 @@ export interface CreateSessionAgentOptions {
 }
 
 const models = createModels();
+const providers = [xiaomi, ...builtinProviders()];
 
-models.setProvider(xiaomi);
-
-for (const provider of builtinProviders()) {
+for (const provider of providers) {
   models.setProvider(provider);
 }
 
@@ -63,7 +62,6 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
   } = options;
 
   const session = await manager.session(sessionId);
-
   const restoredMessages = await session.context();
 
   if (!model) {
@@ -73,7 +71,8 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
   const sessionToolList = useSessionTools ? sessionTools({ session }) : [];
   const crossSessionToolList = crossSessionTools ? createCrossSessionTools({ manager }) : [];
 
-  const memory = options.memory ? createMemoryIntegration(options.memory, sessionId) : undefined;
+  const memory = options.memory ? await createMemory(options.memory, sessionId) : undefined;
+  const resolvedSystemPrompt = [systemPrompt, memory?.systemPrompt].filter(Boolean).join("\n\n");
 
   const agent = new Agent({
     sessionId: session.id,
@@ -81,7 +80,7 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
     transformContext: memory?.transformContext,
     initialState: {
       model,
-      systemPrompt,
+      systemPrompt: resolvedSystemPrompt,
       messages: restoredMessages,
       tools: [...tools, ...sessionToolList, ...crossSessionToolList, ...(memory?.tools ?? [])],
     },

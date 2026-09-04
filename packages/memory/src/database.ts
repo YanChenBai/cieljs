@@ -40,8 +40,7 @@ export async function materializeMemoryEntries(
 
   return rows.map((row) => ({
     id: row.id,
-    scope:
-      row.scopeType === "global" ? { type: "global" } : { type: "space", spaceId: row.scopeId },
+    spaceId: row.spaceId,
     layer: row.layer,
     date: row.date,
     kind: row.kind,
@@ -54,5 +53,5 @@ export async function materializeMemoryEntries(
     expiresAt: row.expiresAt,
     metadata: row.metadata,
     sources: sources.filter((source) => source.memoryId === row.id).map((source) => source.source),
-  }));
+  })) as MemoryEntry[];
 }

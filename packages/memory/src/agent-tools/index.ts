@@ -2,28 +2,22 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 
 import { searchMemoryTool } from "./search-memory.ts";
 import { readMemoryTool } from "./read-memory.ts";
+import { forgetMemoryTool } from "./forget-memory.ts";
 import { rememberMemoryTool } from "./remember-memory.ts";
-import { searchCrossScopesTool } from "./search-cross-scopes.ts";
-import { readCrossScopesTool } from "./read-cross-scopes.ts";
-import { resolveMemoryToolsOptions } from "./options.ts";
-import type { CreateCrossScopeMemoryToolsOptions, CreateMemoryToolsOptions } from "./types.ts";
+import { updateMemoryTool } from "./update-memory.ts";
+import { readAllMemoryTool } from "./read-all-memory.ts";
+import { searchAllMemoryTool } from "./search-all-memory.ts";
+import type { CreateAllMemoryToolsOptions, CreateMemoryToolsOptions } from "./types.ts";
 
 export { searchMemoryTool } from "./search-memory.ts";
 export { readMemoryTool } from "./read-memory.ts";
+export { forgetMemoryTool } from "./forget-memory.ts";
 export { rememberMemoryTool } from "./remember-memory.ts";
-export { searchCrossScopesTool } from "./search-cross-scopes.ts";
-export { readCrossScopesTool } from "./read-cross-scopes.ts";
-export {
-  resolveMemoryToolsOptions,
-  resolveCrossScopeMemoryToolsOptions,
-  memoryToolsDefaults,
-} from "./options.ts";
+export { updateMemoryTool } from "./update-memory.ts";
+export { readAllMemoryTool } from "./read-all-memory.ts";
+export { searchAllMemoryTool } from "./search-all-memory.ts";
 export type {
-  ResolvedMemoryToolsOptions,
-  ResolvedCrossScopeMemoryToolsOptions,
-} from "./options.ts";
-export type {
-  CreateCrossScopeMemoryToolsOptions,
+  CreateAllMemoryToolsOptions,
   CreateMemoryToolsOptions,
   MemoryToolLimits,
   MemorySourceProvider,
@@ -37,24 +31,21 @@ export type {
  *
  * - search_memory
  * - read_memory
- *
- * 设置 allowWrite 后额外提供：
- *
  * - remember_memory
+ * - update_memory
+ * - forget_memory
  */
 export function memoryTools(options: CreateMemoryToolsOptions): AgentTool[] {
-  const { allowWrite } = resolveMemoryToolsOptions(options);
-
-  const tools: AgentTool[] = [searchMemoryTool(options), readMemoryTool(options)];
-
-  if (allowWrite) {
-    tools.push(rememberMemoryTool(options));
-  }
-
-  return tools;
+  return [
+    searchMemoryTool(options),
+    readMemoryTool(options),
+    rememberMemoryTool(options),
+    updateMemoryTool(options),
+    forgetMemoryTool(options),
+  ];
 }
 
-/** 创建显式跨 Scope 的只读 Agent Tools。 */
-export function crossScopeMemoryTools(options: CreateCrossScopeMemoryToolsOptions): AgentTool[] {
-  return [searchCrossScopesTool(options), readCrossScopesTool(options)];
+/** 创建直接读取全库的 Agent Tools。 */
+export function allMemoryTools(options: CreateAllMemoryToolsOptions): AgentTool[] {
+  return [searchAllMemoryTool(options), readAllMemoryTool(options)];
 }

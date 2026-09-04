@@ -6,36 +6,42 @@ import type {
   MemoryKind,
   MemoryLayer,
   MemoryScope,
+  MemoryScopeSelector,
   MemorySource,
 } from "./types.ts";
 
 export function scopeColumns(scope: MemoryScope) {
-  if (scope?.type === "global") return { scopeType: "global" as const, scopeId: "" };
+  if (scope?.type === "global") return { spaceId: null };
 
   if (scope?.type === "space") {
     if (!scope.spaceId?.trim()) {
       throw new TypeError("记忆范围必须为 global 或包含 spaceId 的 space");
     }
 
-    return { scopeType: "space" as const, scopeId: scope.spaceId };
+    return { spaceId: scope.spaceId };
   }
 
   throw new TypeError("记忆范围必须为 global 或包含 spaceId 的 space");
 }
 
 export function scopeCondition(scope: MemoryScope) {
-  const { scopeType, scopeId } = scopeColumns(scope);
-  return and(eq(memories.scopeType, scopeType), eq(memories.scopeId, scopeId))!;
+  scopeColumns(scope);
+
+  return scope.type === "global"
+    ? eq(memories.layer, "global.long_term")
+    : eq(memories.spaceId, scope.spaceId);
 }
 
-export function accessCondition(options: MemoryAccess & { scopes: MemoryScope[] }) {
-  if (!Array.isArray(options.scopes)) {
-    throw new TypeError("必须明确指定 scopes");
-  }
-  let scopeAccessCondition = sql`false`;
+export function accessCondition(options: MemoryAccess & { scopes: MemoryScopeSelector }) {
+  const scopes = options.scopes;
+  let scopeAccessCondition;
 
-  if (options.scopes.length > 0) {
-    scopeAccessCondition = or(...options.scopes.map(scopeCondition))!;
+  if (scopes !== "all") {
+    if (!Array.isArray(scopes)) {
+      throw new TypeError("无效的记忆读取范围");
+    }
+
+    scopeAccessCondition = scopes.length > 0 ? or(...scopes.map(scopeCondition))! : sql`false`;
   }
 
   let statusCondition;
@@ -51,7 +57,7 @@ export function accessCondition(options: MemoryAccess & { scopes: MemoryScope[] 
   return and(scopeAccessCondition, statusCondition, expirationCondition)!;
 }
 
-export function filterCondition(options: MemoryFilter & { scopes: MemoryScope[] }) {
+export function filterCondition(options: MemoryFilter & { scopes: MemoryScopeSelector }) {
   if (options.layer !== undefined && !isMemoryLayer(options.layer)) {
     throw new TypeError("无效的记忆层级");
   }
@@ -204,5 +210,5 @@ function assertSessionSource(source: Extract<MemorySource, { type: "session" }>)
 }
 
 export function isMemoryLayer(value: unknown): value is MemoryLayer {
-  return value === "daily" || value === "long_term";
+  return value === "global.long_term" || value === "space.long_term" || value === "space.daily";
 }

@@ -1,5 +1,3 @@
-import { isDeepStrictEqual } from "node:util";
-
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { getMemoryContext, getMemoryScopes } from "./context.ts";
@@ -34,11 +32,6 @@ import {
   scopeCondition,
 } from "./validation.ts";
 
-export interface MemoryOptions {
-  /** space 默认同时读取 global；global 本身不会重复加入。 */
-  includeGlobal?: boolean;
-}
-
 export interface MemoryServices {
   db: Database;
   embeddingIndex: MemoryEmbeddingIndex;
@@ -49,24 +42,21 @@ export interface MemoryServices {
 }
 
 /** 固定读写范围的长期记忆。 */
-export class Memory {
-  readonly scope: MemoryScope;
+export class Memory<Scope extends MemoryScope = MemoryScope> {
+  readonly scope: Scope;
   private readonly scopes: MemoryScope[];
 
   private constructor(
     private readonly services: MemoryServices,
-    scope: MemoryScope,
-    options: MemoryOptions,
+    scope: Scope,
   ) {
     this.scope = Object.freeze(structuredClone(scope));
-    this.scopes = getMemoryScopes(this.scope, options.includeGlobal ?? true).map((item) =>
-      Object.freeze(item),
-    );
+    this.scopes = getMemoryScopes(this.scope).map((item) => Object.freeze(item));
     Object.freeze(this.scopes);
   }
 
-  static create(services: MemoryServices, scope: MemoryScope, options: MemoryOptions = {}): Memory {
-    return new Memory(services, scope, options);
+  static create<Scope extends MemoryScope>(services: MemoryServices, scope: Scope): Memory<Scope> {
+    return new Memory(services, scope);
   }
 
   getDate(at = new Date()): string {
@@ -89,45 +79,26 @@ export class Memory {
       const occurredAt = input.occurredAt ?? new Date();
       assertTimestamp(occurredAt);
       if (input.expiresAt) assertTimestamp(input.expiresAt);
-      if (!["daily", "long_term"].includes(input.layer)) throw new TypeError("无效的记忆层级");
-      if (input.layer === "long_term" && input.date !== undefined)
+      const isGlobalLayer = input.layer === "global.long_term";
+      const isSpaceLayer = input.layer === "space.long_term" || input.layer === "space.daily";
+
+      if (
+        (this.scope.type === "global" && !isGlobalLayer) ||
+        (this.scope.type === "space" && !isSpaceLayer)
+      ) {
+        throw new TypeError("记忆层级与归属不匹配");
+      }
+
+      if (input.layer !== "space.daily" && input.date !== undefined)
         throw new TypeError("长期记忆不能设置日期");
-      const date = input.layer === "daily" ? (input.date ?? this.getDate(occurredAt)) : null;
+      const date = input.layer === "space.daily" ? (input.date ?? this.getDate(occurredAt)) : null;
       if (date !== null) assertDate(date);
-      const kind = input.kind ?? (input.layer === "daily" ? "event" : "fact");
+      const kind = input.kind ?? (input.layer === "space.daily" ? "event" : "fact");
       assertKind(kind);
       const sources = input.sources ?? [];
       assertSources(sources);
-      if (input.dedupeKey !== undefined && !input.dedupeKey.trim())
-        throw new TypeError("dedupeKey 不能为空");
 
       const result = await this.services.db.transaction(async (transaction) => {
-        if (input.dedupeKey) {
-          const [existing] = await transaction
-            .select()
-            .from(memories)
-            .where(and(scopeCondition(this.scope), eq(memories.dedupeKey, input.dedupeKey)));
-
-          if (existing) {
-            const [memory] = await materializeMemoryEntries(transaction, [existing]);
-
-            if (
-              existing.content !== input.content ||
-              existing.layer !== input.layer ||
-              existing.date !== date ||
-              existing.kind !== kind ||
-              !isDeepStrictEqual(memory!.sources, sources) ||
-              !isDeepStrictEqual(existing.metadata, input.metadata ?? {}) ||
-              existing.expiresAt?.getTime() !== input.expiresAt?.getTime() ||
-              (input.occurredAt && existing.occurredAt.getTime() !== input.occurredAt.getTime())
-            ) {
-              throw new Error("dedupeKey 已用于不同的记忆内容");
-            }
-
-            return memory!;
-          }
-        }
-
         const [row] = await transaction
           .insert(memories)
           .values({
@@ -139,7 +110,6 @@ export class Memory {
             content: input.content,
             occurredAt,
             expiresAt: input.expiresAt,
-            dedupeKey: input.dedupeKey,
             metadata: input.metadata,
           })
           .returning();
@@ -188,6 +158,15 @@ export class Memory {
   update(id: string, input: UpdateMemoryInput): Promise<MemoryEntry> {
     return this.services.operate(async () => {
       integerOption(input.expectedRevision, "expectedRevision", 1, 2147483646);
+      if (
+        input.content === undefined &&
+        input.kind === undefined &&
+        input.sources === undefined &&
+        input.expiresAt === undefined &&
+        input.metadata === undefined
+      ) {
+        throw new TypeError("至少提供一个要更新的字段");
+      }
       if (input.content !== undefined) assertContent(input.content);
       if (input.kind !== undefined) assertKind(input.kind);
       if (input.sources !== undefined) assertSources(input.sources);

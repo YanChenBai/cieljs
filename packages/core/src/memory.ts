@@ -1,46 +1,65 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { memoryTools } from "@cieljs/memory";
-import type { Memory } from "@cieljs/memory";
+import { allMemoryTools, memoryTools } from "@cieljs/memory";
+import type { MemoryContext, SpaceMemory } from "@cieljs/memory";
 
 export interface MemoryAgentOptions {
-  memory: Memory;
-  allowWrite?: boolean;
+  space: SpaceMemory;
+  crossSpaceSearch?: boolean;
   maxTokens?: number;
   recentDays?: number;
   countTokens?: (text: string) => number;
 }
 
-export function createMemoryIntegration(options: MemoryAgentOptions, sessionId: string) {
-  const { memory, maxTokens, recentDays, countTokens } = options;
+function renderMemorySection(title: string, context: MemoryContext): string | undefined {
+  if (!context.text) {
+    return undefined;
+  }
+
+  return [`# ${title}`, context.text].join("\n");
+}
+
+export async function createMemory(options: MemoryAgentOptions, sessionId: string) {
+  const { space, maxTokens, recentDays, countTokens } = options;
+  const contextOptions = { maxTokens, countTokens };
+
+  const [globalLongTerm, spaceLongTerm] = await Promise.all([
+    space.manager.global.longTerm.context(contextOptions),
+    space.longTerm.context(contextOptions),
+  ]);
+
+  const systemPrompt = [
+    renderMemorySection("全局长期记忆", globalLongTerm),
+    renderMemorySection("当前空间长期记忆", spaceLongTerm),
+  ]
+    .filter((section): section is string => Boolean(section))
+    .join("\n\n");
+
   const tools = memoryTools({
-    memory,
-    allowWrite: options.allowWrite,
+    space,
     sources: [{ type: "session", sessionId }],
   });
+  const allTools = options.crossSpaceSearch ? allMemoryTools({ manager: space.manager }) : [];
 
   return {
-    tools,
-    // transformContext 的返回值只用于模型调用，不写回 Agent 状态或 session 原始记录。
+    systemPrompt,
+    tools: [...tools, ...allTools],
+    // 每日记忆只属于当前空间，并且只进入本次模型调用的临时上下文。
     transformContext: async (
       messages: AgentMessage[],
       signal?: AbortSignal,
     ): Promise<AgentMessage[]> => {
-      const lastUser = messages.findLast((message) => message.role === "user");
-      const content = lastUser?.role === "user" ? lastUser.content : undefined;
-      const query =
-        typeof content === "string"
-          ? content
-          : content?.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
-      const context = await memory.context({
-        query,
-        maxTokens,
+      const daily = await space.daily.context({
         recentDays,
+        maxTokens,
         countTokens,
         signal,
       });
-      if (!context.text) return messages;
 
-      return [{ role: "user", content: context.text, timestamp: Date.now() }, ...messages];
+      if (!daily.text) {
+        return messages;
+      }
+
+      return [{ role: "user", content: daily.text, timestamp: Date.now() }, ...messages];
     },
   };
 }

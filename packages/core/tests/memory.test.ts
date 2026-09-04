@@ -1,50 +1,58 @@
 import { afterAll, beforeAll, expect, test } from "vite-plus/test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { MemoryManager } from "@cieljs/memory";
-import { createMemoryIntegration } from "../src/memory.ts";
+import { createMemory } from "../src/memory.ts";
 
 let manager: MemoryManager;
+
 beforeAll(async () => {
   manager = await MemoryManager.open({ dataDir: "memory://" });
 }, 30000);
+
 afterAll(async () => {
   await manager?.close();
 });
 
-test("不同 session 共享 space，召回只进入模型上下文且每次刷新", async () => {
-  const scope = { type: "space" as const, spaceId: "live:123" };
-  const memory = manager.memory(scope, { includeGlobal: false });
-  const first = createMemoryIntegration({ memory, allowWrite: true, maxTokens: 5000 }, "session-1");
-  const second = createMemoryIntegration({ memory, maxTokens: 5000 }, "session-2");
-  await first.tools
-    .find((tool) => tool.name === "remember_memory")!
-    .execute("w", {
-      content: "观众喜欢恐怖游戏",
-      layer: "long_term",
-    });
-  const messages: AgentMessage[] = [{ role: "user", content: "观众喜欢什么", timestamp: 1 }];
-  const transformed = await second.transformContext(messages);
+test("长期记忆进入系统提示词，每日记忆只进入当前调用", async () => {
+  const spaceId = "space-1";
+  const space = manager.space(spaceId);
+  await manager.global.longTerm.remember({ content: "global-long-term" });
+  await space.longTerm.remember({ content: "space-long-term" });
+  await space.daily.remember({ content: "space-daily" });
+
+  const integration = await createMemory({ space, maxTokens: 5000 }, "session-1");
+  const messages: AgentMessage[] = [{ role: "user", content: "现在呢", timestamp: 1 }];
+  const transformed = await integration.transformContext(messages);
+
+  expect(integration.systemPrompt).toContain("global-long-term");
+  expect(integration.systemPrompt).toContain("space-long-term");
+  expect(integration.systemPrompt).not.toContain("space-daily");
   expect(messages).toHaveLength(1);
   expect(transformed).toHaveLength(2);
-  expect(JSON.stringify(transformed[0])).toContain("session-1");
-  expect(JSON.stringify(transformed[0])).toContain("恐怖游戏");
-  const [stored] = await memory.list();
-  await memory.forget(stored!.id, { expectedRevision: 1 });
-  expect(await second.transformContext(messages)).toBe(messages);
+  expect(JSON.stringify(transformed[0])).toContain("space-daily");
 });
 
-test("禁用全局记忆时工具与自动上下文使用相同范围", async () => {
-  await manager.memory({ type: "global" }).remember({ layer: "long_term", content: "global-only" });
-  const integration = createMemoryIntegration(
-    {
-      memory: manager.memory({ type: "space", spaceId: "isolated" }, { includeGlobal: false }),
-    },
-    "s",
+test("写入固定归属当前空间，跨空间读取需要显式授权", async () => {
+  const spaceId = "allowed";
+  const space = manager.space(spaceId);
+  const otherLongTerm = await manager
+    .space("other")
+    .longTerm.remember({ content: "other-long-term" });
+  const integration = await createMemory(
+    { space, crossSpaceSearch: true, maxTokens: 5000 },
+    "session-2",
   );
-  const messages: AgentMessage[] = [{ role: "user", content: "global-only", timestamp: 1 }];
-  expect(await integration.transformContext(messages)).toBe(messages);
+
+  await integration.tools
+    .find((tool) => tool.name === "remember_memory")!
+    .execute("write", { content: "current-space-daily", layer: "space.daily" });
+  const current = [...(await space.daily.list()), ...(await space.longTerm.list())];
   const result = await integration.tools
-    .find((tool) => tool.name === "search_memory")!
-    .execute("s", { query: "global-only" });
-  expect(result.details).toEqual({ hits: [] });
+    .find((tool) => tool.name === "search_all_memory")!
+    .execute("search", { query: "other-long-term" });
+  const hits = (result.details as { hits: Array<{ memory: { id: string } }> }).hits;
+
+  expect(current.map((entry) => entry.content)).toContain("current-space-daily");
+  expect(current[0]?.sources).toEqual([{ type: "session", sessionId: "session-2" }]);
+  expect(hits.map((hit) => hit.memory.id)).toContain(otherLongTerm.id);
 });

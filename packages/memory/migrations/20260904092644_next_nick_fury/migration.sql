@@ -1,8 +1,7 @@
 CREATE TABLE "memories" (
 	"id" text PRIMARY KEY,
-	"scope_type" text NOT NULL,
-	"scope_id" text NOT NULL,
 	"layer" text NOT NULL,
+	"space_id" text,
 	"date" date,
 	"kind" text NOT NULL,
 	"content" text NOT NULL,
@@ -12,10 +11,9 @@ CREATE TABLE "memories" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"expires_at" timestamp with time zone,
-	"dedupe_key" text,
 	"metadata" jsonb DEFAULT '{}' NOT NULL,
-	CONSTRAINT "memories_scope_check" CHECK (("scope_type" = 'global' AND "scope_id" = '') OR ("scope_type" = 'space' AND length(trim("scope_id")) > 0)),
-	CONSTRAINT "memories_layer_date_check" CHECK (("layer" = 'daily' AND "date" IS NOT NULL) OR ("layer" = 'long_term' AND "date" IS NULL)),
+	CONSTRAINT "memories_layer_space_check" CHECK (("layer" = 'global.long_term' AND "space_id" IS NULL) OR ("layer" IN ('space.long_term', 'space.daily') AND length(trim("space_id")) > 0)),
+	CONSTRAINT "memories_layer_date_check" CHECK (("layer" = 'space.daily' AND "date" IS NOT NULL) OR ("layer" IN ('global.long_term', 'space.long_term') AND "date" IS NULL)),
 	CONSTRAINT "memories_kind_check" CHECK ("kind" IN ('event', 'fact', 'preference', 'summary')),
 	CONSTRAINT "memories_status_check" CHECK ("status" IN ('active', 'archived')),
 	CONSTRAINT "memories_content_check" CHECK (length(trim("content")) > 0),
@@ -50,8 +48,7 @@ CREATE TABLE "memory_sources" (
 	CONSTRAINT "memory_sources_pkey" PRIMARY KEY("memory_id","position")
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX "memories_scope_dedupe_idx" ON "memories" ("scope_type","scope_id","dedupe_key");--> statement-breakpoint
-CREATE INDEX "memories_scope_layer_date_idx" ON "memories" ("scope_type","scope_id","layer","date");--> statement-breakpoint
+CREATE INDEX "memories_space_layer_date_idx" ON "memories" ("space_id","layer","date") WHERE "layer" <> 'global.long_term';--> statement-breakpoint
 CREATE UNIQUE INDEX "memory_chunks_position_idx" ON "memory_chunks" ("memory_id","position");--> statement-breakpoint
 CREATE INDEX "memory_chunks_fts_idx" ON "memory_chunks" USING gin (to_tsvector('simple', "token_text"));--> statement-breakpoint
 CREATE INDEX "memory_chunks_trgm_idx" ON "memory_chunks" USING gin ("search_text" gin_trgm_ops);--> statement-breakpoint

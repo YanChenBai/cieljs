@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "d30bdf5f-9d33-4f7b-a479-df0ec527bcbd",
+  "id": "7a250668-8dd7-4578-9bdc-8ee52cb4fd0c",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
@@ -49,33 +49,20 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "scope_type",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "memories"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "scope_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "memories"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
       "name": "layer",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "memories"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "space_id",
       "entityType": "columns",
       "schema": "public",
       "table": "memories"
@@ -193,19 +180,6 @@
       "generated": null,
       "identity": null,
       "name": "expires_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "memories"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "dedupe_key",
       "entityType": "columns",
       "schema": "public",
       "table": "memories"
@@ -422,49 +396,7 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "scope_type",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "scope_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "dedupe_key",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "memories_scope_dedupe_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "memories"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "scope_type",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "scope_id",
+          "value": "space_id",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,
@@ -486,11 +418,11 @@
         }
       ],
       "isUnique": false,
-      "where": null,
+      "where": "\"layer\" <> 'global.long_term'",
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "memories_scope_layer_date_idx",
+      "name": "memories_space_layer_date_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "memories"
@@ -672,14 +604,14 @@
       "entityType": "pks"
     },
     {
-      "value": "(\"scope_type\" = 'global' AND \"scope_id\" = '') OR (\"scope_type\" = 'space' AND length(trim(\"scope_id\")) > 0)",
-      "name": "memories_scope_check",
+      "value": "(\"layer\" = 'global.long_term' AND \"space_id\" IS NULL) OR (\"layer\" IN ('space.long_term', 'space.daily') AND length(trim(\"space_id\")) > 0)",
+      "name": "memories_layer_space_check",
       "entityType": "checks",
       "schema": "public",
       "table": "memories"
     },
     {
-      "value": "(\"layer\" = 'daily' AND \"date\" IS NOT NULL) OR (\"layer\" = 'long_term' AND \"date\" IS NULL)",
+      "value": "(\"layer\" = 'space.daily' AND \"date\" IS NOT NULL) OR (\"layer\" IN ('global.long_term', 'space.long_term') AND \"date\" IS NULL)",
       "name": "memories_layer_date_check",
       "entityType": "checks",
       "schema": "public",

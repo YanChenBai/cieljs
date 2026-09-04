@@ -2,35 +2,43 @@ import type { EmbeddingProvider } from "@cieljs/agent-kit";
 
 export type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/agent-kit";
 
-export type MemoryScope = { type: "global" } | { type: "space"; spaceId: string };
-
-export type MemoryLayer = "daily" | "long_term";
+export type MemoryLayer = "global.long_term" | "space.long_term" | "space.daily";
 export type MemoryKind = "event" | "fact" | "preference" | "summary";
 export type MemoryStatus = "active" | "archived";
+
+/** @internal */
+export type MemoryScope = { type: "global" } | { type: "space"; spaceId: string };
+/** @internal */
+export type MemoryScopeSelector = MemoryScope[] | "all";
 
 export type MemorySource =
   | { type: "session"; sessionId: string; messageId?: string; fromSeq?: number; toSeq?: number }
   | { type: "event"; eventId: string; uri?: string }
   | { type: "memory"; memoryId: string };
 
-export type RememberInput = {
+type RememberFields = {
   content: string;
   kind?: MemoryKind;
   occurredAt?: Date;
   expiresAt?: Date | null;
-  dedupeKey?: string;
   sources?: MemorySource[];
   metadata?: Record<string, unknown>;
-} & (
-  | { layer: "daily"; /** 省略时按 occurredAt 和存储时区归档。 */ date?: string }
-  | { layer: "long_term"; date?: never }
-);
+};
 
-export interface MemoryEntry {
-  id: string;
-  scope: MemoryScope;
+export type LongTermRememberInput = RememberFields;
+export type DailyRememberInput = RememberFields & {
+  /** 省略时按 occurredAt 和存储时区归档。 */
+  date?: string;
+};
+
+/** @internal */
+export type RememberInput = RememberFields & {
   layer: MemoryLayer;
-  date: string | null;
+  date?: string;
+};
+
+type MemoryEntryFields = {
+  id: string;
   kind: MemoryKind;
   content: string;
   status: MemoryStatus;
@@ -41,17 +49,23 @@ export interface MemoryEntry {
   expiresAt: Date | null;
   sources: MemorySource[];
   metadata: Record<string, unknown>;
-}
+};
+
+export type MemoryEntry = MemoryEntryFields &
+  (
+    | { layer: "global.long_term"; spaceId: null; date: null }
+    | { layer: "space.long_term"; spaceId: string; date: null }
+    | { layer: "space.daily"; spaceId: string; date: string }
+  );
 
 export interface MemoryAccess {
-  /** 是否包含已归档或已过期的记忆；范围由 Memory 固定。 */
   includeArchived?: boolean;
   includeExpired?: boolean;
 }
 
+/** @internal */
 export interface CrossScopeMemoryAccess extends MemoryAccess {
-  /** 明确列出本次允许读取的范围；不会隐式加入 global。 */
-  scopes: MemoryScope[];
+  scopes: MemoryScopeSelector;
 }
 
 export interface MemoryFilter extends MemoryAccess {
@@ -90,9 +104,9 @@ export interface MemorySearchOptions extends MemoryFilter {
   minVectorSimilarity?: number;
 }
 
+/** @internal */
 export interface CrossScopeMemorySearchOptions extends MemorySearchOptions {
-  /** 明确列出本次允许搜索的范围；不会隐式加入 global。 */
-  scopes: MemoryScope[];
+  scopes: MemoryScopeSelector;
 }
 
 export interface MemorySearchHit {
@@ -105,7 +119,7 @@ export interface MemorySearchHit {
 
 export interface MemoryContextOptions extends MemoryAccess {
   query?: string;
-  /** 默认同时注入近期每日记忆与长期记忆。 */
+  /** @internal */
   layers?: MemoryLayer[];
   date?: string;
   recentDays?: number;

@@ -28,13 +28,10 @@ async function verifyEmbedding(embedding: EmbeddingProvider) {
     embedding,
     onIndexError: (error) => console.error("记忆索引失败", error),
   });
-  const memory = manager.memory({ type: "global" });
+  const memory = manager.global.longTerm;
 
   try {
-    await memory.remember({
-      layer: "long_term",
-      content: "Ciel 默认用中文回答，先给结论，再解释原因。",
-    });
+    await memory.remember({ content: "Ciel 默认用中文回答，先给结论，再解释原因。" });
     await manager.flushIndexes();
     return await memory.searchVector("回答问题时采用什么表达方式");
   } finally {
@@ -61,16 +58,13 @@ console.log(await manager.getIndexStatus());
 
 await manager.retryEmbeddings();
 await manager.flushIndexes();
-
-await memory.rebuildEmbeddings();
-await manager.flushIndexes();
 ```
 
-上例假定 `manager` 已打开、`memory` 已绑定范围。状态按当前模型与维数统计分块数。`flushIndexes` 表示队列执行完毕，不代表所有任务成功；检查 `failed` 了解是否需要重试。
+状态按当前模型与维数统计分块数。`flushIndexes` 表示队列执行完毕，不代表所有任务成功；检查 `failed` 了解是否需要重试。
 
 失败任务持久化保存，同一次运行不会无限自动重试。`retryEmbeddings` 补齐缺失任务并重试失败项；重新打开数据目录时也会恢复当前模型尚未完成或失败的任务。
 
-`rebuildEmbeddings` 重新生成指定范围的当前模型向量。换模型后使用新 Provider 打开，系统会补齐新模型任务；其他模型的向量保留。不同模型即使维数相同也不会比较，不同维数之间也不会计算距离。
+换模型后使用新 Provider 打开，系统会补齐新模型任务；其他模型的向量保留。不同模型即使维数相同也不会比较，不同维数之间也不会计算距离。
 
 ## 数据增长之后
 

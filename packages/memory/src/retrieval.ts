@@ -4,7 +4,12 @@ import { materializeMemoryEntries, type Database } from "./database.ts";
 import type { MemoryEmbeddingIndex } from "./embedding-index.ts";
 import { memories, memoryChunks, memoryEmbeddings } from "./schema.ts";
 import { normalizeSearchText } from "./search.ts";
-import type { MemoryScope, MemorySearchHit, MemorySearchOptions, SearchMethod } from "./types.ts";
+import type {
+  MemoryScopeSelector,
+  MemorySearchHit,
+  MemorySearchOptions,
+  SearchMethod,
+} from "./types.ts";
 import { filterCondition, integerOption } from "./validation.ts";
 
 interface RawHit {
@@ -14,7 +19,7 @@ interface RawHit {
   score: number;
 }
 
-type ScopedSearchOptions = MemorySearchOptions & { scopes: MemoryScope[] };
+type ScopedSearchOptions = MemorySearchOptions & { scopes: MemoryScopeSelector };
 
 export class MemoryRetrieval {
   constructor(
@@ -80,7 +85,9 @@ export class MemoryRetrieval {
     const limit = integerOption(options.candidateLimit ?? 50, "candidateLimit");
     const normalized = normalizeSearchText(query);
 
-    if (!normalized || !options.scopes.length) {
+    const hasNoScopes = Array.isArray(options.scopes) && options.scopes.length === 0;
+
+    if (!normalized || hasNoScopes) {
       return [];
     }
 

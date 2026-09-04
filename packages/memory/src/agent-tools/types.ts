@@ -1,6 +1,6 @@
-import type { Memory } from "../memory.ts";
 import type { MemoryManager } from "../memory-manager.ts";
-import type { MemoryScope, MemorySource } from "../types.ts";
+import type { SpaceMemory } from "../memory-space.ts";
+import type { MemorySource } from "../types.ts";
 
 export interface MemorySourceProviderContext {
   toolCallId: string;
@@ -17,15 +17,12 @@ export interface MemoryToolLimits {
 }
 
 export interface CreateMemoryToolsOptions extends MemoryToolLimits {
-  /** 已由 MemoryManager.memory() 固定读写范围的记忆入口。 */
-  memory: Memory;
-  allowWrite?: boolean;
+  /** 当前空间；工具可以读取两层记忆，写入仍由 layer 明确选择。 */
+  space: SpaceMemory;
   /** 为工具产生的记忆附加来源；函数会在每次写入时重新调用。 */
   sources?: MemorySource[] | MemorySourceProvider;
 }
 
-export interface CreateCrossScopeMemoryToolsOptions extends MemoryToolLimits {
+export interface CreateAllMemoryToolsOptions extends MemoryToolLimits {
   manager: MemoryManager;
-  /** Agent 允许跨范围读取的 scope；创建工具时生成快照。 */
-  scopes: MemoryScope[];
 }

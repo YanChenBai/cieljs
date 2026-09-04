@@ -25,12 +25,13 @@
   },
   "scripts": {
     "build": "vp pack",
-    "dev": "vp pack --watch",
+    "dev": "node --env-file=.env ./src/agent.ts",
     "test": "vp test",
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
+    "@cieljs/agent-kit": "workspace:*",
     "@cieljs/memory": "workspace:*",
     "@cieljs/session": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",

@@ -1,10 +1,10 @@
 import type { Memory } from "../memory.ts";
 import type { MemoryManager } from "../memory-manager.ts";
-import type { MemoryScope } from "../types.ts";
-import type { MemorySource } from "../types.ts";
-import { integerOption, scopeColumns } from "../validation.ts";
+import { getSpaceGlobalMemory, getSpaceMemoryBackend } from "../memory-space.ts";
+import type { MemoryLayer, MemorySource } from "../types.ts";
+import { integerOption } from "../validation.ts";
 import type {
-  CreateCrossScopeMemoryToolsOptions,
+  CreateAllMemoryToolsOptions,
   CreateMemoryToolsOptions,
   MemorySourceProviderContext,
   MemoryToolLimits,
@@ -17,15 +17,14 @@ export const memoryToolsDefaults = {
 
 export interface ResolvedMemoryToolsOptions {
   memory: Memory;
-  allowWrite: boolean;
+  space: CreateMemoryToolsOptions["space"];
   searchLimit: number;
   maxReadChars: number;
   resolveSources: (context: MemorySourceProviderContext) => Promise<MemorySource[]>;
 }
 
-export interface ResolvedCrossScopeMemoryToolsOptions {
+export interface ResolvedAllMemoryToolsOptions {
   manager: MemoryManager;
-  scopes: MemoryScope[];
   searchLimit: number;
   maxReadChars: number;
 }
@@ -43,8 +42,8 @@ export function resolveMemoryToolsOptions(
     typeof configuredSources === "function" ? undefined : structuredClone(configuredSources ?? []);
 
   return {
-    memory: options.memory,
-    allowWrite: options.allowWrite ?? false,
+    memory: getSpaceMemoryBackend(options.space),
+    space: options.space,
     ...limits,
     resolveSources: async (context) => {
       context.signal?.throwIfAborted();
@@ -56,27 +55,21 @@ export function resolveMemoryToolsOptions(
   };
 }
 
-export function resolveCrossScopeMemoryToolsOptions(
-  options: CreateCrossScopeMemoryToolsOptions,
-): ResolvedCrossScopeMemoryToolsOptions {
-  if (!Array.isArray(options.scopes)) {
-    throw new TypeError("必须明确指定 scopes");
-  }
-
-  const scopes = structuredClone(options.scopes);
-
-  for (const scope of scopes) {
-    scopeColumns(scope);
-    Object.freeze(scope);
-  }
-
-  Object.freeze(scopes);
-
+export function resolveAllMemoryToolsOptions(
+  options: CreateAllMemoryToolsOptions,
+): ResolvedAllMemoryToolsOptions {
   return {
     manager: options.manager,
-    scopes,
     ...resolveMemoryToolLimits(options),
   };
+}
+
+export function resolveWritableMemory(options: ResolvedMemoryToolsOptions, layer: MemoryLayer) {
+  if (layer === "global.long_term") {
+    return getSpaceGlobalMemory(options.space).longTerm;
+  }
+
+  return layer === "space.daily" ? options.space.daily : options.space.longTerm;
 }
 
 function resolveMemoryToolLimits(options: MemoryToolLimits) {

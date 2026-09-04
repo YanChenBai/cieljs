@@ -12,7 +12,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
-import type { MemoryKind, MemorySource, MemoryStatus } from "./types.ts";
+import type { MemoryKind, MemoryLayer, MemorySource, MemoryStatus } from "./types.ts";
 
 const vector = customType<{ data: number[]; driverData: string }>({
   dataType: () => "vector",
@@ -24,9 +24,8 @@ export const memories = pgTable(
   "memories",
   {
     id: text("id").primaryKey(),
-    scopeType: text("scope_type").$type<"global" | "space">().notNull(),
-    scopeId: text("scope_id").notNull(),
-    layer: text("layer").$type<"daily" | "long_term">().notNull(),
+    layer: text("layer").$type<MemoryLayer>().notNull(),
+    spaceId: text("space_id"),
     date: date("date"),
     kind: text("kind").$type<MemoryKind>().notNull(),
     content: text("content").notNull(),
@@ -36,29 +35,24 @@ export const memories = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
-    dedupeKey: text("dedupe_key"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
   },
   (table) => [
     check(
-      "memories_scope_check",
-      sql`(${table.scopeType} = 'global' AND ${table.scopeId} = '') OR (${table.scopeType} = 'space' AND length(trim(${table.scopeId})) > 0)`,
+      "memories_layer_space_check",
+      sql`(${table.layer} = 'global.long_term' AND ${table.spaceId} IS NULL) OR (${table.layer} IN ('space.long_term', 'space.daily') AND length(trim(${table.spaceId})) > 0)`,
     ),
     check(
       "memories_layer_date_check",
-      sql`(${table.layer} = 'daily' AND ${table.date} IS NOT NULL) OR (${table.layer} = 'long_term' AND ${table.date} IS NULL)`,
+      sql`(${table.layer} = 'space.daily' AND ${table.date} IS NOT NULL) OR (${table.layer} IN ('global.long_term', 'space.long_term') AND ${table.date} IS NULL)`,
     ),
     check("memories_kind_check", sql`${table.kind} IN ('event', 'fact', 'preference', 'summary')`),
     check("memories_status_check", sql`${table.status} IN ('active', 'archived')`),
     check("memories_content_check", sql`length(trim(${table.content})) > 0`),
     check("memories_revision_check", sql`${table.revision} > 0`),
-    uniqueIndex("memories_scope_dedupe_idx").on(table.scopeType, table.scopeId, table.dedupeKey),
-    index("memories_scope_layer_date_idx").on(
-      table.scopeType,
-      table.scopeId,
-      table.layer,
-      table.date,
-    ),
+    index("memories_space_layer_date_idx")
+      .on(table.spaceId, table.layer, table.date)
+      .where(sql`${table.layer} <> 'global.long_term'`),
   ],
 );
 

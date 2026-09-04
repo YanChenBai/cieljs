@@ -8,16 +8,17 @@ import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from "@cielj
 
 import { createDatabase, materializeMemoryEntries, type Database } from "./database.ts";
 import { MemoryEmbeddingIndex } from "./embedding-index.ts";
-import { Memory, type MemoryOptions, type MemoryServices } from "./memory.ts";
+import { Memory, type MemoryServices } from "./memory.ts";
+import { createGlobalMemory, createSpaceMemory } from "./memory-space.ts";
+import type { GlobalMemory, SpaceMemory } from "./memory-space.ts";
 import { MemoryRetrieval } from "./retrieval.ts";
 import { memories } from "./schema.ts";
 import { tokenizeSearchText } from "./search.ts";
 import type {
-  CrossScopeMemoryAccess,
-  CrossScopeMemorySearchOptions,
+  MemoryAccess,
   MemoryEntry,
   MemoryManagerOptions,
-  MemoryScope,
+  MemorySearchOptions,
   MemorySearchHit,
 } from "./types.ts";
 import { accessCondition } from "./validation.ts";
@@ -30,6 +31,7 @@ type ResolvedMemoryManagerOptions = Omit<MemoryManagerOptions, "embedding"> & {
 
 export class MemoryManager {
   readonly timeZone: string;
+  readonly global: GlobalMemory;
 
   private readonly embeddingIndex: MemoryEmbeddingIndex;
   private readonly memoryServices: MemoryServices;
@@ -53,6 +55,7 @@ export class MemoryManager {
       tokenize,
       operate: this.operate.bind(this),
     };
+    this.global = createGlobalMemory(Memory.create(this.memoryServices, { type: "global" }));
   }
 
   static async open(options: MemoryManagerOptions): Promise<MemoryManager> {
@@ -84,40 +87,47 @@ export class MemoryManager {
     }
   }
 
-  memory(scope: MemoryScope, options: MemoryOptions = {}): Memory {
-    return Memory.create(this.memoryServices, scope, options);
+  space(spaceId: string): SpaceMemory {
+    const scope = { type: "space" as const, spaceId };
+
+    return createSpaceMemory(spaceId, Memory.create(this.memoryServices, scope), this.global);
   }
 
-  get(id: string, options: CrossScopeMemoryAccess): Promise<MemoryEntry | null> {
+  get(id: string, options: MemoryAccess = {}): Promise<MemoryEntry | null> {
     return this.operate(() =>
       this.memoryServices.db.transaction(async (transaction) => {
         const rows = await transaction
           .select()
           .from(memories)
-          .where(and(eq(memories.id, id), accessCondition(options)));
+          .where(and(eq(memories.id, id), accessCondition({ ...options, scopes: "all" })));
 
         return (await materializeMemoryEntries(transaction, rows))[0] ?? null;
       }),
     );
   }
 
-  searchFullText(
-    query: string,
-    options: CrossScopeMemorySearchOptions,
-  ): Promise<MemorySearchHit[]> {
-    return this.operate(() => this.memoryServices.retrieval.searchFullText(query, options));
+  searchFullText(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchHit[]> {
+    return this.operate(() =>
+      this.memoryServices.retrieval.searchFullText(query, { ...options, scopes: "all" }),
+    );
   }
 
-  searchTrigram(query: string, options: CrossScopeMemorySearchOptions): Promise<MemorySearchHit[]> {
-    return this.operate(() => this.memoryServices.retrieval.searchTrigram(query, options));
+  searchTrigram(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchHit[]> {
+    return this.operate(() =>
+      this.memoryServices.retrieval.searchTrigram(query, { ...options, scopes: "all" }),
+    );
   }
 
-  searchVector(query: string, options: CrossScopeMemorySearchOptions): Promise<MemorySearchHit[]> {
-    return this.operate(() => this.memoryServices.retrieval.searchVector(query, options));
+  searchVector(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchHit[]> {
+    return this.operate(() =>
+      this.memoryServices.retrieval.searchVector(query, { ...options, scopes: "all" }),
+    );
   }
 
-  search(query: string, options: CrossScopeMemorySearchOptions): Promise<MemorySearchHit[]> {
-    return this.operate(() => this.memoryServices.retrieval.search(query, options));
+  search(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchHit[]> {
+    return this.operate(() =>
+      this.memoryServices.retrieval.search(query, { ...options, scopes: "all" }),
+    );
   }
 
   retryEmbeddings(): Promise<void> {

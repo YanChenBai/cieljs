@@ -1,6 +1,10 @@
 import { Type } from "typebox";
 
-export const memoryLayerSchema = Type.Union([Type.Literal("daily"), Type.Literal("long_term")]);
+export const memoryLayerSchema = Type.Union([
+  Type.Literal("global.long_term"),
+  Type.Literal("space.long_term"),
+  Type.Literal("space.daily"),
+]);
 
 export const memoryKindSchema = Type.Union([
   Type.Literal("event"),
