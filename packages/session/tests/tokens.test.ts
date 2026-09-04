@@ -1,8 +1,8 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { describe, expect, test } from "vite-plus/test";
 
-import { getCompactionBoundary } from "../src/compaction.ts";
-import { estimateContextTokens, estimateTokens } from "../src/tokens.ts";
+import { findCompactionBoundary } from "../src/compaction.ts";
+import { estimateContextTokens, estimateAgentMessageTokens } from "../src/tokens.ts";
 
 const user = (content: string): AgentMessage => ({ role: "user", content, timestamp: 1 });
 function assistant(totalTokens: number): Extract<AgentMessage, { role: "assistant" }> {
@@ -83,7 +83,7 @@ describe("Pi 上下文 token 计算", () => {
 
   test("图片、thinking、工具参数计入估算，图片数据长度不影响固定额度", () => {
     expect(
-      estimateTokens({
+      estimateAgentMessageTokens({
         role: "user",
         content: [
           { type: "text", text: "hello" },
@@ -97,7 +97,7 @@ describe("Pi 上下文 token 计算", () => {
       { type: "thinking", thinking: "12345678" },
       { type: "toolCall", id: "call", name: "tool", arguments: { a: 1 } },
     ];
-    expect(estimateTokens(message)).toBe(5);
+    expect(estimateAgentMessageTokens(message)).toBe(5);
   });
 
   test("严格超过窗口减预留值才触发，消息数量不决定压缩", () => {
@@ -108,11 +108,11 @@ describe("Pi 上下文 token 计算", () => {
       summarize: async () => "摘要",
     };
     const context = { summary: null, messages: [user("a".repeat(316)), user("abcd")] };
-    expect(getCompactionBoundary(context, options)).toBe(0);
+    expect(findCompactionBoundary(context, options)).toBe(0);
     context.messages[0] = user("a".repeat(320));
-    expect(getCompactionBoundary(context, options)).toBe(1);
+    expect(findCompactionBoundary(context, options)).toBe(1);
     expect(
-      getCompactionBoundary(
+      findCompactionBoundary(
         { summary: null, messages: Array.from({ length: 50 }, () => user("a")) },
         options,
       ),
@@ -122,11 +122,14 @@ describe("Pi 上下文 token 计算", () => {
   test("默认预留 16384，只有完整长轮次时仍不截断轮次", () => {
     const context = { summary: null, messages: [user("abcd"), assistant(3616), user("")] };
     const options = { contextWindow: 20000, keepRecentMessages: 1, summarize: async () => "摘要" };
-    expect(getCompactionBoundary(context, options)).toBe(0);
+    expect(findCompactionBoundary(context, options)).toBe(0);
     context.messages[1] = assistant(3617);
-    expect(getCompactionBoundary(context, options)).toBe(2);
+    expect(findCompactionBoundary(context, options)).toBe(2);
     expect(
-      getCompactionBoundary({ summary: null, messages: [user("abcd"), assistant(90000)] }, options),
+      findCompactionBoundary(
+        { summary: null, messages: [user("abcd"), assistant(90000)] },
+        options,
+      ),
     ).toBe(0);
   });
 });

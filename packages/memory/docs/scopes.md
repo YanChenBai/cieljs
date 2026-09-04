@@ -16,9 +16,17 @@ const anotherSpace: MemoryScope = { type: "space", spaceId: "space-2" };
 
 底层用 `scope_type + scope_id` 区分范围。global 使用空的内部 ID，space 必须有非空 ID。单个数据目录表示一个 Ciel 的记忆库；多个 Ciel 使用不同数据目录。
 
-查询必须传 `scopes`。只读当前空间用 `[space]`，允许读全局时用 `[space, global]`；空数组返回空结果，不会退化成全库查询。按 ID 读取也应用范围条件。存储 API 是受信任的应用接口，调用方负责决定可访问的 scopes；Agent 工具会固定这组范围。
+调用 `manager.memory(space)` 时会固定读写范围。space 默认同时读取 global；传 `{ includeGlobal: false }` 时只读取当前空间。绑定 global 时只读取 global。按 ID 读取也应用相同范围条件，Agent 工具直接复用这个固定范围的入口。
 
-global 是独立归属，不是所有空间的自动汇总。需要跨空间汇总时由上层明确选择范围和输出归属。
+global 是独立归属，不是所有空间的自动汇总。需要跨空间搜索时，由上层明确传入允许访问的范围：
+
+```ts
+const hits = await manager.search("历史记录", {
+  scopes: [global, space, anotherSpace],
+});
+```
+
+`MemoryManager` 不会隐式加入 global，也不提供无范围约束的搜索。跨范围读取同样使用明确的授权列表：`manager.get(id, { scopes })`。写入仍通过 `manager.memory(scope)` 完成，因此不会因为获得跨范围读取能力而失去单一归属。
 
 ## 每日记忆属于哪一天？
 
@@ -32,11 +40,10 @@ global 是独立归属，不是所有空间的自动汇总。需要跨空间汇�
 
 ## 重试与修改
 
-外部事件可能重复投递，使用稳定的 `dedupeKey` 可以避免同一范围内重复保存。下面假定 `store` 已打开，`scope` 为当前空间：
+外部事件可能重复投递，使用稳定的 `dedupeKey` 可以避免同一范围内重复保存。下面假定 `memory` 是 `manager.memory(scope)` 返回的当前空间入口：
 
 ```ts
-const memory = await store.remember({
-  scope,
+const saved = await memory.remember({
   layer: "daily",
   date: "2026-09-03",
   content: "约定周五整理本周的讨论记录。",
@@ -44,9 +51,8 @@ const memory = await store.remember({
   sources: [{ type: "event", eventId: "agreement-42" }],
 });
 
-const updated = await store.update(memory.id, {
-  scope,
-  expectedRevision: memory.revision,
+const updated = await memory.update(saved.id, {
+  expectedRevision: saved.revision,
   content: "约定改到周六整理本周的讨论记录。",
 });
 ```
@@ -60,8 +66,7 @@ const updated = await store.update(memory.id, {
 `expiresAt` 控制何时停止默认召回，与 daily/long_term 无关。它不自动物理删除正文。
 
 ```ts
-await store.forget(updated.id, {
-  scope,
+await memory.forget(updated.id, {
   expectedRevision: updated.revision,
 });
 ```

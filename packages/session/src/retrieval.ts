@@ -4,7 +4,11 @@ import type { Database } from "./database.ts";
 import type { EmbeddingIndex } from "./embedding-index.ts";
 import { retrievalChunks, retrievalEmbeddings } from "./schema.ts";
 import { normalizeSearchText } from "./search.ts";
-import type { RawSearchHit, SearchHit, SearchOptions } from "./types.ts";
+import type { RawSearchHit, SearchHit, SearchOptions, SearchSource } from "./types.ts";
+
+interface RetrievalSearchOptions extends SearchOptions {
+  sessionId?: string;
+}
 
 export class SessionRetrieval {
   private readonly db: Database;
@@ -15,7 +19,10 @@ export class SessionRetrieval {
     this.embeddingIndex = embeddingIndex;
   }
 
-  async searchFullText(query: string, options: SearchOptions = {}): Promise<RawSearchHit[]> {
+  async searchFullText(
+    query: string,
+    options: RetrievalSearchOptions = {},
+  ): Promise<RawSearchHit[]> {
     const limit = options.ftsLimit ?? options.limit ?? 20;
 
     const normalized = normalizeSearchText(query);
@@ -74,7 +81,10 @@ export class SessionRetrieval {
       .limit(limit);
   }
 
-  async searchTrigram(query: string, options: SearchOptions = {}): Promise<RawSearchHit[]> {
+  async searchTrigram(
+    query: string,
+    options: RetrievalSearchOptions = {},
+  ): Promise<RawSearchHit[]> {
     const limit = options.trigramLimit ?? options.limit ?? 20;
 
     const normalized = normalizeSearchText(query);
@@ -93,15 +103,10 @@ export class SessionRetrieval {
     return this.db
       .select({
         chunkId: retrievalChunks.id,
-
         sessionId: retrievalChunks.sessionId,
-
         messageId: retrievalChunks.messageId,
-
         messageSeq: retrievalChunks.messageSeq,
-
         content: retrievalChunks.content,
-
         score: similarity,
       })
       .from(retrievalChunks)
@@ -124,7 +129,7 @@ export class SessionRetrieval {
       .limit(limit);
   }
 
-  async searchVector(query: string, options: SearchOptions = {}): Promise<RawSearchHit[]> {
+  async searchVector(query: string, options: RetrievalSearchOptions = {}): Promise<RawSearchHit[]> {
     if (!normalizeSearchText(query)) {
       return [];
     }
@@ -151,15 +156,10 @@ export class SessionRetrieval {
     return this.db
       .select({
         chunkId: retrievalChunks.id,
-
         sessionId: retrievalChunks.sessionId,
-
         messageId: retrievalChunks.messageId,
-
         messageSeq: retrievalChunks.messageSeq,
-
         content: retrievalChunks.content,
-
         score: similarity,
       })
       .from(retrievalEmbeddings)
@@ -183,8 +183,9 @@ export class SessionRetrieval {
    *
    * 用 RRF 融合，不直接混合不同 score。
    */
-  async search(query: string, options: SearchOptions = {}): Promise<SearchHit[]> {
+  async search(query: string, options: RetrievalSearchOptions = {}): Promise<SearchHit[]> {
     options.signal?.throwIfAborted();
+
     const [fts, trigram, vector] = await Promise.all([
       this.searchFullText(query, options),
 
@@ -198,51 +199,55 @@ export class SessionRetrieval {
     ]);
 
     options.signal?.throwIfAborted();
+
     const hits = new Map<string, SearchHit>();
 
-    const add = (rows: RawSearchHit[], source: "fts" | "trigram" | "vector", weight: number) => {
-      rows.forEach((row, index) => {
-        /**
-         * Reciprocal Rank Fusion。
-         */
-        const score = weight * (1 / (60 + index + 1));
+    this.mergeRankedHits(hits, fts, "fts", 1);
+    this.mergeRankedHits(hits, trigram, "trigram", 0.7);
+    this.mergeRankedHits(hits, vector, "vector", 1);
 
-        const existing = hits.get(row.chunkId);
+    return this.rankHits(hits.values(), options.limit ?? 10);
+  }
 
-        if (existing) {
-          existing.score += score;
+  private mergeRankedHits(
+    hits: Map<string, SearchHit>,
+    rows: RawSearchHit[],
+    source: SearchSource,
+    weight: number,
+  ): void {
+    for (const [index, row] of rows.entries()) {
+      const score = weight / (60 + index + 1);
 
-          if (!existing.sources.includes(source)) {
-            existing.sources.push(source);
-          }
+      const existing = hits.get(row.chunkId);
 
-          return;
+      /**
+       * 同一 chunk 被多个检索源命中时
+       * 累加各来源的 RRF 分数， 并记录命中的检索源
+       */
+      if (existing) {
+        existing.score += score;
+
+        if (!existing.sources.includes(source)) {
+          existing.sources.push(source);
         }
 
-        hits.set(row.chunkId, {
-          chunkId: row.chunkId,
+        continue;
+      }
 
-          sessionId: row.sessionId,
-
-          messageId: row.messageId,
-
-          messageSeq: row.messageSeq,
-
-          content: row.content,
-
-          score,
-
-          sources: [source],
-        });
+      hits.set(row.chunkId, {
+        chunkId: row.chunkId,
+        sessionId: row.sessionId,
+        messageId: row.messageId,
+        messageSeq: row.messageSeq,
+        content: row.content,
+        score,
+        sources: [source],
       });
-    };
+    }
+  }
 
-    add(fts, "fts", 1);
-
-    add(trigram, "trigram", 0.7);
-
-    add(vector, "vector", 1);
-
-    return [...hits.values()].sort((a, b) => b.score - a.score).slice(0, options.limit ?? 10);
+  private rankHits(hits: Iterable<SearchHit>, limit: number): SearchHit[] {
+    const results = [...hits];
+    return results.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 }

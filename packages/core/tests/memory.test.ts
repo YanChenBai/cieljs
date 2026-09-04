@@ -1,26 +1,21 @@
 import { afterAll, beforeAll, expect, test } from "vite-plus/test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { MemoryStore } from "@cieljs/memory";
+import { MemoryManager } from "@cieljs/memory";
 import { createMemoryIntegration } from "../src/memory.ts";
 
-let store: MemoryStore;
+let manager: MemoryManager;
 beforeAll(async () => {
-  store = await MemoryStore.open({ dataDir: "memory://" });
+  manager = await MemoryManager.open({ dataDir: "memory://" });
 }, 30000);
 afterAll(async () => {
-  await store?.close();
+  await manager?.close();
 });
 
 test("不同 session 共享 space，召回只进入模型上下文且每次刷新", async () => {
   const scope = { type: "space" as const, spaceId: "live:123" };
-  const first = createMemoryIntegration(
-    { store, scope, allowWrite: true, includeGlobal: false, maxTokens: 5000 },
-    "session-1",
-  );
-  const second = createMemoryIntegration(
-    { store, scope, includeGlobal: false, maxTokens: 5000 },
-    "session-2",
-  );
+  const memory = manager.memory(scope, { includeGlobal: false });
+  const first = createMemoryIntegration({ memory, allowWrite: true, maxTokens: 5000 }, "session-1");
+  const second = createMemoryIntegration({ memory, maxTokens: 5000 }, "session-2");
   await first.tools
     .find((tool) => tool.name === "remember_memory")!
     .execute("w", {
@@ -33,15 +28,17 @@ test("不同 session 共享 space，召回只进入模型上下文且每次刷�
   expect(transformed).toHaveLength(2);
   expect(JSON.stringify(transformed[0])).toContain("session-1");
   expect(JSON.stringify(transformed[0])).toContain("恐怖游戏");
-  const [memory] = await store.list({ scopes: [scope] });
-  await store.forget(memory!.id, { scope, expectedRevision: 1 });
+  const [stored] = await memory.list();
+  await memory.forget(stored!.id, { expectedRevision: 1 });
   expect(await second.transformContext(messages)).toBe(messages);
 });
 
 test("禁用全局记忆时工具与自动上下文使用相同范围", async () => {
-  await store.remember({ scope: { type: "global" }, layer: "long_term", content: "global-only" });
+  await manager.memory({ type: "global" }).remember({ layer: "long_term", content: "global-only" });
   const integration = createMemoryIntegration(
-    { store, scope: { type: "space", spaceId: "isolated" }, includeGlobal: false },
+    {
+      memory: manager.memory({ type: "space", spaceId: "isolated" }, { includeGlobal: false }),
+    },
     "s",
   );
   const messages: AgentMessage[] = [{ role: "user", content: "global-only", timestamp: 1 }];

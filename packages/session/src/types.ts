@@ -1,32 +1,9 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { EmbeddingProvider } from "@cieljs/agent-kit";
 
-export interface EmbeddingOptions {
-  /** 区分检索查询与待索引文档，供模型选择前缀或任务类型。 */
-  purpose: "query" | "document";
-  signal?: AbortSignal;
-}
+export type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/agent-kit";
 
-export interface EmbeddingProvider {
-  /**
-   * embedding model 标识。
-   *
-   * 例如：
-   *
-   * qwen3-embedding-0.6b
-   */
-  readonly model: string;
-
-  /**
-   * 输出向量维数。不同模型和维数的索引相互隔离。
-   */
-  readonly dimensions: number;
-
-  /** 单次索引请求的最大文本数，默认 32。 */
-  readonly batchSize?: number;
-
-  /** 统一批量接口，返回顺序必须与输入一致；查询也使用单元素数组。 */
-  embedBatch(texts: string[], options: EmbeddingOptions): Promise<number[][]>;
-}
+export type SearchSource = "fts" | "trigram" | "vector";
 
 export interface SummarizeInput {
   sessionId: string;
@@ -79,7 +56,6 @@ export interface AppendCompactionInput {
 
 export interface SearchOptions {
   signal?: AbortSignal;
-  sessionId?: string;
 
   limit?: number;
 
@@ -111,7 +87,7 @@ export interface SearchHit {
    */
   score: number;
 
-  sources: Array<"fts" | "trigram" | "vector">;
+  sources: Array<SearchSource>;
 }
 
 export interface RawSearchHit {
@@ -128,7 +104,7 @@ export interface RawSearchHit {
   score: number;
 }
 
-export interface SessionStoreOptions {
+export interface SessionManagerOptions {
   dataDir: string;
 
   /**
@@ -140,4 +116,22 @@ export interface SessionStoreOptions {
    * embedding 错误不会影响 Session。
    */
   onIndexError?: (error: unknown) => void;
+}
+
+export interface Chunk {
+  id: string;
+  content: string;
+}
+
+export interface GenerateSummaryInput {
+  systemPrompt: string;
+  prompt: string;
+  signal?: AbortSignal;
+}
+
+export interface SessionSummarizerOptions {
+  /** 在此配置模型、凭据、输出上限及超时，存储层不依赖具体模型 SDK。 */
+  generateText: (input: GenerateSummaryInput) => Promise<string>;
+  /** 追加领域要求，不替换历史内容的信任边界。 */
+  instructions?: string;
 }

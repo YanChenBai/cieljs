@@ -12,9 +12,10 @@ CREATE TABLE "retrieval_chunks" (
 CREATE TABLE "retrieval_embeddings" (
 	"chunk_id" text,
 	"model" text,
-	"embedding" vector(1024) NOT NULL,
+	"dimensions" integer,
+	"embedding" vector NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "retrieval_embeddings_pkey" PRIMARY KEY("chunk_id","model")
+	CONSTRAINT "retrieval_embeddings_pkey" PRIMARY KEY("chunk_id","model","dimensions")
 );
 --> statement-breakpoint
 CREATE TABLE "session_compactions" (
@@ -43,7 +44,7 @@ CREATE UNIQUE INDEX "retrieval_chunks_message_chunk_unique" ON "retrieval_chunks
 CREATE INDEX "retrieval_chunks_session_seq_idx" ON "retrieval_chunks" ("session_id","message_seq");--> statement-breakpoint
 CREATE INDEX "retrieval_chunks_fts_idx" ON "retrieval_chunks" USING gin (to_tsvector('simple', "search_text"));--> statement-breakpoint
 CREATE INDEX "retrieval_chunks_trgm_idx" ON "retrieval_chunks" USING gin ("search_text" gin_trgm_ops);--> statement-breakpoint
-CREATE INDEX "retrieval_embeddings_hnsw_idx" ON "retrieval_embeddings" USING hnsw ("embedding" vector_cosine_ops);--> statement-breakpoint
+CREATE INDEX "retrieval_embeddings_model_dimensions_idx" ON "retrieval_embeddings" ("model","dimensions");--> statement-breakpoint
 CREATE UNIQUE INDEX "session_compactions_session_through_unique" ON "session_compactions" ("session_id","through_seq");--> statement-breakpoint
 CREATE UNIQUE INDEX "session_messages_session_seq_unique" ON "session_messages" ("session_id","seq");--> statement-breakpoint
 ALTER TABLE "retrieval_chunks" ADD CONSTRAINT "retrieval_chunks_session_id_sessions_id_fkey" FOREIGN KEY ("session_id") REFERENCES "sessions"("id") ON DELETE CASCADE;--> statement-breakpoint

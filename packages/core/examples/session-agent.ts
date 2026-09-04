@@ -1,10 +1,10 @@
-import { SessionStore } from "@cieljs/session";
+import { SessionManager } from "@cieljs/session";
 import { createSessionAgent } from "../src/agent.ts";
 
-const store = await SessionStore.open({ dataDir: ".ciel/session" });
+const manager = await SessionManager.open({ dataDir: ".ciel/session" });
 const { agent, unsubscribe, flushPersistence } = await createSessionAgent({
   sessionId: "732",
-  store,
+  manager,
   systemPrompt: "",
 });
 
@@ -21,5 +21,5 @@ try {
 } finally {
   unsubscribe();
   await flushPersistence();
-  await store.close();
+  await manager.close();
 }

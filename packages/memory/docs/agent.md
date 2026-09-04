@@ -4,15 +4,14 @@ Agent 可以通过工具主动查找记忆，也可以在调用模型前获得�
 
 ## 加入记忆工具
 
-假定 `store` 已打开，为当前空间创建工具：
+假定 `manager` 已打开，先取得固定范围的记忆入口，再创建工具：
 
 ```ts
 import { memoryTools } from "@cieljs/memory";
 
+const memory = manager.memory({ type: "space", spaceId: "space-1" }, { includeGlobal: true });
 const tools = memoryTools({
-  store,
-  scope: { type: "space", spaceId: "space-1" },
-  includeGlobal: true,
+  memory,
   allowWrite: false,
 });
 ```
@@ -21,17 +20,43 @@ const tools = memoryTools({
 
 工具参数不提供 scope 字段，范围在创建时捕获。`read_memory` 按 ID 读取也会检查范围。长正文默认每页 12,000 个 UTF-16 字符，通过返回的 `nextOffset` 继续读取。
 
+需要像 session 一样显式查询多个范围时，单独创建跨 scope 工具：
+
+```ts
+import { crossScopeMemoryTools } from "@cieljs/memory";
+
+const tools = crossScopeMemoryTools({
+  manager,
+  scopes: [
+    { type: "global" },
+    { type: "space", spaceId: "space-1" },
+    { type: "space", spaceId: "space-2" },
+  ],
+});
+```
+
+它提供 `search_cross_scopes` 与 `read_cross_scopes`。`scopes` 在创建时生成快照，工具参数不允许模型选择或扩大范围。这两个工具只读；写入仍由绑定单一 scope 的 `remember_memory` 完成。
+
 设置 `allowWrite: true` 后加入 `remember_memory`。它只向绑定 scope 写入，即使允许读取全局，也不会让空间工具写入全局。可以通过 `sources` 为每次写入附加当前 session 等来源。
 
-当前不暴露模型可调用的修改、归档工具；应用可以通过 `store.update/forget` 执行带版本检查的变更。
+当来源会随当前 session、消息或外部事件变化时，可以传入函数。函数会在每次 `remember_memory` 写入前重新调用，也可以返回 Promise：
+
+```ts
+const tools = memoryTools({
+  memory,
+  allowWrite: true,
+  sources: () => [{ type: "session", sessionId: currentSessionId }],
+});
+```
+
+需要关联工具调用本身时，可以接收 `{ toolCallId, signal }` 参数。静态来源数组仍然支持，并会在创建工具时生成快照。
+
+当前不暴露模型可调用的修改、归档工具；应用可以通过 `memory.update/forget` 执行带版本检查的变更。
 
 ## 准备上下文
 
 ```ts
-import { getMemoryContext } from "@cieljs/memory";
-
-const context = await getMemoryContext(store, {
-  scopes: [scope, { type: "global" }],
+const context = await memory.context({
   query: "我们之前决定如何保存历史记录？",
   recentDays: 2,
   maxTokens: 2000,
@@ -41,6 +66,17 @@ const context = await getMemoryContext(store, {
 上例假定 `scope` 为当前空间。函数读取最近两天（含当天）的每日记忆，并按 query 搜索长期记忆；没有 query 时读取近期长期记忆。两层交替选取，整条记忆放不下就跳过，不会截断事实正文。
 
 日期默认按存储时区计算，也可以显式传 `date` 进行历史回放。候选上限为 50 条每日记忆与 20 条长期记忆；大量历史的精确查询交给搜索工具。
+
+只把长期记忆注入 system prompt 时，可以限制上下文层级：
+
+```ts
+const { text, memories } = await memory.context({
+  layers: ["long_term"],
+  maxTokens: 2000,
+});
+```
+
+`memory` 的读取范围由 `manager.memory(scope, { includeGlobal })` 决定。需要程序化获得原始记录而不是提示词文本时，使用 `memory.list({ layer: "long_term" })`；绑定 global 只查全局，绑定 space 并关闭 `includeGlobal` 只查该空间。
 
 `maxTokens` 的预算包括记忆边界说明、正文和来源。默认以 UTF-8 字节数做保守估算；需要匹配对话模型时，传 `countTokens(text)`，预算按该函数返回值计算。设置 `maxTokens: 0` 可禁用自动注入。
 
@@ -52,20 +88,19 @@ const context = await getMemoryContext(store, {
 
 ```ts
 import { createSessionAgent } from "core";
-import { SessionStore } from "@cieljs/session";
-import { MemoryStore } from "@cieljs/memory";
+import { SessionManager } from "@cieljs/session";
+import { MemoryManager } from "@cieljs/memory";
 
-const sessions = await SessionStore.open({ dataDir: ".ciel/sessions" });
-const memory = await MemoryStore.open({ dataDir: ".ciel/memory" });
+const sessions = await SessionManager.open({ dataDir: ".ciel/sessions" });
+const memories = await MemoryManager.open({ dataDir: ".ciel/memory" });
+const memory = memories.memory({ type: "space", spaceId: "space-1" });
 
 const { agent, unsubscribe, flushPersistence } = await createSessionAgent({
-  store: sessions,
+  manager: sessions,
   sessionId: "conversation-1",
   systemPrompt: "你是 Ciel。结合当前上下文与相关记忆，帮助用户完成任务。",
   memory: {
-    store: memory,
-    scope: { type: "space", spaceId: "space-1" },
-    includeGlobal: true,
+    memory,
     allowWrite: true,
     maxTokens: 2000,
   },
@@ -77,7 +112,7 @@ try {
   unsubscribe();
   await flushPersistence();
   await sessions.close();
-  await memory.close();
+  await memories.close();
 }
 ```
 

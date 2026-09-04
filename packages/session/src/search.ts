@@ -1,5 +1,17 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 
+function tryStringify(value: unknown): string | undefined {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
 /**
  * AgentMessage → 可搜索文本。
  *
@@ -12,7 +24,7 @@ export function messageToSearchText(message: AgentMessage): string {
     }
   ).content;
 
-  if (typeof content === "string") {
+  if (isString(content)) {
     return content.trim();
   }
 
@@ -31,7 +43,7 @@ export function messageToSearchText(message: AgentMessage): string {
 
     switch (item.type) {
       case "text": {
-        if (typeof item.text === "string") {
+        if (isString(item.text)) {
           parts.push(item.text);
         }
 
@@ -39,16 +51,10 @@ export function messageToSearchText(message: AgentMessage): string {
       }
 
       case "toolCall": {
-        if (typeof item.name === "string") {
-          parts.push(item.name);
-        }
+        const argumentsText = tryStringify(item.arguments);
 
-        if (item.arguments !== undefined) {
-          try {
-            parts.push(JSON.stringify(item.arguments));
-          } catch {
-            parts.push("[工具参数无法序列化]");
-          }
+        if (isString(item.name) && argumentsText) {
+          parts.push(item.name, argumentsText);
         }
 
         break;

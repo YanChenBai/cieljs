@@ -6,13 +6,14 @@
 
 准备 Embedding 服务的模型标识、输出维数和批量调用函数。模型标识应能区分服务商与版本；即使维数相同，不同模型生成的向量也不能混用。
 
-`EmbeddingProvider` 只有一个生成入口：`embedBatch(texts, options)`。索引传入多条文档，查询传入只包含一条文本的数组。
+`EmbeddingProvider` 的批量入口是 `embedBatch(texts, options)`。索引传入多条文档；查询使用可选的单文本入口 `embed(text, options)`，未提供时由 agent kit 自动调用单元素 `embedBatch`。
 
 | 配置         | 说明                         | 默认值 |
 | ------------ | ---------------------------- | ------ |
 | `model`      | 向量空间的唯一标识           | 必填   |
 | `dimensions` | 输出维数，1 到 16,000 的整数 | 必填   |
 | `batchSize`  | 单次索引请求的最大文本数     | 32     |
+| `embed`      | 单文本向量接口               | 可选   |
 | `embedBatch` | 返回与输入顺序一致的向量数组 | 必填   |
 
 ## 第二步：接入服务
@@ -20,7 +21,7 @@
 将你使用的 SDK 或本地模型封装成批量函数。下面的工厂直接接收已配置好模型、地址和凭据的调用函数：
 
 ```ts
-import type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/session";
+import type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/agent-kit";
 
 type GenerateEmbeddings = (texts: string[], options: EmbeddingOptions) => Promise<number[][]>;
 
@@ -47,26 +48,27 @@ export function createEmbeddingProvider(
 下面的函数接收第二步创建的 Provider，写入消息并验证检索：
 
 ```ts
-import { SessionStore, type EmbeddingProvider } from "@cieljs/session";
+import type { EmbeddingProvider } from "@cieljs/agent-kit";
+import { SessionManager } from "@cieljs/session";
 
 export async function verifyEmbedding(embedding: EmbeddingProvider) {
-  const store = await SessionStore.open({
+  const manager = await SessionManager.open({
     dataDir: ".ciel/sessions",
     embedding,
     onIndexError: (error) => console.error("向量索引失败", error),
   });
 
   try {
-    const session = await store.createSession();
-    await store.appendMessage(session.id, {
+    const session = await manager.session();
+    await session.appendMessage({
       role: "user",
       content: "本次决定采用本地数据库保存会话。",
       timestamp: Date.now(),
     });
-    await store.flushIndexes();
-    return await store.searchVector("会话保存在哪里", { sessionId: session.id });
+    await manager.flushIndexes();
+    return await session.searchVector("会话保存在哪里");
   } finally {
-    await store.close();
+    await manager.close();
   }
 }
 ```
@@ -77,8 +79,8 @@ export async function verifyEmbedding(embedding: EmbeddingProvider) {
 
 - **查询没有命中**：检查索引是否完成、模型标识和维数是否正确，以及 `minVectorSimilarity` 是否过高。默认阈值为 0.35。
 - **向量服务暂时不可用**：消息仍会保存。`search()` 报告向量错误后继续全文和模糊检索；`searchVector()` 直接抛出错误，适合验证配置。
-- **更换模型**：使用新 Provider 打开存储后，调用 `rebuildEmbeddings(sessionId)`。省略 ID 时重建所有会话的当前模型向量。
-- **需要重建全部检索投影**：调用 `rebuildIndex(sessionId)`，重建该会话的文本与向量索引。
+- **更换模型**：使用新 Provider 打开存储后，调用 `session.rebuildEmbeddings()`；需要重建所有会话时调用 `manager.rebuildEmbeddings()`。
+- **需要重建全部检索投影**：调用 `session.rebuildIndex()`，重建该会话的文本与向量索引。
 - **数据量较大**：当前使用模型/维数索引筛选和精确余弦计算，没有 HNSW 近似索引。性能需要按数据规模评估。
 
 历史数据库会在打开时自动迁移，已有向量会保留并回填维数。索引属于派生数据，失败不会撤销会话消息；未配置 `onIndexError` 时打印中文警告。

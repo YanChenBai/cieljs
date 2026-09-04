@@ -1,29 +1,28 @@
-import type { SessionStore } from "../store.ts";
+import type { Session } from "../session.ts";
+import type { SessionManager } from "../session-manager.ts";
 
-export interface CreateSessionToolsOptions {
-  store: SessionStore;
-
+export interface SessionToolLimits {
   /**
-   * 默认不重复暴露当前上下文；调试或特殊工作流可显式启用。
-   */
-  includeContextTool?: boolean;
-
-  /**
-   * 当前 Agent 所绑定的 Session。
-   */
-  sessionId: string;
-
-  /**
-   * search_session 默认返回数量。
+   * 搜索工具默认返回数量。
    *
    * @default 8
    */
   searchLimit?: number;
 
   /**
-   * read_session 单侧最多允许读取多少条消息。
+   * 读取工具单侧最多允许读取多少条消息。
    *
    * @default 10
    */
   maxReadMessages?: number;
+}
+
+export interface CreateSessionToolsOptions extends SessionToolLimits {
+  /** 当前 Agent 所绑定的 Session。 */
+  session: Session;
+}
+
+export interface CreateCrossSessionToolsOptions extends SessionToolLimits {
+  /** 跨 Session 查询所使用的 Manager。 */
+  manager: SessionManager;
 }

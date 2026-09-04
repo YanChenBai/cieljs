@@ -1,8 +1,8 @@
-export { SessionStore } from "./store.ts";
+export { SessionManager } from "./session-manager.ts";
+export type { Session } from "./session.ts";
 export * from "./agent-tools/index.ts";
-export { createSessionSummarizer } from "./compaction.ts";
-export type { GenerateSummaryInput, SessionSummarizerOptions } from "./compaction.ts";
-export { estimateContextTokens, estimateTokens } from "./tokens.ts";
+export { createSummarizer } from "./compaction.ts";
+export { estimateContextTokens, estimateAgentMessageTokens } from "./tokens.ts";
 export type { ContextTokenEstimate } from "./tokens.ts";
 
 export type {
@@ -14,7 +14,7 @@ export type {
   SearchHit,
   SearchOptions,
   SessionContext,
-  SessionStoreOptions,
+  SessionManagerOptions,
   SessionSummarizer,
   SummarizeInput,
 } from "./types.ts";

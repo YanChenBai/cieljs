@@ -1,3 +1,7 @@
+import type { EmbeddingProvider } from "@cieljs/agent-kit";
+
+export type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/agent-kit";
+
 export type MemoryScope = { type: "global" } | { type: "space"; spaceId: string };
 
 export type MemoryLayer = "daily" | "long_term";
@@ -10,7 +14,6 @@ export type MemorySource =
   | { type: "memory"; memoryId: string };
 
 export type RememberInput = {
-  scope: MemoryScope;
   content: string;
   kind?: MemoryKind;
   occurredAt?: Date;
@@ -23,7 +26,7 @@ export type RememberInput = {
   | { layer: "long_term"; date?: never }
 );
 
-export interface Memory {
+export interface MemoryEntry {
   id: string;
   scope: MemoryScope;
   layer: MemoryLayer;
@@ -41,10 +44,14 @@ export interface Memory {
 }
 
 export interface MemoryAccess {
-  /** 必须明确指定可访问范围；空数组不会扩大到全库。 */
-  scopes: MemoryScope[];
+  /** 是否包含已归档或已过期的记忆；范围由 Memory 固定。 */
   includeArchived?: boolean;
   includeExpired?: boolean;
+}
+
+export interface CrossScopeMemoryAccess extends MemoryAccess {
+  /** 明确列出本次允许读取的范围；不会隐式加入 global。 */
+  scopes: MemoryScope[];
 }
 
 export interface MemoryFilter extends MemoryAccess {
@@ -57,7 +64,6 @@ export interface MemoryFilter extends MemoryAccess {
 }
 
 export interface UpdateMemoryInput {
-  scope: MemoryScope;
   /** 防止并发编辑覆盖；每次修改成功后递增。 */
   expectedRevision: number;
   content?: string;
@@ -67,20 +73,7 @@ export interface UpdateMemoryInput {
   metadata?: Record<string, unknown>;
 }
 
-export interface EmbeddingOptions {
-  purpose: "query" | "document";
-  signal?: AbortSignal;
-}
-
-/** 与 session 的 Provider 结构兼容，不依赖其存储实现。 */
-export interface EmbeddingProvider {
-  readonly model: string;
-  readonly dimensions: number;
-  readonly batchSize?: number;
-  embedBatch(texts: string[], options: EmbeddingOptions): Promise<number[][]>;
-}
-
-export interface MemoryStoreOptions {
+export interface MemoryManagerOptions {
   dataDir: string;
   timeZone?: string;
   embedding?: EmbeddingProvider;
@@ -97,8 +90,13 @@ export interface MemorySearchOptions extends MemoryFilter {
   minVectorSimilarity?: number;
 }
 
+export interface CrossScopeMemorySearchOptions extends MemorySearchOptions {
+  /** 明确列出本次允许搜索的范围；不会隐式加入 global。 */
+  scopes: MemoryScope[];
+}
+
 export interface MemorySearchHit {
-  memory: Memory;
+  memory: MemoryEntry;
   excerpt: string;
   /** RRF 排名分数，不是概率或向量相似度。 */
   score: number;
@@ -107,6 +105,8 @@ export interface MemorySearchHit {
 
 export interface MemoryContextOptions extends MemoryAccess {
   query?: string;
+  /** 默认同时注入近期每日记忆与长期记忆。 */
+  layers?: MemoryLayer[];
   date?: string;
   recentDays?: number;
   maxTokens?: number;
@@ -117,6 +117,6 @@ export interface MemoryContextOptions extends MemoryAccess {
 
 export interface MemoryContext {
   text: string;
-  memories: Memory[];
+  memories: MemoryEntry[];
   tokens: number;
 }

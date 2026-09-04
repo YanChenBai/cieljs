@@ -4,41 +4,41 @@
 
 ## 第一步：准备模型
 
-`EmbeddingProvider` 与 session 使用相同的结构。已有的 session Provider 可以直接传给 memory，不需要依赖或共享 SessionStore。
+`EmbeddingProvider` 定义在 `@cieljs/agent-kit`。session 和 memory 都兼容并重新导出该类型，因此同一个 Provider 可以直接复用，不需要依赖或共享 Manager。
 
 | 配置         | 说明                                 | 默认值 |
 | ------------ | ------------------------------------ | ------ |
 | `model`      | 区分服务商、模型版本与向量空间的标识 | 必填   |
 | `dimensions` | 输出维数，1 到 16,000 的整数         | 必填   |
 | `batchSize`  | 单次文档请求数量，1 到 1,000         | 32     |
+| `embed`      | 单文本向量接口                       | 可选   |
 | `embedBatch` | 批量生成，输出顺序与输入一致         | 必填   |
 
-查询也调用 `embedBatch`，输入长度为 1。`purpose` 为 `query` 或 `document`，供模型选择任务类型或文本前缀。索引直接使用原始分块正文，不使用中文分词后的文本。
+查询调用 `embed`；未提供时由 agent kit 自动调用单元素 `embedBatch`。`purpose` 为 `query` 或 `document`，供模型选择任务类型或文本前缀。索引直接使用原始分块正文，不使用中文分词后的文本。
 
 ## 第二步：接入并等待索引
 
 ```ts
-import { MemoryStore, type EmbeddingProvider } from "@cieljs/memory";
+import type { EmbeddingProvider } from "@cieljs/agent-kit";
+import { MemoryManager } from "@cieljs/memory";
 
 async function verifyEmbedding(embedding: EmbeddingProvider) {
-  const store = await MemoryStore.open({
+  const manager = await MemoryManager.open({
     dataDir: ".ciel/memory",
     embedding,
     onIndexError: (error) => console.error("记忆索引失败", error),
   });
+  const memory = manager.memory({ type: "global" });
 
   try {
-    await store.remember({
-      scope: { type: "global" },
+    await memory.remember({
       layer: "long_term",
       content: "Ciel 默认用中文回答，先给结论，再解释原因。",
     });
-    await store.flushIndexes();
-    return await store.searchVector("回答问题时采用什么表达方式", {
-      scopes: [{ type: "global" }],
-    });
+    await manager.flushIndexes();
+    return await memory.searchVector("回答问题时采用什么表达方式");
   } finally {
-    await store.close();
+    await manager.close();
   }
 }
 ```
@@ -51,22 +51,22 @@ Provider 必须返回正确数量、正确维数的有限非零向量。返回�
 
 正文修改会删除旧分块并生成新 ID。进行中的旧任务即使稍后完成，也无法写回已经删除的分块。归档记忆同样会移除分块及派生向量。
 
-使用期间应复用同一个 MemoryStore；停止提交任务后调用 `close()`。它等待已经提交的操作与索引队列，不会取消正在执行的 Provider 请求。Provider 应自行设置网络超时，避免关闭时无限等待。
+使用期间应复用同一个 MemoryManager；停止提交任务后调用 `close()`。它等待已经提交的操作与索引队列，不会取消正在执行的 Provider 请求。Provider 应自行设置网络超时，避免关闭时无限等待。
 
 ## 第四步：恢复与换模型
 
 ```ts
-console.log(await store.getIndexStatus());
+console.log(await manager.getIndexStatus());
 // { pending: 0, ready: 8, failed: 1 }
 
-await store.retryEmbeddings();
-await store.flushIndexes();
+await manager.retryEmbeddings();
+await manager.flushIndexes();
 
-await store.rebuildEmbeddings({ scopes: [scope] });
-await store.flushIndexes();
+await memory.rebuildEmbeddings();
+await manager.flushIndexes();
 ```
 
-上例假定 `store` 已打开、`scope` 已配置。状态按当前模型与维数统计分块数。`flushIndexes` 表示队列执行完毕，不代表所有任务成功；检查 `failed` 了解是否需要重试。
+上例假定 `manager` 已打开、`memory` 已绑定范围。状态按当前模型与维数统计分块数。`flushIndexes` 表示队列执行完毕，不代表所有任务成功；检查 `failed` 了解是否需要重试。
 
 失败任务持久化保存，同一次运行不会无限自动重试。`retryEmbeddings` 补齐缺失任务并重试失败项；重新打开数据目录时也会恢复当前模型尚未完成或失败的任务。
 

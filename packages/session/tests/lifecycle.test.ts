@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vite-plus/test";
 
-import { SessionStore } from "../src/index.ts";
+import { SessionManager, type Session } from "../src/index.ts";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -12,7 +12,7 @@ function deferred<T>() {
 
 test("关闭时先等待压缩，再等待尚未完成的向量索引", async () => {
   const embedBatch = vi.fn(async (texts: string[]) => texts.map(() => [1, 0, 0]));
-  const store = await SessionStore.open({
+  const store = await SessionManager.open({
     dataDir: "memory://",
     embedding: { model: "test/lifecycle", dimensions: 3, embedBatch },
   });
@@ -21,12 +21,12 @@ test("关闭时先等待压缩，再等待尚未完成的向量索引", async ()
   const indexingStarted = deferred<void>();
   const vectorsReady = deferred<number[][]>();
   let closing: Promise<void> | undefined;
-  let compacting: ReturnType<SessionStore["compactSession"]> | undefined;
+  let compacting: ReturnType<Session["compact"]> | undefined;
 
   try {
-    const session = await store.createSession();
+    const session = await store.session();
     for (let index = 0; index < 3; index++) {
-      await store.appendMessage(session.id, {
+      await session.appendMessage({
         role: "user",
         content: `message ${index}`,
         timestamp: index,
@@ -38,10 +38,10 @@ test("关闭时先等待压缩，再等待尚未完成的向量索引", async ()
       indexingStarted.resolve();
       return vectorsReady.promise;
     });
-    await store.appendMessage(session.id, { role: "user", content: "pending", timestamp: 3 });
+    await session.appendMessage({ role: "user", content: "pending", timestamp: 3 });
     await indexingStarted.promise;
 
-    compacting = store.compactSession(session.id, {
+    compacting = session.compact({
       contextWindow: 32000,
       keepRecentMessages: 1,
       force: true,
@@ -56,12 +56,12 @@ test("关闭时先等待压缩，再等待尚未完成的向量索引", async ()
     closing = store.close().then(() => {
       isClosed = true;
     });
-    expect(await store.getSession(session.id)).not.toBeNull();
+    expect(await session.exists()).toBe(true);
     expect(isClosed).toBe(false);
 
     summaryReady.resolve("summary");
     expect(await compacting).toMatchObject({ summary: "summary", throughSeq: 3 });
-    expect(await store.getLatestCompaction(session.id)).toMatchObject({ summary: "summary" });
+    expect(await session.getLatestCompaction()).toMatchObject({ summary: "summary" });
     expect(isClosed).toBe(false);
 
     vectorsReady.resolve([[1, 0, 0]]);
@@ -76,17 +76,17 @@ test("关闭时先等待压缩，再等待尚未完成的向量索引", async ()
 }, 30_000);
 
 test("未配置向量提供方时仍支持检索、重建和关闭", async () => {
-  const store = await SessionStore.open({ dataDir: "memory://" });
+  const store = await SessionManager.open({ dataDir: "memory://" });
   try {
-    const session = await store.createSession();
-    await store.appendMessage(session.id, { role: "user", content: "lexical", timestamp: 1 });
+    const session = await store.session();
+    await session.appendMessage({ role: "user", content: "lexical", timestamp: 1 });
 
-    await store.rebuildIndex(session.id);
+    await session.rebuildIndex();
     await store.rebuildEmbeddings();
     await store.flushIndexes();
 
-    expect(await store.searchVector("lexical", { sessionId: session.id })).toEqual([]);
-    const hits = await store.search("lexical", { sessionId: session.id });
+    expect(await session.searchVector("lexical")).toEqual([]);
+    const hits = await session.search("lexical");
     expect(hits).toHaveLength(1);
     expect(hits[0]!.sources).toEqual(["fts", "trigram"]);
   } finally {

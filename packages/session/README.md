@@ -26,33 +26,34 @@
 打开一个会话，写入消息，再取回它的当前上下文：
 
 ```ts
-import { SessionStore } from "@cieljs/session";
+import { SessionManager } from "@cieljs/session";
 
-const store = await SessionStore.open({ dataDir: ".ciel/sessions" });
+const manager = await SessionManager.open({ dataDir: ".ciel/sessions" });
 
 try {
-  const session = await store.getOrCreateSession("conversation-1");
+  // ID 已存在时复用已有 Session。
+  const session = await manager.session("conversation-1");
 
-  await store.appendMessage(session.id, {
+  await session.appendMessage({
     role: "user",
     content: "我们决定用本地数据库保存会话。",
     timestamp: Date.now(),
   });
 
-  const context = await store.getContext(session.id);
-  console.log(context.summary, context.messages);
+  const messages = await session.context();
+  console.log(messages);
 } finally {
-  await store.close();
+  await manager.close();
 }
 ```
 
-`summary` 是最近一次累计摘要，`messages` 是它尚未覆盖的原文。再次使用相同的数据目录和会话 ID，就可以继续读取这段历史。
+`context()` 返回可直接交给 Agent 的 `AgentMessage[]`。存在累计摘要时，摘要会作为第一条历史消息，后面是它尚未覆盖的原文。再次使用相同的数据目录和会话 ID，就可以继续读取这段历史。
 
 消息完成后等待 `appendMessage()`；使用结束、停止提交新任务后再关闭存储。`close()` 会等待已排队的压缩和索引任务。
 
 ## 对话越来越长时
 
-我们沿用 Pi 的方式判断上下文用量：优先读取最近有效的模型 usage，再估算后续新增消息。用量超过 `contextWindow - reserveTokens` 时，调用 `compactSession()` 就会尝试压缩较早的对话。
+我们沿用 Pi 的方式判断上下文用量：优先读取最近有效的模型 usage，再估算后续新增消息。用量超过 `contextWindow - reserveTokens` 时，调用 `session.compact()` 就会尝试压缩较早的对话。
 
 `contextWindow` 使用对话模型的窗口大小，`reserveTokens` 默认预留 16,384 tokens。你也可以通过 `keepRecentMessages` 指定至少保留最近多少条原文，默认是 10 条。
 
@@ -68,17 +69,30 @@ S2 + 最近保留的原文    → 当前上下文
 
 ## 找回之前聊过的内容
 
-通过 `sessionTools({ store, sessionId })`，可以为 Agent 加入两个历史工具：
+通过 `sessionTools({ session })`，可以为 Agent 加入两个历史工具：
 
 - `search_session`：找到相关的历史片段。
 - `read_session`：沿着消息序号，读取当时的完整上下文。
 
-如果还需要查看当前摘要和近期原文，可以设置 `includeContextTool: true`，加入 `get_session_context`。
+这两个工具只允许访问当前 Session。需要跨 Session 搜索和读取时，额外加入一组名称明确的工具：
+
+```ts
+import { crossSessionTools, sessionTools } from "@cieljs/session";
+
+const tools = [...sessionTools({ session }), ...crossSessionTools({ manager })];
+```
+
+- `search_cross_sessions`：搜索可访问的全部 Session。
+- `read_cross_sessions`：根据跨会话搜索返回的消息 ID 读取原始上下文。
+
+两组工具不会在内部切换权限。`read_session` 始终校验消息属于当前 Session，只有名称带 `cross` 的工具能越过当前 Session 边界。Agent 只传消息 ID，不直接选择目标 Session ID。
 
 > [!TIP]
 > 可以先从全文和模糊检索开始。需要语义检索时，再接入一个提供 `embedBatch()` 的 Embedding Provider。
 
 向量模型的维数、批量接口和索引维护方式，请看[向量检索文档](./docs/embedding.md)。
+
+需要跨会话查找时，使用 `manager.search(query)`；返回结果中的 `sessionId` 标识命中的会话。`session.search(query)` 始终只查询当前会话。
 
 ## 开发
 

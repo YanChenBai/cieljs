@@ -10,7 +10,7 @@ export interface ContextTokenEstimate {
 }
 
 /** 参考 Pi 0.84.4：文本按字符数 / 4 估算，图片按 1200 tokens 计入。 */
-export function estimateTokens(message: AgentMessage): number {
+export function estimateAgentMessageTokens(message: AgentMessage): number {
   // Pi 可通过模块扩展注册自定义消息，这里只读取影响上下文的已知字段。
   const value = message as {
     content?: unknown;
@@ -84,7 +84,7 @@ export function estimateContextTokens(
 
     const trailingTokens = messages
       .slice(index + 1)
-      .reduce((total, entry) => total + estimateTokens(entry), 0);
+      .reduce((total, entry) => total + estimateAgentMessageTokens(entry), 0);
     // 有效 usage 已包含当时的历史和摘要，不再重复累加。
     return {
       tokens: usageTokens + trailingTokens,
@@ -95,7 +95,7 @@ export function estimateContextTokens(
   }
 
   const trailingTokens = messages.reduce(
-    (total, message) => total + estimateTokens(message),
+    (total, message) => total + estimateAgentMessageTokens(message),
     Math.ceil((summary?.length ?? 0) / 4),
   );
   return { tokens: trailingTokens, usageTokens: 0, trailingTokens, lastUsageIndex: null };

@@ -1,7 +1,7 @@
-import type { Memory } from "../types.ts";
+import type { MemoryEntry } from "../types.ts";
 
 export function createMemoryPreview(maxReadChars: number) {
-  return (memory: Memory) => ({
+  return (memory: MemoryEntry) => ({
     ...memory,
     content: memory.content.slice(0, maxReadChars),
     truncated: memory.content.length > maxReadChars,

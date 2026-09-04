@@ -29,16 +29,16 @@ contextTokens > contextWindow - reserveTokens
 
 这与 Pi 一样，是“真实 usage + 尾部估算”，不是精确 tokenizer。字符估算在中文等内容上可能偏低；没有 usage 时也不包含存储层无法得知的系统提示和工具定义开销，应留出合适余量。
 
-压缩后，保留消息中的 usage 可能仍反映压缩前的大上下文。Store 根据数据库写入时间排除这些旧 usage，先估算新摘要与保留消息，等压缩后产生新的有效 assistant usage 再使用真实用量。
+压缩后，保留消息中的 usage 可能仍反映压缩前的大上下文。Session 根据数据库写入时间排除这些旧 usage，先估算新摘要与保留消息，等压缩后产生新的有效 assistant usage 再使用真实用量。
 
 ## 第二步：配置摘要模型
 
-摘要模型由 `createSessionSummarizer({ generateText })` 注入。服务地址、鉴权、模型和输出上限由调用方的模型 SDK 管理，不写进 SessionStore。
+摘要模型由 `createSummarizer({ generateText })` 注入。服务地址、鉴权、模型和输出上限由调用方的模型 SDK 管理，不写进 SessionManager。
 
 下面使用仓库现有的 Pi AI。调用方需要安装 `@earendil-works/pi-ai`，并配置对应 Provider 所需的凭据，以及 `SESSION_COMPACTION_PROVIDER`、`SESSION_COMPACTION_MODEL`：
 
 ```ts
-import { createSessionSummarizer } from "@cieljs/session";
+import { createSummarizer } from "@cieljs/session";
 import { createModels } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 
@@ -52,7 +52,7 @@ const model = models.getModel(
 if (!model) throw new Error("未找到会话压缩模型");
 const summaryModel = model;
 
-const summarize = createSessionSummarizer({
+const summarize = createSummarizer({
   instructions: "保留关键文件路径、用户约束和未完成事项。",
   async generateText({ systemPrompt, prompt, signal }) {
     const response = await models.completeSimple(
@@ -81,17 +81,17 @@ const summarize = createSessionSummarizer({
 
 ## 第三步：检查并执行压缩
 
-在完整消息写入后调用。可以在开始下一个用户请求前，或一组工具结果写入完成、准备请求模型之前检查。SessionStore 不自行监听 Agent 事件；上层负责调用以及更新实际传给模型的上下文。
+在完整消息写入后调用。可以在开始下一个用户请求前，或一组工具结果写入完成、准备请求模型之前检查。SessionManager 不自行监听 Agent 事件；上层负责调用以及更新实际传给模型的上下文。
 
 接着上面的 `summarize` 示例：
 
 ```ts
-import { SessionStore } from "@cieljs/session";
+import { SessionManager } from "@cieljs/session";
 
-const store = await SessionStore.open({ dataDir: ".ciel/sessions" });
+const manager = await SessionManager.open({ dataDir: ".ciel/sessions" });
 try {
-  const session = await store.getOrCreateSession("conversation-1");
-  const result = await store.compactSession(session.id, {
+  const session = await manager.session("conversation-1");
+  const result = await session.compact({
     summarize,
     contextWindow: 128_000,
     reserveTokens: 16_384,
@@ -100,12 +100,12 @@ try {
   });
 
   if (result) {
-    const context = await store.getContext(session.id);
+    const context = await session.context();
     // 下一次模型请求使用最新 summary 和 messages。
     console.log(context);
   }
 } finally {
-  await store.close();
+  await manager.close();
 }
 ```
 
@@ -120,7 +120,7 @@ S2 + 新增旧消息 C         → 摘要 S3
 当前上下文                = S3 + 最近保留的原文
 ```
 
-每次只读取尚未被摘要覆盖的旧消息，并把上一份摘要传给模型。数据库保留历史摘要以便检查，`getContext()` 始终只返回最新的一份。
+每次只读取尚未被摘要覆盖的旧消息，并把上一份摘要传给模型。数据库保留历史摘要以便检查，`session.context()` 始终只包含最新摘要对应的历史消息。
 
 ## 第四步：验证与排查
 
@@ -128,8 +128,8 @@ S2 + 新增旧消息 C         → 摘要 S3
 - **压缩后仍接近上限**：检查摘要长度和保留消息大小，调整摘要输出上限或保留条数。上层应重新评估实际请求的预算。
 - **摘要模型报上下文过长**：摘要模型自身也需要容纳旧摘要和本次待压缩消息，主对话的预算并不保证摘要模型能接收相同内容。
 - **生成失败、空摘要或取消**：本次不会推进压缩边界，调用方收到错误，可以重试；原始历史仍完整。
-- **同会话并发调用**：同一 Store 内会串行处理；写入前还会检查摘要边界，拒绝覆盖生成期间被外部更新的摘要。
+- **同会话并发调用**：同一 SessionManager 内会串行处理；写入前还会检查摘要边界，拒绝覆盖生成期间被外部更新的摘要。
 
 ## 实现参考
 
-计量与阈值参考 Pi 0.84.4 的 `estimateContextTokens`、`estimateTokens` 和 `shouldCompact`，可在已安装包的 `dist/core/compaction/compaction.js` 与 `docs/compaction.md` 中核对。本包按使用需求保留最近 N 条消息，不使用 Pi 的近期 token 保留预算。
+计量与阈值参考 Pi 0.84.4 的 `estimateContextTokens`、`estimateAgentMessageTokens` 和 `shouldCompact`，可在已安装包的 `dist/core/compaction/compaction.js` 与 `docs/compaction.md` 中核对。本包按使用需求保留最近 N 条消息，不使用 Pi 的近期 token 保留预算。

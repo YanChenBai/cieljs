@@ -1,6 +1,10 @@
-import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 
-import { SessionStore, sessionTools } from "@cieljs/session";
+import {
+  SessionManager,
+  crossSessionTools as createCrossSessionTools,
+  sessionTools,
+} from "@cieljs/session";
 import { createModels } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 
@@ -9,7 +13,7 @@ import { xiaomi } from "./provider.ts";
 import { createMemoryIntegration, type MemoryAgentOptions } from "./memory.ts";
 
 export interface CreateSessionAgentOptions {
-  store: SessionStore;
+  manager: SessionManager;
 
   sessionId: string;
 
@@ -29,6 +33,13 @@ export interface CreateSessionAgentOptions {
    */
   useSessionTools?: boolean;
 
+  /**
+   * 是否额外启用跨 Session 检索工具。
+   *
+   * @default false
+   */
+  crossSessionTools?: boolean;
+
   memory?: MemoryAgentOptions;
 }
 
@@ -42,37 +53,25 @@ for (const provider of builtinProviders()) {
 
 export async function createSessionAgent(options: CreateSessionAgentOptions) {
   const {
-    store,
+    manager,
     sessionId,
     model = models.getModel("xiaomi", "mimo-v2.5"),
     systemPrompt,
     useSessionTools = true,
+    crossSessionTools = false,
     tools = [],
   } = options;
 
-  const session = await store.getOrCreateSession(sessionId);
+  const session = await manager.session(sessionId);
 
-  /**
-   * 从数据库恢复：
-   *
-   * summary
-   * +
-   * 尚未压缩的 messages
-   */
-  const context = await store.getContext(session.id);
-
-  const restoredMessages = createRestoredMessages(context.summary, context.messages ?? []);
+  const restoredMessages = await session.context();
 
   if (!model) {
     throw new Error("Model not found");
   }
 
-  const sessionToolList = useSessionTools
-    ? sessionTools({
-        store,
-        sessionId,
-      })
-    : [];
+  const sessionToolList = useSessionTools ? sessionTools({ session }) : [];
+  const crossSessionToolList = crossSessionTools ? createCrossSessionTools({ manager }) : [];
 
   const memory = options.memory ? createMemoryIntegration(options.memory, sessionId) : undefined;
 
@@ -84,7 +83,7 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
       model,
       systemPrompt,
       messages: restoredMessages,
-      tools: [...tools, ...sessionToolList, ...(memory?.tools ?? [])],
+      tools: [...tools, ...sessionToolList, ...crossSessionToolList, ...(memory?.tools ?? [])],
     },
   });
 
@@ -105,7 +104,7 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
     }
 
     persistence = persistence
-      .then(() => store.appendMessage(sessionId, event.message))
+      .then(() => session.appendMessage(event.message))
       .catch((error) => {
         console.error("[session] Failed to persist message", error);
       });
@@ -117,43 +116,5 @@ export async function createSessionAgent(options: CreateSessionAgentOptions) {
     unsubscribe,
 
     flushPersistence: () => persistence,
-  };
-}
-
-function createRestoredMessages(
-  summary: string | null,
-  messages: Parameters<typeof createSummaryMessage>[1],
-) {
-  if (!summary) {
-    return messages;
-  }
-
-  return [
-    createSummaryMessage(summary, messages),
-
-    ...messages,
-  ];
-}
-
-function createSummaryMessage(summary: string, _messages: AgentMessage[]): AgentMessage {
-  return {
-    role: "user",
-
-    content: [
-      {
-        type: "text",
-
-        text: [
-          "<session_summary>",
-          "以下内容是此前会话历史的压缩摘要。",
-          "它代表更早的对话历史，应作为已有上下文使用，而不是新的用户请求。",
-          "",
-          summary,
-          "</session_summary>",
-        ].join("\n"),
-      },
-    ],
-
-    timestamp: Date.now(),
   };
 }

@@ -29,23 +29,22 @@
 打开存储，留下今天的一件事，再找回它：
 
 ```ts
-import { MemoryStore, type MemoryScope } from "@cieljs/memory";
+import { MemoryManager } from "@cieljs/memory";
 
-const store = await MemoryStore.open({ dataDir: ".ciel/memory" });
-const scope: MemoryScope = { type: "space", spaceId: "space-1" };
+const manager = await MemoryManager.open({ dataDir: ".ciel/memory" });
+const memory = manager.memory({ type: "space", spaceId: "space-1" });
 
 try {
-  await store.remember({
-    scope,
+  await memory.remember({
     layer: "daily",
     content: "今天决定用本地数据库保存历史记录。",
     sources: [{ type: "session", sessionId: "conversation-1", fromSeq: 12, toSeq: 16 }],
   });
 
-  const hits = await store.search("历史记录", { scopes: [scope] });
+  const hits = await memory.search("历史记录");
   console.log(hits.map((hit) => hit.memory.content));
 } finally {
-  await store.close();
+  await manager.close();
 }
 ```
 
@@ -64,14 +63,18 @@ try {
 
 ## 让 Agent 找回记忆
 
-`memoryTools({ store, scope })` 默认提供两个工具：
+`memoryTools({ memory })` 默认提供两个工具：
 
 - `search_memory`：在当前空间与全局记忆中搜索，支持层级和日期范围。
 - `read_memory`：读取命中记忆的正文与来源，长文本可分页。
 
+需要让 Agent 查询多个授权空间时，使用
+`crossScopeMemoryTools({ manager, scopes })`。它提供 `search_cross_scopes` 与
+`read_cross_scopes`，范围在创建工具时固定，不允许模型自行指定 scope。
+
 需要允许 Agent 保存记忆时，设置 `allowWrite: true`，加入 `remember_memory`。写入始终归属于创建工具时绑定的 scope。
 
-`getMemoryContext()` 可以在预算内组合近期每日记忆与长期记忆。core 的 `createSessionAgent({ memory })` 已将它接入每次模型调用前的上下文准备；用法见 [Agent 接入](./docs/agent.md)。
+`memory.context()` 可以在预算内组合近期每日记忆与长期记忆。core 的 `createSessionAgent({ memory })` 已将它接入每次模型调用前的上下文准备；用法见 [Agent 接入](./docs/agent.md)。
 
 > [!TIP]
 > session 保存原始对话，memory 保存值得跨会话使用的信息。来源引用可以帮助回到原话，但两个存储之间不会自动复制消息。

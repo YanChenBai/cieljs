@@ -29,15 +29,19 @@
     "earendil",
     "genai",
     "hnsw",
+    "jieba",
     "mimo",
     "pglite",
     "pgvector",
+    "plainto",
     "protobufjs",
     "qwen",
     "trgm",
+    "tsquery",
     "tsvector",
     "typebox",
     "voidzero",
+    "websearch",
     "xhigh"
   ]
 }

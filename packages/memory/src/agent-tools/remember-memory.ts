@@ -16,7 +16,8 @@ export const rememberMemoryTool = defineTool(
     dedupeKey: Type.Optional(Type.String({ minLength: 1 })),
   }),
   (options: CreateMemoryToolsOptions) => {
-    const { store, scope, sources, maxReadChars } = resolveMemoryToolsOptions(options);
+    const resolvedOptions = resolveMemoryToolsOptions(options);
+    const { memory: scopedMemory, maxReadChars } = resolvedOptions;
     const preview = createMemoryPreview(maxReadChars);
     const result = createMemoryResult();
 
@@ -31,7 +32,7 @@ export const rememberMemoryTool = defineTool(
       长期记忆不传 date；不要把推测写成事实。
       `,
 
-      execute: async (params, { signal }) => {
+      execute: async (params, { toolCallId, signal }) => {
         signal?.throwIfAborted();
 
         if (params.layer === "long_term" && params.date !== undefined) {
@@ -39,14 +40,13 @@ export const rememberMemoryTool = defineTool(
         }
 
         const common = {
-          scope,
-          sources,
+          sources: await resolvedOptions.resolveSources({ toolCallId, signal }),
           content: params.content,
           kind: params.kind,
           dedupeKey: params.dedupeKey,
         };
 
-        const memory = await store.remember(
+        const memory = await scopedMemory.remember(
           params.layer === "daily"
             ? { ...common, layer: "daily" as const, date: params.date }
             : { ...common, layer: "long_term" as const },

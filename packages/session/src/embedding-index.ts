@@ -1,32 +1,25 @@
 import { eq, sql } from "drizzle-orm";
+import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from "@cieljs/agent-kit";
 
 import type { Database } from "./database.ts";
 import { retrievalChunks, retrievalEmbeddings } from "./schema.ts";
-import type { EmbeddingProvider, SessionStoreOptions } from "./types.ts";
-
-export function validateEmbeddingProvider(provider: EmbeddingProvider | undefined): void {
-  if (!provider) {
-    return;
-  }
-
-  const { model, dimensions, batchSize = 32 } = provider;
-  if (!model.trim() || !Number.isSafeInteger(dimensions) || dimensions < 1 || dimensions > 16000) {
-    throw new TypeError("Embedding 模型名不能为空，维数必须是 1 到 16000 的整数");
-  }
-  if (!Number.isSafeInteger(batchSize) || batchSize < 1) {
-    throw new TypeError("Embedding batchSize 必须是正整数");
-  }
-}
+import type { Chunk } from "./types.ts";
 
 export class EmbeddingIndex {
   private readonly db: Database;
-  private readonly embedding: EmbeddingProvider | undefined;
+  private readonly embedding: ResolvedEmbeddingProvider | undefined;
   private readonly onIndexError: ((error: unknown) => void) | undefined;
 
-  /** 向量是派生索引；队列保证顺序，并允许关闭数据库前等待索引完成。 */
+  /** 向量是派生索引；队列保证顺序，并允许关闭数据库前等待索引完成 */
   private indexingQueue: Promise<void> = Promise.resolve();
 
-  constructor(db: Database, options: Pick<SessionStoreOptions, "embedding" | "onIndexError">) {
+  constructor(
+    db: Database,
+    options: {
+      embedding?: ResolvedEmbeddingProvider;
+      onIndexError?: (error: unknown) => void;
+    },
+  ) {
     this.db = db;
     this.embedding = options.embedding;
     this.onIndexError = options.onIndexError;
@@ -42,14 +35,8 @@ export class EmbeddingIndex {
     }
 
     signal?.throwIfAborted();
-    const embeddings = await provider.embedBatch([query], { purpose: "query", signal });
+    const embedding = await provider.embed(query, { purpose: "query", signal });
     signal?.throwIfAborted();
-
-    if (embeddings.length !== 1) {
-      throw new Error("查询向量数量必须为 1");
-    }
-    const embedding = embeddings[0]!;
-    this.assertEmbedding(embedding);
 
     return { model: provider.model, dimensions: provider.dimensions, embedding };
   }
@@ -73,12 +60,7 @@ export class EmbeddingIndex {
     await operation;
   }
 
-  /** 等待已排队的向量索引任务结束。 */
-  async flush(): Promise<void> {
-    await this.indexingQueue;
-  }
-
-  enqueue(chunks: Array<{ id: string; content: string }>): void {
+  enqueue(chunks: Chunk[]): void {
     if (!this.embedding || !chunks.length) {
       return;
     }
@@ -88,36 +70,37 @@ export class EmbeddingIndex {
       .catch((error) => this.reportIndexError(error));
   }
 
-  private async indexChunks(chunks: Array<{ id: string; content: string }>): Promise<void> {
+  /** 等待已排队的向量索引任务结束 */
+  async flush(): Promise<void> {
+    await this.indexingQueue;
+  }
+
+  private async indexChunks(chunks: Chunk[]): Promise<void> {
     const provider = this.embedding;
     if (!provider) {
       return;
     }
 
     const batchSize = provider.batchSize ?? 32;
+
     for (let offset = 0; offset < chunks.length; offset += batchSize) {
       const batch = chunks.slice(offset, offset + batchSize);
       const texts = batch.map((chunk) => chunk.content);
-      const options = { purpose: "document" as const };
+      const options = { purpose: "document" } as const;
       const embeddings = await provider.embedBatch(texts, options);
 
-      if (embeddings.length !== batch.length) {
-        throw new Error("批量向量数量与输入文本数量不一致");
-      }
-      for (const embedding of embeddings) {
-        this.assertEmbedding(embedding);
-      }
+      assertEmbeddingVectors(embeddings, batch.length, provider.dimensions);
+
+      const values = batch.map((chunk, index) => ({
+        chunkId: chunk.id,
+        model: provider.model,
+        dimensions: provider.dimensions,
+        embedding: embeddings[index]!,
+      }));
 
       await this.db
         .insert(retrievalEmbeddings)
-        .values(
-          batch.map((chunk, index) => ({
-            chunkId: chunk.id,
-            model: provider.model,
-            dimensions: provider.dimensions,
-            embedding: embeddings[index]!,
-          })),
-        )
+        .values(values)
         .onConflictDoUpdate({
           target: [
             retrievalEmbeddings.chunkId,
@@ -142,16 +125,6 @@ export class EmbeddingIndex {
       this.onIndexError(error);
     } catch (callbackError) {
       console.warn("[session] 索引错误回调执行失败", callbackError, error);
-    }
-  }
-
-  private assertEmbedding(embedding: number[]): void {
-    if (
-      embedding.length !== this.embedding?.dimensions ||
-      !embedding.every(Number.isFinite) ||
-      !embedding.some((value) => value !== 0)
-    ) {
-      throw new Error("向量必须匹配模型维数、仅包含有限数值且不能为零向量");
     }
   }
 }
