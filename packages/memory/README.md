@@ -1,15 +1,16 @@
 <h1 align="center">@cieljs/memory</h1>
 
-<p align="center">让空间保留近期上下文，让稳定事实跨空间或跨会话继续使用。</p>
+<p align="center">严格分层、保留版本历史，并能沿来源发现相关空间的长期记忆。</p>
 
 <p align="center">
-  <a href="./docs/scopes.md">层级与日期</a> ·
-  <a href="./docs/search.md">记忆检索</a> ·
+  <a href="./docs/scopes.md">层级与版本</a> ·
+  <a href="./docs/search.md">内容与来源检索</a> ·
   <a href="./docs/embedding.md">向量配置</a> ·
-  <a href="./docs/agent.md">Agent 接入</a>
+  <a href="./docs/agent.md">Agent 接入</a> ·
+  <a href="./docs/api-design.md">完整 API 设计</a>
 </p>
 
-`@cieljs/memory` 使用 PGlite 保存整理后的事件和事实。公开模型只有三个层级：
+`@cieljs/memory` 使用 PGlite、Drizzle 和 pgvector 保存三层记忆：
 
 | Layer              | 归属     | 用途                       |
 | ------------------ | -------- | -------------------------- |
@@ -17,58 +18,95 @@
 | `space.long_term`  | 单个空间 | 空间独有的长期知识与约定   |
 | `space.daily`      | 单个空间 | 当天事件、话题和短期状态   |
 
+Space API 不会隐式合并全局记忆。跨空间访问只在管理端或显式授权的只读 Agent Tools 中发生。
+
 ## 基本使用
 
 ```ts
 import { MemoryManager } from "@cieljs/memory";
 
-const memories = await MemoryManager.open({ dataDir: ".ciel/memory" });
-const space = memories.space("space-1");
+await using memories = await MemoryManager.open({
+  dataDir: ".ciel/memory",
+  timeZone: "Asia/Shanghai",
+  embedding,
+});
 
-try {
-  await memories.global.longTerm.remember({
-    content: "用户偏好简洁的回答。",
+const space = memories.space("blive:room:21452505");
+
+await memories.global.remember({
+  content: "用户偏好简洁且自然的表达",
+  sources: ["session:conversation-1"],
+});
+
+await space.longTerm.remember({
+  content: "这个直播间经常讨论独立游戏",
+  sources: ["bilibili:room:21452505", "主播昵称"],
+});
+
+await space.daily.remember({
+  content: "今天主播开始体验新的独立游戏",
+  sources: ["bilibili:room:21452505", "今晚第一次挑战新模式"],
+});
+```
+
+## 更新与遗忘
+
+更新只提交变化字段和当前 revision。数据库会创建下一份完整快照，旧内容仍可通过历史 API 读取。
+
+```ts
+const current = await space.get(memoryId);
+
+if (current) {
+  await space.update(current.id, {
+    expectedRevision: current.revision,
+    content: "修正后的完整内容",
   });
 
-  await space.longTerm.remember({
-    content: "这个空间使用本地数据库保存历史记录。",
-  });
-
-  await space.daily.remember({
-    content: "今天决定重构记忆层级。",
-    sources: [{ type: "session", sessionId: "conversation-1" }],
-  });
-} finally {
-  await memories.close();
+  const history = await space.history(current.id);
+  const firstRevision = await space.getRevision(current.id, 1);
 }
 ```
 
-写入入口已经固定归属和层级。每日记忆可以传 `date`，长期记忆不能传日期。
+`forget()` 是软归档，不物理删除正文、来源或 revision。
 
-## 局部与全库检索
+## 沿来源查找
 
 ```ts
-// global.long_term + 当前空间的 long_term/daily
-const localHits = await space.search("之前决定如何保存历史记录");
+const memoriesFromTitle = await memories.searchBySource("今晚第一次挑战新模式");
+const relatedSpaces = await memories.findSpacesBySource("主播昵称");
 
-// 全局长期记忆 + 所有空间记忆
-const allHits = await memories.search("之前决定如何保存历史记录");
+for (const related of relatedSpaces) {
+  const hits = await memories.space(related.spaceId).search("之前对这个游戏有什么看法");
+}
 ```
 
-`space.get(id)` 只能读取全局与当前空间的记录；`memories.get(id)` 可以读取全库记录。全库入口不接受空间列表，它的语义始终是全部记忆。
+`sources` 是业务定义的 `string[]`。包只负责规范化、精确匹配和文本检索，不解释主播、直播间、session 等业务含义。
 
 ## Agent Tools
 
-`memoryTools({ space })` 提供 `search_memory`、`read_memory`、`remember_memory`、`update_memory` 和 `forget_memory`。三个写入工具使用复合 `layer`，当前 `spaceId` 由 `space` 固定。
+```ts
+import { globalMemoryTools, loadMemoryContext, memoryTools } from "@cieljs/memory/agent";
 
-`allMemoryTools({ manager })` 提供只读的 `search_all_memory` 与 `read_all_memory`，直接搜索全局和所有空间。工具参数不包含 scope；模型不能自行改变写入归属。
+const tools = memoryTools({
+  space,
+  sources: ["session:conversation-1", "bilibili:room:21452505"],
+  crossSpace: {
+    manager: memories,
+    access: "related",
+  },
+});
+```
+
+当前空间工具不接受 `spaceId`。`related` 模式要求 Agent 先调用 `find_memory_spaces`，再只读搜索或读取已发现的 space。全局写入工具由宿主通过 `globalMemoryTools()` 单独授权。
+
+第一版不包含自动记忆整理。新记忆属于 daily、space long-term 还是 global long-term，由调用者或具体工具显式决定。
 
 ## 开发
 
 ```bash
 vp check
-vp test
+vp test --run
 vp run build
 ```
 
-测试使用本地数据库和 Embedding 替身，无需 API Key。
+测试使用内存数据库和 Embedding 替身，无需 API Key。

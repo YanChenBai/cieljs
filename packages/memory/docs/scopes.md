@@ -1,60 +1,38 @@
-# 层级与日期
+# 层级、版本与生命周期
 
-记忆归属直接编码在 `layer` 中，不再由独立的 scope 类型与 layer 两次组合。
+## 严格层级
+
+`manager.global` 只访问 `global.long_term`。`manager.space(spaceId)` 返回绑定空间的对象，其中 `longTerm` 和 `daily` 分别固定写入对应层级。
 
 ```ts
 const space = manager.space("space-1");
 
-await manager.global.longTerm.remember({ content: "跨空间成立的稳定事实" });
-await space.longTerm.remember({ content: "当前空间的长期知识" });
-await space.daily.remember({ content: "当前空间今天发生的事" });
+await space.longTerm.remember({ content: "空间内稳定成立的事实" });
+await space.daily.remember({ content: "今天发生的事件" });
 ```
 
-数据库中的合法组合只有：
+`space.get()`、`space.list()` 和 `space.search()` 只访问当前 space，不包含全局记忆，也不会访问其他 space。
 
-| `layer`            | `spaceId` | `date` |
-| ------------------ | --------- | ------ |
-| `global.long_term` | `null`    | `null` |
-| `space.long_term`  | 非空      | `null` |
-| `space.daily`      | 非空      | 非空   |
+## Daily 日期
 
-`global.long_term` 不属于任何 space。两个 space layer 必须带有非空 `spaceId`。`spaceId` 是业务层定义的不透明字符串，memory 不解析其含义。
+每日记忆可以显式传入 `YYYY-MM-DD` 日期。省略日期时，包先使用 `occurredAt`，再按 `MemoryManager` 的 `timeZone` 计算日期。长期记忆不能传日期。
 
-## 每日记忆
+## Revision
 
-`space.daily.remember()` 可以显式传 `date: "2026-09-04"`。省略时，memory 根据 `occurredAt` 和存储配置的 `timeZone` 计算日期；两者都省略时使用当前时间。
+一条逻辑记忆拥有稳定 ID。每次更新都会保存一份完整 revision 快照，并把逻辑记忆的 current revision 指向新版本。
 
 ```ts
-await space.daily.remember({
-  content: "约定周五整理讨论记录。",
-  date: "2026-09-04",
-  sources: [{ type: "event", eventId: "agreement-42" }],
+const updated = await space.update(memory.id, {
+  expectedRevision: memory.revision,
+  kind: "preference",
+  content: "更新后的完整正文",
 });
 ```
 
-默认时区为 `Asia/Shanghai`。每日记忆不会在零点自动删除，`daily` 只表示按日期组织；过期由 `expiresAt` 单独控制。
+没有提交的字段继承当前 revision。显式提交 `sources` 或 `metadata` 时会整体替换对应值。`expectedRevision` 用于阻止并发更新静默覆盖；冲突时应重新读取最新内容后再判断。
 
-长期记忆没有日期参数。事实发生或获知的时刻仍可通过 `occurredAt` 保存。
+## 遗忘
 
-## 追加、修改与归档
+`forget()` 把记忆标记为 `archived`，并从默认读取和检索中移除。历史 revision 仍可通过 `history()` 和 `getRevision()` 读取。第一版不提供物理删除和恢复 API。
 
-`remember()` 默认追加记录，不根据正文猜测两个事件是否相同。外部 `eventId` 和 session 来源用于追溯，不承担语义去重。
-
-需要修改已有事实时使用明确的记忆 ID 和版本号：
-
-```ts
-const updated = await space.longTerm.update(saved.id, {
-  expectedRevision: saved.revision,
-  content: "更新后的长期事实。",
-});
-
-await space.longTerm.forget(updated.id, {
-  expectedRevision: updated.revision,
-});
-```
-
-并发修改同一版本只允许一次成功。归档后，默认读取和检索不再返回该记录；正文与来源仍可供管理端查阅。
-
-## 来源
-
-`sources` 接受 session、event 和 memory 三类引用。来源是追溯信息，不是跨库外键。删除外部 session 或事件不会自动删除记忆。
+归档保留正文与向量索引。宿主显式传入 `includeArchived: true` 时仍可搜索，默认 Agent 工具不会读取归档记忆。

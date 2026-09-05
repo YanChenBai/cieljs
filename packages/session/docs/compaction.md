@@ -38,7 +38,7 @@ contextTokens > contextWindow - reserveTokens
 下面使用仓库现有的 Pi AI。调用方需要安装 `@earendil-works/pi-ai`，并配置对应 Provider 所需的凭据，以及 `SESSION_COMPACTION_PROVIDER`、`SESSION_COMPACTION_MODEL`：
 
 ```ts
-import { createSummarizer } from "@cieljs/session";
+import { createSummarizer } from "@cieljs/session/agent";
 import { createModels } from "@earendil-works/pi-ai";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 
@@ -90,7 +90,9 @@ import { SessionManager } from "@cieljs/session";
 
 const manager = await SessionManager.open({ dataDir: ".ciel/sessions" });
 try {
-  const session = await manager.session("conversation-1");
+  const session = await manager.space("blive:room:21452505").session({
+    id: "conversation-1",
+  });
   const result = await session.compact({
     summarize,
     contextWindow: 128_000,

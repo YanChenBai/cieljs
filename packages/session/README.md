@@ -11,6 +11,8 @@
 
 `@cieljs/session` 为这些内容提供一个本地的存放处。它用 PGlite 保存完整消息，用递归摘要整理较早的对话，再通过历史检索把需要的细节找回来。
 
+一个 `spaceId` 表示稳定的业务空间，例如某个直播间；同一空间可以包含多段 Session。`sources` 保存主播昵称、房间标题和其他可检索来源，不参与空间隔离。
+
 ## 对话可以留下什么？
 
 - **完整的历史。** 用户消息、助手回复和工具结果按顺序保存，重新打开会话就能恢复上下文。
@@ -29,10 +31,14 @@
 import { SessionManager } from "@cieljs/session";
 
 const manager = await SessionManager.open({ dataDir: ".ciel/sessions" });
+const space = manager.space("blive:room:21452505");
 
 try {
   // ID 已存在时复用已有 Session。
-  const session = await manager.session("conversation-1");
+  const session = await space.session({
+    id: "conversation-1",
+    sources: ["project:ciel", "user:alice"],
+  });
 
   await session.appendMessage({
     role: "user",
@@ -47,7 +53,7 @@ try {
 }
 ```
 
-`context()` 返回可直接交给 Agent 的 `AgentMessage[]`。存在累计摘要时，摘要会作为第一条历史消息，后面是它尚未覆盖的原文。再次使用相同的数据目录和会话 ID，就可以继续读取这段历史。
+`context()` 返回可直接交给 Agent 的 `AgentMessage[]`。存在累计摘要时，摘要会作为第一条历史消息，后面是它尚未覆盖的原文。再次使用相同的数据目录、空间 ID 和会话 ID，就可以继续读取这段历史。
 
 消息完成后等待 `appendMessage()`；使用结束、停止提交新任务后再关闭存储。`close()` 会等待已排队的压缩和索引任务。
 
@@ -69,30 +75,41 @@ S2 + 最近保留的原文    → 当前上下文
 
 ## 找回之前聊过的内容
 
-通过 `sessionTools({ session })`，可以为 Agent 加入两个历史工具：
+Agent Tool 从独立入口导入。通过 `sessionTools({ session, space })`，可以同时获得当前会话和当前空间的历史工具：
 
-- `search_session`：找到相关的历史片段。
-- `read_session`：沿着消息序号，读取当时的完整上下文。
+- `search_session`：找到当前 Session 的相关历史片段。
+- `read_session`：读取当前 Session 中某条消息附近的上下文。
+- `find_sessions_by_source`：在当前空间中根据业务 ID、名称、昵称、标题或别名等 `sources` 发现相关会话。
+- `search_found_session`：搜索已经发现的会话。
+- `read_found_session`：读取已经发现的会话中某条消息附近的上下文。
 
-这两个工具只允许访问当前 Session。需要跨 Session 搜索和读取时，额外加入一组名称明确的工具：
+同一直播间内的跨 Session 查询属于基础能力。只有需要越过当前 `spaceId` 时，才显式传入 Manager 与跨空间访问级别：
 
 ```ts
-import { crossSessionTools, sessionTools } from "@cieljs/session";
+import { sessionTools } from "@cieljs/session/agent";
 
-const tools = [...sessionTools({ session }), ...crossSessionTools({ manager })];
+const tools = sessionTools({
+  session,
+  space,
+  crossSpace: {
+    manager,
+    access: "related",
+  },
+});
 ```
 
-- `search_cross_sessions`：搜索可访问的全部 Session。
-- `read_cross_sessions`：根据跨会话搜索返回的消息 ID 读取原始上下文。
+`crossSpace` 未配置时，来源发现和后续读取始终限制在当前 Space。`access: "related"` 允许按 sources 发现其他空间的 Session；`access: "all"` 还会提供 `search_all_sessions` 与 `read_any_session`。Agent Tool 不提供 `list_sessions`；宿主若需要管理列表，可以调用 `space.list()` 或 `manager.list()`。
 
-两组工具不会在内部切换权限。`read_session` 始终校验消息属于当前 Session，只有名称带 `cross` 的工具能越过当前 Session 边界。Agent 只传消息 ID，不直接选择目标 Session ID。
+独立全局问答 Agent 可以用另一个数据目录保存自身 Session，再把普通空间的 Manager 只作为跨会话查询来源。这样问答历史不会混入普通空间数据。
 
 > [!TIP]
 > 可以先从全文和模糊检索开始。需要语义检索时，再接入一个提供 `embedBatch()` 的 Embedding Provider。
 
 向量模型的维数、批量接口和索引维护方式，请看[向量检索文档](./docs/embedding.md)。
 
-需要跨会话查找时，使用 `manager.search(query)`；返回结果中的 `sessionId` 标识命中的会话。`session.search(query)` 始终只查询当前会话。
+宿主需要跨会话查找时，使用 `manager.searchAll(query)`；`session.search(query)` 始终只查询当前会话。通过 `manager.findSessionsBySource(query)` 可以按来源定位会话。
+
+来源全文检索与查询使用同一个 tokenizer，支持中文多关键词查询。更换 tokenizer 后，`rebuildIndexes()` 会同时重建正文与来源索引。
 
 ## 开发
 

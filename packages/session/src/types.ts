@@ -3,7 +3,43 @@ import type { EmbeddingProvider } from "@cieljs/agent-kit";
 
 export type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/agent-kit";
 
-export type SearchSource = "fts" | "trigram" | "vector";
+export type SessionSource = string;
+
+export interface SessionInfo {
+  id: string;
+  spaceId: string;
+  sources: SessionSource[];
+  messageCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SessionOptions {
+  id?: string;
+  sources?: SessionSource[];
+}
+
+export interface UpdateSessionInput {
+  sources?: SessionSource[];
+}
+
+export interface SessionListOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface SessionMessage {
+  id: string;
+  sessionId: string;
+  seq: number;
+  message: AgentMessage;
+  createdAt: Date;
+}
+
+export interface SessionMessageListOptions {
+  afterSeq?: number;
+  limit?: number;
+}
 
 export interface SummarizeInput {
   sessionId: string;
@@ -29,98 +65,73 @@ export interface CompactionOptions {
 }
 
 export interface SessionContext {
-  /**
-   * 最近一次累计摘要。
-   */
   summary: string | null;
-
-  /**
-   * summary 尚未覆盖的原始消息。
-   */
   messages: AgentMessage[];
 }
 
 export interface AppendCompactionInput {
   /** 乐观并发检查：摘要所基于的旧边界，首次压缩为 0。 */
   expectedThroughSeq?: number;
-  /**
-   * 累计摘要。
-   */
   summary: string;
-
-  /**
-   * 此 summary 已覆盖至哪条 Message。
-   */
   throughSeq: number;
 }
 
-export interface SearchOptions {
-  signal?: AbortSignal;
+export interface SessionCompaction {
+  id: string;
+  sessionId: string;
+  throughSeq: number;
+  summary: string;
+  createdAt: Date;
+}
 
+export type SessionSearchMode = "hybrid" | "full_text" | "trigram" | "vector";
+export type SessionSearchMatch = "full_text" | "trigram" | "vector";
+
+export interface SessionSearchOptions {
+  mode?: SessionSearchMode;
   limit?: number;
-
-  /**
-   * 向量余弦相似度阈值。
-   */
+  offset?: number;
+  candidateLimit?: number;
   minVectorSimilarity?: number;
-
-  ftsLimit?: number;
-
-  trigramLimit?: number;
-
-  vectorLimit?: number;
+  signal?: AbortSignal;
 }
 
-export interface SearchHit {
-  chunkId: string;
+export type SearchAllSessionsOptions = SessionSearchOptions;
 
-  sessionId: string;
-
-  messageId: string;
-
-  messageSeq: number;
-
-  content: string;
-
-  /**
-   * 多路检索融合后的排名分数。
-   */
+export interface SessionSearchHit {
+  spaceId: string;
+  message: SessionMessage;
+  excerpt: string;
   score: number;
-
-  sources: Array<SearchSource>;
+  matches: SessionSearchMatch[];
 }
 
-export interface RawSearchHit {
-  chunkId: string;
+export type SessionSourceSearchMode = "auto" | "exact" | "text";
 
-  sessionId: string;
+export interface FindSessionsBySourceOptions {
+  mode?: SessionSourceSearchMode;
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+}
 
-  messageId: string;
-
-  messageSeq: number;
-
-  content: string;
-
+export interface SessionSourceHit {
+  session: SessionInfo;
+  matchedSources: SessionSource[];
   score: number;
 }
 
 export interface SessionManagerOptions {
   dataDir: string;
-
-  /**
-   * 不提供则只有全文检索。
-   */
   embedding?: EmbeddingProvider;
-
-  /**
-   * embedding 错误不会影响 Session。
-   */
+  tokenize?: (text: string) => string[];
   onIndexError?: (error: unknown) => void;
 }
 
-export interface Chunk {
-  id: string;
-  content: string;
+export interface SessionIndexStatus {
+  pending: number;
+  ready: number;
+  failed: number;
 }
 
 export interface GenerateSummaryInput {
@@ -134,4 +145,10 @@ export interface SessionSummarizerOptions {
   generateText: (input: GenerateSummaryInput) => Promise<string>;
   /** 追加领域要求，不替换历史内容的信任边界。 */
   instructions?: string;
+}
+
+/** @internal */
+export interface SessionChunk {
+  id: string;
+  content: string;
 }

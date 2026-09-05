@@ -1,130 +1,211 @@
-import { eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from "@cieljs/agent-kit";
 
-import type { Database } from "./database.ts";
+import type { Database, Transaction } from "./database.ts";
 import { retrievalChunks, retrievalEmbeddings } from "./schema.ts";
-import type { Chunk } from "./types.ts";
+import type { SessionIndexStatus } from "./types.ts";
 
 export class EmbeddingIndex {
-  private readonly db: Database;
-  private readonly embedding: ResolvedEmbeddingProvider | undefined;
-  private readonly onIndexError: ((error: unknown) => void) | undefined;
-
-  /** 向量是派生索引；队列保证顺序，并允许关闭数据库前等待索引完成 */
-  private indexingQueue: Promise<void> = Promise.resolve();
+  private indexing: Promise<void> = Promise.resolve();
 
   constructor(
-    db: Database,
-    options: {
-      embedding?: ResolvedEmbeddingProvider;
-      onIndexError?: (error: unknown) => void;
-    },
-  ) {
-    this.db = db;
-    this.embedding = options.embedding;
-    this.onIndexError = options.onIndexError;
-  }
+    private readonly db: Database,
+    private readonly provider: ResolvedEmbeddingProvider | undefined,
+    private readonly onIndexError: ((error: unknown) => void) | undefined,
+  ) {}
 
-  async embedQuery(
-    query: string,
-    signal?: AbortSignal,
-  ): Promise<{ model: string; dimensions: number; embedding: number[] } | null> {
-    const provider = this.embedding;
-    if (!provider) {
-      return null;
+  async prepare(reset = false, sessionId?: string): Promise<void> {
+    if (!this.provider) {
+      return;
     }
 
-    signal?.throwIfAborted();
-    const embedding = await provider.embed(query, { purpose: "query", signal });
-    signal?.throwIfAborted();
+    await this.db.transaction(async (transaction) => {
+      const rows = await transaction
+        .select({ id: retrievalChunks.id })
+        .from(retrievalChunks)
+        .where(sessionId ? eq(retrievalChunks.sessionId, sessionId) : undefined);
 
-    return { model: provider.model, dimensions: provider.dimensions, embedding };
+      for (let start = 0; start < rows.length; start += 500) {
+        const ids = rows.slice(start, start + 500).map((row) => row.id);
+
+        await this.addPending(transaction, ids);
+        await transaction
+          .update(retrievalEmbeddings)
+          .set({ status: "pending", embedding: null, error: null })
+          .where(
+            and(
+              this.modelCondition(),
+              inArray(retrievalEmbeddings.chunkId, ids),
+              reset ? undefined : eq(retrievalEmbeddings.status, "failed"),
+            ),
+          );
+      }
+    });
+  }
+
+  async addPending(transaction: Transaction, chunkIds: string[]): Promise<void> {
+    const provider = this.provider;
+
+    if (!provider || !chunkIds.length) {
+      return;
+    }
+
+    await transaction
+      .insert(retrievalEmbeddings)
+      .values(
+        chunkIds.map((chunkId) => ({
+          chunkId,
+          model: provider.model,
+          dimensions: provider.dimensions,
+        })),
+      )
+      .onConflictDoNothing();
+  }
+
+  enqueue(): void {
+    if (!this.provider) {
+      return;
+    }
+
+    this.indexing = this.indexing
+      .then(() => this.indexPending())
+      .catch((error: unknown) => this.reportError(error));
   }
 
   async rebuild(sessionId?: string): Promise<void> {
-    await this.flush();
-    if (!this.embedding) {
-      return;
-    }
-
-    const chunks = await this.db
-      .select({ id: retrievalChunks.id, content: retrievalChunks.content })
-      .from(retrievalChunks)
-      .where(sessionId ? eq(retrievalChunks.sessionId, sessionId) : undefined);
-
-    const operation = this.indexingQueue.then(() => this.indexChunks(chunks));
-    this.indexingQueue = operation.then(
-      () => {},
-      () => {},
-    );
-    await operation;
+    await this.prepare(true, sessionId);
+    this.enqueue();
   }
 
-  enqueue(chunks: Chunk[]): void {
-    if (!this.embedding || !chunks.length) {
-      return;
-    }
-
-    this.indexingQueue = this.indexingQueue
-      .then(() => this.indexChunks(chunks))
-      .catch((error) => this.reportIndexError(error));
+  async retry(): Promise<void> {
+    await this.prepare();
+    this.enqueue();
   }
 
-  /** 等待已排队的向量索引任务结束 */
+  async status(): Promise<SessionIndexStatus> {
+    const result: SessionIndexStatus = { pending: 0, ready: 0, failed: 0 };
+
+    if (!this.provider) {
+      return result;
+    }
+
+    const rows = await this.db
+      .select({ status: retrievalEmbeddings.status, count: sql<number>`count(*)::integer` })
+      .from(retrievalEmbeddings)
+      .where(this.modelCondition())
+      .groupBy(retrievalEmbeddings.status);
+
+    for (const row of rows) {
+      result[row.status] = row.count;
+    }
+
+    return result;
+  }
+
+  async embedQuery(query: string, signal?: AbortSignal): Promise<number[] | null> {
+    if (!this.provider) {
+      return null;
+    }
+
+    const vector = await this.provider.embed(query, { purpose: "query", signal });
+    signal?.throwIfAborted();
+
+    return vector;
+  }
+
+  get model() {
+    return this.provider
+      ? { model: this.provider.model, dimensions: this.provider.dimensions }
+      : undefined;
+  }
+
   async flush(): Promise<void> {
-    await this.indexingQueue;
+    let current: Promise<void>;
+
+    do {
+      current = this.indexing;
+      await current;
+    } while (current !== this.indexing);
   }
 
-  private async indexChunks(chunks: Chunk[]): Promise<void> {
-    const provider = this.embedding;
-    if (!provider) {
-      return;
-    }
-
-    const batchSize = provider.batchSize ?? 32;
-
-    for (let offset = 0; offset < chunks.length; offset += batchSize) {
-      const batch = chunks.slice(offset, offset + batchSize);
-      const texts = batch.map((chunk) => chunk.content);
-      const options = { purpose: "document" } as const;
-      const embeddings = await provider.embedBatch(texts, options);
-
-      assertEmbeddingVectors(embeddings, batch.length, provider.dimensions);
-
-      const values = batch.map((chunk, index) => ({
-        chunkId: chunk.id,
-        model: provider.model,
-        dimensions: provider.dimensions,
-        embedding: embeddings[index]!,
-      }));
-
-      await this.db
-        .insert(retrievalEmbeddings)
-        .values(values)
-        .onConflictDoUpdate({
-          target: [
-            retrievalEmbeddings.chunkId,
-            retrievalEmbeddings.model,
-            retrievalEmbeddings.dimensions,
-          ],
-          set: {
-            embedding: sql`excluded.embedding`,
-            createdAt: new Date(),
-          },
-        });
-    }
-  }
-
-  reportIndexError(error: unknown): void {
-    if (!this.onIndexError) {
-      console.warn("[session] 向量检索或索引失败，全文检索仍可用", error);
-      return;
-    }
-
+  reportError(error: unknown): void {
     try {
-      this.onIndexError(error);
+      if (this.onIndexError) {
+        this.onIndexError(error);
+      } else {
+        console.warn("[session] 向量索引或检索失败", error);
+      }
     } catch (callbackError) {
-      console.warn("[session] 索引错误回调执行失败", callbackError, error);
+      console.warn("[session] 索引错误回调失败", callbackError);
+    }
+  }
+
+  private modelCondition() {
+    const provider = this.provider!;
+
+    return and(
+      eq(retrievalEmbeddings.model, provider.model),
+      eq(retrievalEmbeddings.dimensions, provider.dimensions),
+    )!;
+  }
+
+  private async indexPending(): Promise<void> {
+    const provider = this.provider!;
+
+    while (true) {
+      const rows = await this.db
+        .select({ id: retrievalChunks.id, content: retrievalChunks.content })
+        .from(retrievalEmbeddings)
+        .innerJoin(retrievalChunks, eq(retrievalChunks.id, retrievalEmbeddings.chunkId))
+        .where(and(this.modelCondition(), eq(retrievalEmbeddings.status, "pending")))
+        .orderBy(asc(retrievalChunks.id))
+        .limit(provider.batchSize);
+
+      if (!rows.length) {
+        return;
+      }
+
+      try {
+        const vectors = await provider.embedBatch(
+          rows.map((row) => row.content),
+          { purpose: "document" },
+        );
+        assertEmbeddingVectors(vectors, rows.length, provider.dimensions);
+
+        await this.db.transaction(async (transaction) => {
+          for (const [index, row] of rows.entries()) {
+            await transaction
+              .update(retrievalEmbeddings)
+              .set({ embedding: vectors[index]!, status: "ready", error: null })
+              .where(
+                and(
+                  this.modelCondition(),
+                  eq(retrievalEmbeddings.chunkId, row.id),
+                  eq(retrievalEmbeddings.status, "pending"),
+                ),
+              );
+          }
+        });
+      } catch (error) {
+        await this.db
+          .update(retrievalEmbeddings)
+          .set({
+            status: "failed",
+            embedding: null,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          .where(
+            and(
+              this.modelCondition(),
+              inArray(
+                retrievalEmbeddings.chunkId,
+                rows.map((row) => row.id),
+              ),
+              eq(retrievalEmbeddings.status, "pending"),
+            ),
+          );
+        this.reportError(error);
+      }
     }
   }
 }

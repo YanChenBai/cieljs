@@ -84,7 +84,20 @@ export function messageToSearchText(message: AgentMessage): string {
  * "上下文 压缩 session ..."
  */
 export function normalizeSearchText(text: string): string {
-  return text.normalize("NFKC").replace(/\s+/g, " ").trim();
+  return text.normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+}
+
+export function tokenizeSearchText(text: string): string[] {
+  const normalized = normalizeSearchText(text);
+  const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
+
+  return [
+    ...new Set(
+      [...segmenter.segment(normalized)]
+        .filter((segment) => segment.isWordLike)
+        .map((segment) => segment.segment),
+    ),
+  ];
 }
 
 export interface TextChunk {

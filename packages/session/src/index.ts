@@ -1,7 +1,8 @@
+export * from "./errors.ts";
 export { SessionManager } from "./session-manager.ts";
+export { tokenizeSearchText } from "./search.ts";
 export type { Session } from "./session.ts";
-export * from "./agent-tools/index.ts";
-export { createSummarizer } from "./compaction.ts";
+export type { SessionSpace } from "./session-space.ts";
 export { estimateContextTokens, estimateAgentMessageTokens } from "./tokens.ts";
 export type { ContextTokenEstimate } from "./tokens.ts";
 
@@ -10,11 +11,25 @@ export type {
   CompactionOptions,
   EmbeddingOptions,
   EmbeddingProvider,
-  RawSearchHit,
-  SearchHit,
-  SearchOptions,
+  FindSessionsBySourceOptions,
+  SearchAllSessionsOptions,
+  SessionCompaction,
   SessionContext,
+  SessionIndexStatus,
+  SessionInfo,
+  SessionListOptions,
   SessionManagerOptions,
+  SessionMessage,
+  SessionMessageListOptions,
+  SessionOptions,
+  SessionSearchHit,
+  SessionSearchMatch,
+  SessionSearchMode,
+  SessionSearchOptions,
+  SessionSource,
+  SessionSourceHit,
+  SessionSourceSearchMode,
   SessionSummarizer,
   SummarizeInput,
+  UpdateSessionInput,
 } from "./types.ts";

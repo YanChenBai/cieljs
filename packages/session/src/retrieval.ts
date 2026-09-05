@@ -1,253 +1,310 @@
-import { and, cosineDistance, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "./database.ts";
 import type { EmbeddingIndex } from "./embedding-index.ts";
-import { retrievalChunks, retrievalEmbeddings } from "./schema.ts";
+import { SessionValidationError } from "./errors.ts";
+import { chunkCondition, sessionCondition, type SessionSelector } from "./query.ts";
+import { materializeMessage, materializeSession } from "./repository.ts";
+import { retrievalChunks, retrievalEmbeddings, sessionMessages, sessions } from "./schema.ts";
 import { normalizeSearchText } from "./search.ts";
-import type { RawSearchHit, SearchHit, SearchOptions, SearchSource } from "./types.ts";
+import type {
+  FindSessionsBySourceOptions,
+  SessionSearchHit,
+  SessionSearchMatch,
+  SessionSearchOptions,
+  SessionSourceHit,
+} from "./types.ts";
+import { integerOption } from "./validation.ts";
 
-interface RetrievalSearchOptions extends SearchOptions {
-  sessionId?: string;
+interface RawContentHit {
+  messageId: string;
+  excerpt: string;
+  score: number;
+}
+interface RawSourceHit {
+  session: typeof sessions.$inferSelect;
+  score: number;
 }
 
 export class SessionRetrieval {
-  private readonly db: Database;
-  private readonly embeddingIndex: EmbeddingIndex;
+  constructor(
+    private readonly db: Database,
+    private readonly embeddingIndex: EmbeddingIndex,
+    private readonly tokenize: (text: string) => string[],
+  ) {}
 
-  constructor(db: Database, embeddingIndex: EmbeddingIndex) {
-    this.db = db;
-    this.embeddingIndex = embeddingIndex;
-  }
-
-  async searchFullText(
+  async search(
+    selector: SessionSelector,
     query: string,
-    options: RetrievalSearchOptions = {},
-  ): Promise<RawSearchHit[]> {
-    const limit = options.ftsLimit ?? options.limit ?? 20;
+    options: SessionSearchOptions = {},
+  ): Promise<SessionSearchHit[]> {
+    const mode = options.mode ?? "hybrid";
 
-    const normalized = normalizeSearchText(query);
-
-    if (!normalized) {
-      return [];
+    if (!["hybrid", "full_text", "trigram", "vector"].includes(mode)) {
+      throw new SessionValidationError("无效的 Session 检索模式");
     }
 
-    const tsQuery = sql`
-        websearch_to_tsquery(
-          'simple',
-          ${normalized}
-        )
-      `;
-
-    const rank = sql<number>`
-        ts_rank_cd(
-          to_tsvector(
-            'simple',
-            ${retrievalChunks.searchText}
-          ),
-          ${tsQuery}
-        )
-      `;
-
-    return this.db
-      .select({
-        chunkId: retrievalChunks.id,
-
-        sessionId: retrievalChunks.sessionId,
-
-        messageId: retrievalChunks.messageId,
-
-        messageSeq: retrievalChunks.messageSeq,
-
-        content: retrievalChunks.content,
-
-        score: rank,
-      })
-      .from(retrievalChunks)
-      .where(
-        and(
-          options.sessionId ? eq(retrievalChunks.sessionId, options.sessionId) : undefined,
-
-          sql`
-            to_tsvector(
-              'simple',
-              ${retrievalChunks.searchText}
-            )
-            @@
-            ${tsQuery}
-          `,
-        ),
-      )
-      .orderBy(desc(rank))
-      .limit(limit);
-  }
-
-  async searchTrigram(
-    query: string,
-    options: RetrievalSearchOptions = {},
-  ): Promise<RawSearchHit[]> {
-    const limit = options.trigramLimit ?? options.limit ?? 20;
-
-    const normalized = normalizeSearchText(query);
-
-    if (!normalized) {
-      return [];
+    if (mode !== "hybrid") {
+      const method = mode as SessionSearchMatch;
+      return this.mergeContentHits(
+        selector,
+        [[method, await this.searchRoute(method, selector, query, options)]],
+        options,
+      );
     }
 
-    const similarity = sql<number>`
-        similarity(
-          ${retrievalChunks.searchText},
-          ${normalized}
-        )
-      `;
-
-    return this.db
-      .select({
-        chunkId: retrievalChunks.id,
-        sessionId: retrievalChunks.sessionId,
-        messageId: retrievalChunks.messageId,
-        messageSeq: retrievalChunks.messageSeq,
-        content: retrievalChunks.content,
-        score: similarity,
-      })
-      .from(retrievalChunks)
-      .where(
-        and(
-          options.sessionId ? eq(retrievalChunks.sessionId, options.sessionId) : undefined,
-
-          /**
-           * % 是 pg_trgm similarity operator，
-           * 能利用 gin_trgm_ops。
-           */
-          sql`
-            ${retrievalChunks.searchText}
-            %
-            ${normalized}
-          `,
-        ),
-      )
-      .orderBy(desc(similarity))
-      .limit(limit);
-  }
-
-  async searchVector(query: string, options: RetrievalSearchOptions = {}): Promise<RawSearchHit[]> {
-    if (!normalizeSearchText(query)) {
-      return [];
-    }
-
-    const vector = await this.embeddingIndex.embedQuery(query, options.signal);
-    if (!vector) {
-      return [];
-    }
-
-    // 不能只依赖 WHERE 的执行顺序；CASE 保证不同维数的向量不会计算距离。
-    const similarity = sql<number>`
-        1 - (
-          CASE WHEN ${retrievalEmbeddings.model} = ${vector.model}
-            AND ${retrievalEmbeddings.dimensions} = ${vector.dimensions}
-            THEN ${cosineDistance(retrievalEmbeddings.embedding, vector.embedding)}
-            ELSE NULL END
-        )
-      `;
-
-    const limit = options.vectorLimit ?? options.limit ?? 20;
-
-    const threshold = options.minVectorSimilarity ?? 0.35;
-
-    return this.db
-      .select({
-        chunkId: retrievalChunks.id,
-        sessionId: retrievalChunks.sessionId,
-        messageId: retrievalChunks.messageId,
-        messageSeq: retrievalChunks.messageSeq,
-        content: retrievalChunks.content,
-        score: similarity,
-      })
-      .from(retrievalEmbeddings)
-      .innerJoin(retrievalChunks, eq(retrievalChunks.id, retrievalEmbeddings.chunkId))
-      .where(
-        and(
-          eq(retrievalEmbeddings.model, vector.model),
-          eq(retrievalEmbeddings.dimensions, vector.dimensions),
-
-          options.sessionId ? eq(retrievalChunks.sessionId, options.sessionId) : undefined,
-
-          gt(similarity, threshold),
-        ),
-      )
-      .orderBy(desc(similarity))
-      .limit(limit);
-  }
-
-  /**
-   * FTS + trigram + Vector
-   *
-   * 用 RRF 融合，不直接混合不同 score。
-   */
-  async search(query: string, options: RetrievalSearchOptions = {}): Promise<SearchHit[]> {
-    options.signal?.throwIfAborted();
-
-    const [fts, trigram, vector] = await Promise.all([
-      this.searchFullText(query, options),
-
-      this.searchTrigram(query, options),
-
-      this.searchVector(query, options).catch((error) => {
+    const routes = await Promise.all([
+      this.searchRoute("full_text", selector, query, options),
+      this.searchRoute("trigram", selector, query, options),
+      this.searchRoute("vector", selector, query, options).catch((error: unknown) => {
         options.signal?.throwIfAborted();
-        this.embeddingIndex.reportIndexError(error);
+        this.embeddingIndex.reportError(error);
         return [];
       }),
     ]);
 
+    return this.mergeContentHits(
+      selector,
+      [
+        ["full_text", routes[0]],
+        ["trigram", routes[1]],
+        ["vector", routes[2]],
+      ],
+      options,
+    );
+  }
+
+  async findBySource(
+    selector: SessionSelector,
+    query: string,
+    options: FindSessionsBySourceOptions = {},
+  ): Promise<SessionSourceHit[]> {
     options.signal?.throwIfAborted();
+    const sourceQuery = query.normalize("NFKC").trim();
+    if (!sourceQuery) return [];
 
-    const hits = new Map<string, SearchHit>();
-
-    this.mergeRankedHits(hits, fts, "fts", 1);
-    this.mergeRankedHits(hits, trigram, "trigram", 0.7);
-    this.mergeRankedHits(hits, vector, "vector", 1);
-
-    return this.rankHits(hits.values(), options.limit ?? 10);
-  }
-
-  private mergeRankedHits(
-    hits: Map<string, SearchHit>,
-    rows: RawSearchHit[],
-    source: SearchSource,
-    weight: number,
-  ): void {
-    for (const [index, row] of rows.entries()) {
-      const score = weight / (60 + index + 1);
-
-      const existing = hits.get(row.chunkId);
-
-      /**
-       * 同一 chunk 被多个检索源命中时
-       * 累加各来源的 RRF 分数， 并记录命中的检索源
-       */
-      if (existing) {
-        existing.score += score;
-
-        if (!existing.sources.includes(source)) {
-          existing.sources.push(source);
-        }
-
-        continue;
-      }
-
-      hits.set(row.chunkId, {
-        chunkId: row.chunkId,
-        sessionId: row.sessionId,
-        messageId: row.messageId,
-        messageSeq: row.messageSeq,
-        content: row.content,
-        score,
-        sources: [source],
-      });
+    const mode = options.mode ?? "auto";
+    if (!["auto", "exact", "text"].includes(mode)) {
+      throw new SessionValidationError("无效的来源检索模式");
     }
+
+    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 10, "limit");
+    const candidateLimit = Math.min(1000, offset + limit);
+    const routes: RawSourceHit[][] = [];
+
+    if (mode === "auto" || mode === "exact")
+      routes.push(await this.searchSourceExact(selector, sourceQuery, candidateLimit));
+    if (mode === "auto" || mode === "text")
+      routes.push(await this.searchSourceText(selector, sourceQuery, candidateLimit));
+
+    options.signal?.throwIfAborted();
+    const merged = new Map<string, RawSourceHit>();
+    for (const rows of routes) {
+      for (const row of rows) {
+        const existing = merged.get(row.session.id);
+        if (!existing || row.score > existing.score) merged.set(row.session.id, row);
+      }
+    }
+
+    const normalizedQuery = normalizeSearchText(sourceQuery);
+    const queryTokens = this.tokenize(normalizedQuery).map(normalizeSearchText).filter(Boolean);
+    return [...merged.values()]
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          right.session.updatedAt.getTime() - left.session.updatedAt.getTime() ||
+          left.session.id.localeCompare(right.session.id),
+      )
+      .slice(offset, offset + limit)
+      .map((row) => ({
+        session: materializeSession(row.session),
+        matchedSources: row.session.sources.filter((source) => {
+          const sourceText = normalizeSearchText(source);
+          const sourceTokens = this.tokenize(sourceText).map(normalizeSearchText);
+          return (
+            source === sourceQuery ||
+            sourceText.includes(normalizedQuery) ||
+            queryTokens.some((token) => sourceTokens.includes(token))
+          );
+        }),
+        score: row.score,
+      }));
   }
 
-  private rankHits(hits: Iterable<SearchHit>, limit: number): SearchHit[] {
-    const results = [...hits];
-    return results.sort((a, b) => b.score - a.score).slice(0, limit);
+  private async searchRoute(
+    method: SessionSearchMatch,
+    selector: SessionSelector,
+    query: string,
+    options: SessionSearchOptions,
+  ): Promise<RawContentHit[]> {
+    options.signal?.throwIfAborted();
+    const normalized = normalizeSearchText(query);
+    if (!normalized) return [];
+
+    const limit = integerOption(options.candidateLimit ?? 50, "candidateLimit");
+    if (method === "vector") return this.searchVector(selector, query, limit, options);
+
+    let score;
+    let match;
+    if (method === "full_text") {
+      const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(" ");
+      if (!tokens) return [];
+      const document = sql`to_tsvector('simple', ${retrievalChunks.tokenText})`;
+      const tsQuery = sql`plainto_tsquery('simple', ${tokens})`;
+      score = sql<number>`ts_rank_cd(${document}, ${tsQuery})`;
+      match = sql`${document} @@ ${tsQuery}`;
+    } else {
+      const pattern = `%${escapeLike(normalized)}%`;
+      score = sql<number>`similarity(${retrievalChunks.searchText}, ${normalized})`;
+      match = sql`(${retrievalChunks.searchText} % ${normalized} OR ${retrievalChunks.searchText} LIKE ${pattern})`;
+    }
+
+    const rows = await this.db
+      .select({ messageId: retrievalChunks.messageId, excerpt: retrievalChunks.content, score })
+      .from(retrievalChunks)
+      .where(and(chunkCondition(selector), match))
+      .orderBy(desc(score), asc(retrievalChunks.id))
+      .limit(limit);
+    options.signal?.throwIfAborted();
+    return rows;
   }
+
+  private async searchVector(
+    selector: SessionSelector,
+    query: string,
+    limit: number,
+    options: SessionSearchOptions,
+  ): Promise<RawContentHit[]> {
+    const model = this.embeddingIndex.model;
+    if (!model) return [];
+
+    const threshold = options.minVectorSimilarity ?? 0.35;
+    if (!Number.isFinite(threshold) || threshold < -1 || threshold > 1) {
+      throw new SessionValidationError("相似度阈值必须在 -1 到 1 之间");
+    }
+
+    const vector = await this.embeddingIndex.embedQuery(query, options.signal);
+    if (!vector) return [];
+
+    const score = sql<number>`CASE WHEN ${retrievalEmbeddings.model} = ${model.model}
+      AND ${retrievalEmbeddings.dimensions} = ${model.dimensions}
+      AND ${retrievalEmbeddings.status} = 'ready'
+      THEN 1 - (${retrievalEmbeddings.embedding} <=> ${JSON.stringify(vector)}::vector) ELSE NULL END`;
+    const rows = await this.db
+      .select({ messageId: retrievalChunks.messageId, excerpt: retrievalChunks.content, score })
+      .from(retrievalChunks)
+      .innerJoin(retrievalEmbeddings, eq(retrievalEmbeddings.chunkId, retrievalChunks.id))
+      .where(
+        and(
+          chunkCondition(selector),
+          eq(retrievalEmbeddings.model, model.model),
+          eq(retrievalEmbeddings.dimensions, model.dimensions),
+          eq(retrievalEmbeddings.status, "ready"),
+          sql`${score} >= ${threshold}`,
+        ),
+      )
+      .orderBy(desc(score), asc(retrievalChunks.id))
+      .limit(limit);
+    options.signal?.throwIfAborted();
+    return rows;
+  }
+
+  private async mergeContentHits(
+    selector: SessionSelector,
+    routes: Array<[SessionSearchMatch, RawContentHit[]]>,
+    options: SessionSearchOptions,
+  ): Promise<SessionSearchHit[]> {
+    const hits = new Map<string, RawContentHit & { matches: SessionSearchMatch[] }>();
+    for (const [method, rows] of routes) {
+      const seen = new Set<string>();
+      for (const row of rows) {
+        if (seen.has(row.messageId)) continue;
+        seen.add(row.messageId);
+        const score = (method === "trigram" ? 0.7 : 1) / (60 + seen.size);
+        const existing = hits.get(row.messageId);
+        if (existing) {
+          existing.score += score;
+          existing.matches.push(method);
+        } else {
+          hits.set(row.messageId, { ...row, score, matches: [method] });
+        }
+      }
+    }
+
+    if (!hits.size) return [];
+    const rows = await this.db
+      .select({ message: sessionMessages, spaceId: sessions.spaceId })
+      .from(sessionMessages)
+      .innerJoin(sessions, eq(sessions.id, sessionMessages.sessionId))
+      .where(and(inArray(sessionMessages.id, [...hits.keys()]), sessionCondition(selector)));
+    options.signal?.throwIfAborted();
+    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 10, "limit");
+
+    return rows
+      .map((row) => {
+        const hit = hits.get(row.message.id)!;
+        return {
+          spaceId: row.spaceId,
+          message: materializeMessage(row.message),
+          excerpt: hit.excerpt,
+          score: hit.score,
+          matches: hit.matches,
+        };
+      })
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          right.message.createdAt.getTime() - left.message.createdAt.getTime() ||
+          left.message.id.localeCompare(right.message.id),
+      )
+      .slice(offset, offset + limit);
+  }
+
+  private searchSourceExact(
+    selector: SessionSelector,
+    query: string,
+    limit: number,
+  ): Promise<RawSourceHit[]> {
+    return this.sourceQuery(
+      selector,
+      sql`${sessions.sources} @> ARRAY[${query}]::text[]`,
+      sql<number>`2`,
+      limit,
+    );
+  }
+
+  private searchSourceText(
+    selector: SessionSelector,
+    query: string,
+    limit: number,
+  ): Promise<RawSourceHit[]> {
+    const normalized = normalizeSearchText(query);
+    const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(" ");
+    const pattern = `%${escapeLike(normalized)}%`;
+    const document = sql`to_tsvector('simple', ${sessions.sourceTokenText})`;
+    const tsQuery = sql`plainto_tsquery('simple', ${tokens})`;
+    const match = sql`(${document} @@ ${tsQuery} OR ${sessions.sourceSearchText} % ${normalized} OR ${sessions.sourceSearchText} LIKE ${pattern})`;
+    const score = sql<number>`GREATEST(ts_rank_cd(${document}, ${tsQuery}), similarity(${sessions.sourceSearchText}, ${normalized}), CASE WHEN ${sessions.sourceSearchText} LIKE ${pattern} THEN 0.5 ELSE 0 END)`;
+    return this.sourceQuery(selector, match, score, limit);
+  }
+
+  private sourceQuery(
+    selector: SessionSelector,
+    match: ReturnType<typeof sql>,
+    score: ReturnType<typeof sql<number>>,
+    limit: number,
+  ): Promise<RawSourceHit[]> {
+    return this.db
+      .select({ session: sessions, score })
+      .from(sessions)
+      .where(and(sessionCondition(selector), match))
+      .orderBy(desc(score), desc(sessions.updatedAt), asc(sessions.id))
+      .limit(limit) as Promise<RawSourceHit[]>;
+  }
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
 }

@@ -2,11 +2,8 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from "@cieljs/agent-kit";
 
 import type { Database, Transaction } from "./database.ts";
-import { memories, memoryChunks, memoryEmbeddings } from "./schema.ts";
-import type { MemoryAccess, MemoryScope } from "./types.ts";
-import { accessCondition } from "./validation.ts";
-
-type MemoryIndexAccess = MemoryAccess & { scopes: MemoryScope[] };
+import { memoryChunks, memoryEmbeddings } from "./schema.ts";
+import type { MemoryIndexStatus } from "./types.ts";
 
 export class MemoryEmbeddingIndex {
   private indexing: Promise<void> = Promise.resolve();
@@ -17,21 +14,14 @@ export class MemoryEmbeddingIndex {
     private readonly onIndexError: ((error: unknown) => void) | undefined,
   ) {}
 
-  async prepare(options?: MemoryIndexAccess, reset = false): Promise<void> {
-    const provider = this.provider;
-
-    if (!provider) {
+  async prepare(reset = false): Promise<void> {
+    if (!this.provider) {
       return;
     }
 
     await this.db.transaction(async (transaction) => {
-      const rows = await transaction
-        .select({ id: memoryChunks.id })
-        .from(memoryChunks)
-        .innerJoin(memories, eq(memories.id, memoryChunks.memoryId))
-        .where(and(eq(memories.status, "active"), options ? accessCondition(options) : undefined));
+      const rows = await transaction.select({ id: memoryChunks.id }).from(memoryChunks);
 
-      // 分批避免大库重启时超出 PostgreSQL 参数数量限制。
       for (let start = 0; start < rows.length; start += 500) {
         const ids = rows.slice(start, start + 500).map((row) => row.id);
 
@@ -79,8 +69,8 @@ export class MemoryEmbeddingIndex {
       .catch((error: unknown) => this.reportError(error));
   }
 
-  async rebuild(options: MemoryIndexAccess): Promise<void> {
-    await this.prepare(options, true);
+  async rebuild(): Promise<void> {
+    await this.prepare(true);
     this.enqueue();
   }
 
@@ -89,8 +79,8 @@ export class MemoryEmbeddingIndex {
     this.enqueue();
   }
 
-  async status(): Promise<{ pending: number; ready: number; failed: number }> {
-    const result = { pending: 0, ready: 0, failed: 0 };
+  async status(): Promise<MemoryIndexStatus> {
+    const result: MemoryIndexStatus = { pending: 0, ready: 0, failed: 0 };
 
     if (!this.provider) {
       return result;
@@ -110,13 +100,11 @@ export class MemoryEmbeddingIndex {
   }
 
   async embedQuery(query: string, signal?: AbortSignal): Promise<number[] | null> {
-    const provider = this.provider;
-
-    if (!provider) {
+    if (!this.provider) {
       return null;
     }
 
-    const vector = await provider.embed(query, { purpose: "query", signal });
+    const vector = await this.provider.embed(query, { purpose: "query", signal });
     signal?.throwIfAborted();
 
     return vector;

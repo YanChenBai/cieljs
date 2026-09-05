@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  check,
   customType,
   index,
   integer,
@@ -13,6 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { SessionSource } from "./types.ts";
 
 // 不在列类型中固定维数，允许多个模型的派生索引共存。
 const embeddingVector = customType<{ data: number[]; driverData: string }>({
@@ -27,21 +29,51 @@ const embeddingVector = customType<{ data: number[]; driverData: string }>({
  * nextMessageSeq 只给 session_messages 使用。
  * Compaction 不参与 Message seq。
  */
-export const sessions = pgTable("sessions", {
-  id: text("id").primaryKey(),
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
 
-  nextMessageSeq: bigint("next_message_seq", {
-    mode: "number",
-  })
-    .notNull()
-    .default(1),
+    spaceId: text("space_id").notNull(),
 
-  createdAt: timestamp("created_at", {
-    withTimezone: true,
-  })
-    .notNull()
-    .defaultNow(),
-});
+    nextMessageSeq: bigint("next_message_seq", {
+      mode: "number",
+    })
+      .notNull()
+      .default(1),
+
+    sources: text("sources")
+      .array()
+      .$type<SessionSource>()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+
+    sourceSearchText: text("source_search_text").notNull().default(""),
+    sourceTokenText: text("source_token_text").notNull().default(""),
+
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check("sessions_space_id_check", sql`length(trim(${table.spaceId})) > 0`),
+    index("sessions_space_updated_idx").on(table.spaceId, table.updatedAt),
+    index("sessions_sources_idx").using("gin", table.sources),
+    index("sessions_source_fts_idx").using(
+      "gin",
+      sql`to_tsvector('simple', ${table.sourceTokenText})`,
+    ),
+    index("sessions_source_trgm_idx").using("gin", sql`${table.sourceSearchText} gin_trgm_ops`),
+  ],
+);
 
 /**
  * Agent Message 是 Session 唯一真实时间线。
@@ -149,6 +181,9 @@ export const retrievalChunks = pgTable(
      */
     searchText: text("search_text").notNull(),
 
+    /** 分词后的全文检索文本。 */
+    tokenText: text("token_text").notNull().default(""),
+
     createdAt: timestamp("created_at", {
       withTimezone: true,
     })
@@ -163,7 +198,7 @@ export const retrievalChunks = pgTable(
     /**
      * PostgreSQL FTS。
      */
-    index("retrieval_chunks_fts_idx").using("gin", sql`to_tsvector('simple', ${table.searchText})`),
+    index("retrieval_chunks_fts_idx").using("gin", sql`to_tsvector('simple', ${table.tokenText})`),
 
     /**
      * pg_trgm。
@@ -196,7 +231,11 @@ export const retrievalEmbeddings = pgTable(
 
     dimensions: integer("dimensions").notNull(),
 
-    embedding: embeddingVector("embedding").notNull(),
+    embedding: embeddingVector("embedding"),
+
+    status: text("status").$type<"pending" | "ready" | "failed">().notNull().default("pending"),
+
+    error: text("error"),
 
     createdAt: timestamp("created_at", {
       withTimezone: true,
@@ -210,5 +249,10 @@ export const retrievalEmbeddings = pgTable(
     }),
 
     index("retrieval_embeddings_model_dimensions_idx").on(table.model, table.dimensions),
+    index("retrieval_embeddings_jobs_idx").on(table.model, table.dimensions, table.status),
+    check(
+      "retrieval_embeddings_status_check",
+      sql`(${table.status} = 'ready' AND ${table.embedding} IS NOT NULL) OR (${table.status} IN ('pending', 'failed') AND ${table.embedding} IS NULL)`,
+    ),
   ],
 );

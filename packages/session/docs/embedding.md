@@ -59,14 +59,14 @@ export async function verifyEmbedding(embedding: EmbeddingProvider) {
   });
 
   try {
-    const session = await manager.session();
+    const session = await manager.space("blive:room:21452505").session();
     await session.appendMessage({
       role: "user",
       content: "本次决定采用本地数据库保存会话。",
       timestamp: Date.now(),
     });
     await manager.flushIndexes();
-    return await session.searchVector("会话保存在哪里");
+    return await session.search("会话保存在哪里", { mode: "vector" });
   } finally {
     await manager.close();
   }
@@ -78,8 +78,8 @@ export async function verifyEmbedding(embedding: EmbeddingProvider) {
 ## 第四步：排查与维护
 
 - **查询没有命中**：检查索引是否完成、模型标识和维数是否正确，以及 `minVectorSimilarity` 是否过高。默认阈值为 0.35。
-- **向量服务暂时不可用**：消息仍会保存。`search()` 报告向量错误后继续全文和模糊检索；`searchVector()` 直接抛出错误，适合验证配置。
-- **更换模型**：使用新 Provider 打开存储后，调用 `session.rebuildEmbeddings()`；需要重建所有会话时调用 `manager.rebuildEmbeddings()`。
+- **向量服务暂时不可用**：消息仍会保存。混合 `search()` 报告向量错误后继续全文和模糊检索；显式 `{ mode: "vector" }` 会把查询错误交给调用方。
+- **更换模型或 tokenizer**：使用新配置打开存储后，调用 `session.rebuildIndexes()`；需要重建所有会话时调用 `manager.rebuildIndexes()`。失败任务也可以通过 `manager.retryIndexes()` 重试。
 - **需要重建全部检索投影**：调用 `session.rebuildIndex()`，重建该会话的文本与向量索引。
 - **数据量较大**：当前使用模型/维数索引筛选和精确余弦计算，没有 HNSW 近似索引。性能需要按数据规模评估。
 

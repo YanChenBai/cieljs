@@ -1,79 +1,72 @@
-# 让 Agent 使用记忆
+# Agent 接入
 
-Agent 的默认工具绑定一个明确的当前空间：
+## 当前 Space
 
-```ts
-import { memoryTools } from "@cieljs/memory";
+`memoryTools({ space })` 默认提供：
 
-const space = manager.space("space-1");
-const tools = memoryTools({
-  space,
-});
+```text
+search_memory
+search_memory_sources
+read_memory
+remember_daily_memory
+remember_long_term_memory
+update_memory
+forget_memory
 ```
 
-默认提供：
+工具绑定宿主传入的 `SpaceMemory`，参数中没有 `spaceId`。Daily 和 long-term 使用两个 remember 工具，Agent 不需要传数据库 layer。
 
-- `search_memory`：搜索 `global.long_term` 与当前空间的两层记忆。
-- `read_memory`：读取上述范围内的完整记忆与来源。
-- `remember_memory`：按复合 layer 保存到全局长期或当前空间的两层记忆。
-- `update_memory`：按 `id + layer + expectedRevision` 更新记忆。
-- `forget_memory`：按 `id + layer + expectedRevision` 归档记忆。
+## Sources 注入
 
-写入工具没有 scope 或 layer 参数，工具本身决定归属。长正文默认每页读取 12,000 个 UTF-16 字符，并通过 `nextOffset` 分页。
-
-来源可以是静态数组，也可以在每次工具执行时动态生成：
+Agent 不直接提交 sources。宿主可以提供静态数组或每次调用时执行的 provider：
 
 ```ts
 const tools = memoryTools({
   space,
-  sources: () => [{ type: "session", sessionId: currentSessionId }],
+  sources: ({ toolCallId, action }) => [
+    `session:${sessionId}`,
+    `tool-call:${toolCallId}`,
+    `action:${action}`,
+  ],
 });
 ```
 
-需要搜索所有空间时，单独加入全库只读工具：
+更新时默认把宿主来源追加到旧来源。传入 `sourcesMode: "replace"` 可以改为替换，但 Agent 仍不能自行构造 sources。
+
+`replace` 模式下，宿主返回空数组会清空旧来源；`append` 模式下空数组不改变旧来源。
+
+## 跨 Space 只读探索
+
+`crossSpace.access: "related"` 增加 `find_memory_spaces`、`search_space_memory`、`search_space_memory_sources` 和 `read_space_memory`。必须先发现一个 space，后续工具才允许访问它。
+
+`all` 还增加 `search_all_memory`、`search_all_memory_sources` 和 `read_all_memory`。两种模式都不会扩大更新或遗忘权限。
+
+当前空间、跨空间和全局的正文搜索工具均按 `maxReadChars` 截断正文预览和片段；完整正文可通过对应读取工具的 `offset` 分页获取。
+
+## 全局授权
+
+全局工具必须单独创建：
 
 ```ts
-import { allMemoryTools } from "@cieljs/memory";
-
-const tools = allMemoryTools({ manager });
-```
-
-它提供 `search_all_memory` 与 `read_all_memory`。两者始终访问全局和所有空间，不接受空间选择参数。
-
-## 准备上下文
-
-分层入口可以独立生成预算内的上下文：
-
-```ts
-const globalLongTerm = await manager.global.longTerm.context({ maxTokens: 1000 });
-const spaceLongTerm = await space.longTerm.context({ maxTokens: 1000 });
-const recentDaily = await space.daily.context({ recentDays: 2, maxTokens: 1000 });
-```
-
-日期默认按存储时区计算，也可以传 `date` 进行历史回放。整条记忆放不下时会跳过，不截断事实正文。默认以 UTF-8 字节数保守估算预算；可以通过 `countTokens` 接入模型 tokenizer。
-
-## 在 core 中使用
-
-```ts
-import { createSessionAgent } from "core";
-import { MemoryManager } from "@cieljs/memory";
-import { SessionManager } from "@cieljs/session";
-
-const sessions = await SessionManager.open({ dataDir: ".ciel/sessions" });
-const memories = await MemoryManager.open({ dataDir: ".ciel/memory" });
-
-const { agent, unsubscribe, flushPersistence } = await createSessionAgent({
-  manager: sessions,
-  sessionId: "conversation-1",
-  systemPrompt: "你是 Ciel。结合当前上下文与相关记忆帮助用户。",
-  memory: {
-    space: memories.space("space-1"),
-    crossSpaceSearch: true,
-    maxTokens: 2000,
-  },
+const tools = globalMemoryTools({
+  memory: manager.global,
+  sources: ["session:conversation-1"],
 });
 ```
 
-core 在创建 Agent 时把 `global.long_term` 和当前 `space.long_term` 加入 system prompt。每次模型调用前只刷新当前 `space.daily`，临时上下文不会写回 Agent 状态或 session。
+它包含全局搜索、来源搜索、读取、保存、更新和遗忘。宿主可以分别关闭三个写入能力。
 
-`crossSpaceSearch` 只增加全库搜索与读取工具，不扩大自动注入范围，也不改变写入归属。不同 session 复用同一个 `spaceId` 即可共享空间记忆。
+## 上下文
+
+`loadMemoryContext()` 独立返回全局长期、空间长期和近期每日三个 section。建议把两类长期记忆用于稳定上下文，把 daily 作为每次模型调用前刷新的临时上下文。
+
+```ts
+const context = await loadMemoryContext({
+  manager,
+  space,
+  query: currentUserMessage,
+  recentDays: 2,
+});
+```
+
+三个 section 使用独立 token 预算，避免近期事件挤掉长期事实。

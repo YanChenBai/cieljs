@@ -1,214 +1,150 @@
-import { and, eq, or, sql } from "drizzle-orm";
-import { memories } from "./schema.ts";
-import type {
-  MemoryAccess,
-  MemoryFilter,
-  MemoryKind,
-  MemoryLayer,
-  MemoryScope,
-  MemoryScopeSelector,
-  MemorySource,
-} from "./types.ts";
+import { MemoryValidationError } from "./errors.ts";
+import { normalizeSearchText } from "./search.ts";
+import type { JsonObject, MemoryKind, MemoryLayer, MemorySource } from "./types.ts";
 
-export function scopeColumns(scope: MemoryScope) {
-  if (scope?.type === "global") return { spaceId: null };
+export const MAX_MEMORY_SOURCES = 32;
+export const MAX_MEMORY_SOURCE_LENGTH = 512;
+export const MAX_MEMORY_SOURCES_BYTES = 32 * 1024;
 
-  if (scope?.type === "space") {
-    if (!scope.spaceId?.trim()) {
-      throw new TypeError("记忆范围必须为 global 或包含 spaceId 的 space");
-    }
-
-    return { spaceId: scope.spaceId };
+export function assertContent(value: string): void {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new MemoryValidationError("记忆正文不能为空");
   }
-
-  throw new TypeError("记忆范围必须为 global 或包含 spaceId 的 space");
-}
-
-export function scopeCondition(scope: MemoryScope) {
-  scopeColumns(scope);
-
-  return scope.type === "global"
-    ? eq(memories.layer, "global.long_term")
-    : eq(memories.spaceId, scope.spaceId);
-}
-
-export function accessCondition(options: MemoryAccess & { scopes: MemoryScopeSelector }) {
-  const scopes = options.scopes;
-  let scopeAccessCondition;
-
-  if (scopes !== "all") {
-    if (!Array.isArray(scopes)) {
-      throw new TypeError("无效的记忆读取范围");
-    }
-
-    scopeAccessCondition = scopes.length > 0 ? or(...scopes.map(scopeCondition))! : sql`false`;
-  }
-
-  let statusCondition;
-
-  if (!options.includeArchived) statusCondition = eq(memories.status, "active");
-
-  let expirationCondition;
-
-  if (!options.includeExpired) {
-    expirationCondition = sql`(${memories.expiresAt} IS NULL OR ${memories.expiresAt} > now())`;
-  }
-
-  return and(scopeAccessCondition, statusCondition, expirationCondition)!;
-}
-
-export function filterCondition(options: MemoryFilter & { scopes: MemoryScopeSelector }) {
-  if (options.layer !== undefined && !isMemoryLayer(options.layer)) {
-    throw new TypeError("无效的记忆层级");
-  }
-
-  if (options.kind !== undefined) {
-    assertKind(options.kind);
-  }
-
-  if (options.dateFrom !== undefined) {
-    assertDate(options.dateFrom);
-  }
-
-  if (options.dateTo !== undefined) {
-    assertDate(options.dateTo);
-  }
-
-  const hasInvalidDateRange =
-    options.dateFrom !== undefined &&
-    options.dateTo !== undefined &&
-    options.dateFrom > options.dateTo;
-
-  if (hasInvalidDateRange) {
-    throw new TypeError("日期范围起点不能晚于终点");
-  }
-
-  let layerCondition;
-
-  if (options.layer) {
-    layerCondition = eq(memories.layer, options.layer);
-  }
-
-  let kindCondition;
-
-  if (options.kind) {
-    kindCondition = eq(memories.kind, options.kind);
-  }
-
-  let dateFromCondition;
-
-  if (options.dateFrom) {
-    dateFromCondition = sql`${memories.date} >= ${options.dateFrom}::date`;
-  }
-
-  let dateToCondition;
-
-  if (options.dateTo) {
-    dateToCondition = sql`${memories.date} <= ${options.dateTo}::date`;
-  }
-
-  return and(
-    accessCondition(options),
-    layerCondition,
-    kindCondition,
-    dateFromCondition,
-    dateToCondition,
-  )!;
 }
 
 export function assertDate(value: string): void {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new TypeError("日期必须为 YYYY-MM-DD");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new MemoryValidationError("日期必须为 YYYY-MM-DD");
+  }
 
   const parsed = new Date(`${value}T00:00:00Z`);
-  const isValidDate = Number.isFinite(parsed.getTime());
-  const matchesCalendarDate = isValidDate && parsed.toISOString().slice(0, 10) === value;
 
-  if (!matchesCalendarDate) {
-    throw new TypeError("无效的日历日期");
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new MemoryValidationError("无效的日历日期");
   }
 }
 
 export function assertTimestamp(value: Date): void {
-  const isValidTimestamp = value instanceof Date && Number.isFinite(value.getTime());
-
-  if (!isValidTimestamp) {
-    throw new TypeError("时间必须为有效的 Date");
-  }
-}
-
-export function assertContent(value: string): void {
-  const hasContent = typeof value === "string" && Boolean(value.trim());
-
-  if (!hasContent) {
-    throw new TypeError("记忆正文不能为空");
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new MemoryValidationError("时间必须为有效的 Date");
   }
 }
 
 export function assertKind(value: MemoryKind): void {
   if (!["event", "fact", "preference", "summary"].includes(value)) {
-    throw new TypeError("无效的记忆种类");
+    throw new MemoryValidationError("无效的记忆种类");
   }
 }
 
-export function integerOption(value: number, name: string, min = 1, max = 1000): number {
-  const isIntegerInRange = Number.isSafeInteger(value) && value >= min && value <= max;
+export function assertLayers(layers: MemoryLayer[]): void {
+  if (!layers.every(isMemoryLayer)) {
+    throw new MemoryValidationError("无效的记忆层级");
+  }
+}
 
-  if (!isIntegerInRange) {
-    throw new TypeError(`${name} 必须为 ${min} 到 ${max} 的整数`);
+export function assertJsonObject(value: JsonObject): void {
+  if (!isPlainObject(value)) {
+    throw new MemoryValidationError("metadata 必须是可序列化的 JSON 对象");
+  }
+
+  assertJsonValue(value, new WeakSet());
+}
+
+export function normalizeSources(sources: MemorySource[]): MemorySource[] {
+  if (!Array.isArray(sources)) {
+    throw new MemoryValidationError("sources 必须是字符串数组");
+  }
+
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const source of sources) {
+    if (typeof source !== "string") {
+      throw new MemoryValidationError("source 必须是字符串");
+    }
+
+    const value = source.normalize("NFKC").trim();
+
+    if (!value) {
+      continue;
+    }
+
+    if (Array.from(value).length > MAX_MEMORY_SOURCE_LENGTH) {
+      throw new MemoryValidationError(`单个 source 不能超过 ${MAX_MEMORY_SOURCE_LENGTH} 个字符`);
+    }
+
+    const key = normalizeSearchText(value);
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      normalized.push(value);
+    }
+  }
+
+  if (normalized.length > MAX_MEMORY_SOURCES) {
+    throw new MemoryValidationError(`sources 不能超过 ${MAX_MEMORY_SOURCES} 项`);
+  }
+
+  if (new TextEncoder().encode(normalized.join("\n")).length > MAX_MEMORY_SOURCES_BYTES) {
+    throw new MemoryValidationError(`sources 总大小不能超过 ${MAX_MEMORY_SOURCES_BYTES} 字节`);
+  }
+
+  return normalized;
+}
+
+export function integerOption(value: number, name: string, min = 1, max = 1000): number {
+  if (!Number.isSafeInteger(value) || value < min || value > max) {
+    throw new MemoryValidationError(`${name} 必须为 ${min} 到 ${max} 的整数`);
   }
 
   return value;
 }
 
-export function assertSources(sources: MemorySource[]): void {
-  for (const source of sources) {
-    switch (source.type) {
-      case "session":
-        assertSessionSource(source);
-        break;
-      case "event":
-        if (!source.eventId?.trim()) {
-          throw new TypeError("无效的记忆来源");
-        }
-        break;
-      case "memory":
-        if (!source.memoryId?.trim()) {
-          throw new TypeError("无效的记忆来源");
-        }
-        break;
-      default: {
-        throw new TypeError("无效的记忆来源");
-      }
-    }
-  }
-}
-
-function assertSessionSource(source: Extract<MemorySource, { type: "session" }>): void {
-  if (!source.sessionId?.trim()) {
-    throw new TypeError("无效的记忆来源");
-  }
-
-  if (source.messageId !== undefined && !source.messageId.trim()) {
-    throw new TypeError("messageId 不能为空");
-  }
-
-  if (source.fromSeq !== undefined) {
-    integerOption(source.fromSeq, "fromSeq", 1, Number.MAX_SAFE_INTEGER);
-  }
-
-  if (source.toSeq !== undefined) {
-    integerOption(source.toSeq, "toSeq", 1, Number.MAX_SAFE_INTEGER);
-  }
-
-  const hasIncompleteRange = source.toSeq !== undefined && source.fromSeq === undefined;
-  const hasReversedRange =
-    source.toSeq !== undefined && source.fromSeq !== undefined && source.toSeq < source.fromSeq;
-
-  if (hasIncompleteRange || hasReversedRange) {
-    throw new TypeError("来源消息区间无效");
-  }
-}
-
 export function isMemoryLayer(value: unknown): value is MemoryLayer {
   return value === "global.long_term" || value === "space.long_term" || value === "space.daily";
+}
+
+function assertJsonValue(value: unknown, visited: WeakSet<object>): void {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean" ||
+    (typeof value === "number" && Number.isFinite(value))
+  ) {
+    return;
+  }
+
+  if (typeof value !== "object") {
+    throw new MemoryValidationError("metadata 包含不可序列化的值");
+  }
+
+  if (visited.has(value)) {
+    throw new MemoryValidationError("metadata 不能包含循环引用");
+  }
+
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      assertJsonValue(item, visited);
+    }
+  } else if (isPlainObject(value)) {
+    for (const item of Object.values(value)) {
+      assertJsonValue(item, visited);
+    }
+  } else {
+    throw new MemoryValidationError("metadata 只能包含普通 JSON 对象和数组");
+  }
+
+  visited.delete(value);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value) as unknown;
+
+  return prototype === Object.prototype || prototype === null;
 }

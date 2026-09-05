@@ -1,40 +1,51 @@
 import { fileURLToPath } from "node:url";
 
 import type { PGlite } from "@electric-sql/pglite";
-
-import { and, eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from "@cieljs/agent-kit";
 
-import { createDatabase, materializeMemoryEntries, type Database } from "./database.ts";
+import { createDatabase, type Database } from "./database.ts";
 import { MemoryEmbeddingIndex } from "./embedding-index.ts";
-import { Memory, type MemoryServices } from "./memory.ts";
-import { createGlobalMemory, createSpaceMemory } from "./memory-space.ts";
-import type { GlobalMemory, SpaceMemory } from "./memory-space.ts";
+import { MemoryClosedError, MemoryValidationError } from "./errors.ts";
+import {
+  createGlobalMemory,
+  createSpaceMemory,
+  type GlobalLongTermMemory,
+  type MemoryStoreServices,
+  type SpaceMemory,
+} from "./memory-store.ts";
+import { MemoryRepository } from "./repository.ts";
 import { MemoryRetrieval } from "./retrieval.ts";
-import { memories } from "./schema.ts";
 import { tokenizeSearchText } from "./search.ts";
 import type {
-  MemoryAccess,
+  FindMemorySpacesOptions,
   MemoryEntry,
+  MemoryIndexStatus,
   MemoryManagerOptions,
-  MemorySearchOptions,
+  MemoryReadOptions,
   MemorySearchHit,
+  MemorySourceSearchHit,
+  MemorySourceSearchOptions,
+  MemorySpaceSourceHit,
+  SearchAllMemoryOptions,
 } from "./types.ts";
-import { accessCondition } from "./validation.ts";
+import { integerOption } from "./validation.ts";
 
 const MIGRATIONS_FOLDER = fileURLToPath(new URL("../migrations/", import.meta.url));
+const ALL_LAYERS = ["global.long_term", "space.long_term", "space.daily"] as const;
 
 type ResolvedMemoryManagerOptions = Omit<MemoryManagerOptions, "embedding"> & {
   embedding?: ResolvedEmbeddingProvider;
 };
 
-export class MemoryManager {
+export class MemoryManager implements AsyncDisposable {
   readonly timeZone: string;
-  readonly global: GlobalMemory;
+  readonly global: GlobalLongTermMemory;
 
   private readonly embeddingIndex: MemoryEmbeddingIndex;
-  private readonly memoryServices: MemoryServices;
+  private readonly repository: MemoryRepository;
+  private readonly retrieval: MemoryRetrieval;
+  private readonly services: MemoryStoreServices;
   private readonly operations = new Set<Promise<unknown>>();
   private closing: Promise<void> | undefined;
 
@@ -46,25 +57,34 @@ export class MemoryManager {
     this.timeZone = options.timeZone ?? "Asia/Shanghai";
     const tokenize = options.tokenize ?? tokenizeSearchText;
     this.embeddingIndex = new MemoryEmbeddingIndex(db, options.embedding, options.onIndexError);
-    const retrieval = new MemoryRetrieval(db, this.embeddingIndex, tokenize);
-    this.memoryServices = {
-      db,
-      embeddingIndex: this.embeddingIndex,
-      retrieval,
-      timeZone: this.timeZone,
-      tokenize,
+    this.repository = new MemoryRepository(db, this.embeddingIndex, this.timeZone, tokenize);
+    this.retrieval = new MemoryRetrieval(db, this.embeddingIndex, tokenize);
+    this.services = {
+      repository: this.repository,
+      retrieval: this.retrieval,
       operate: this.operate.bind(this),
     };
-    this.global = createGlobalMemory(Memory.create(this.memoryServices, { type: "global" }));
+    this.global = createGlobalMemory(this.services);
   }
 
   static async open(options: MemoryManagerOptions): Promise<MemoryManager> {
+    if (!options.dataDir?.trim()) {
+      throw new MemoryValidationError("dataDir 不能为空");
+    }
+
+    const timeZone = options.timeZone ?? "Asia/Shanghai";
+
+    try {
+      new Intl.DateTimeFormat("en", { timeZone });
+    } catch (error) {
+      throw new MemoryValidationError("timeZone 必须是有效的 IANA 时区", { cause: error });
+    }
+
     const resolvedOptions: ResolvedMemoryManagerOptions = {
       ...options,
+      timeZone,
       embedding: resolveEmbeddingProvider(options.embedding),
     };
-
-    new Intl.DateTimeFormat("en", { timeZone: options.timeZone ?? "Asia/Shanghai" });
     const { client, db } = createDatabase(options.dataDir);
 
     try {
@@ -75,7 +95,6 @@ export class MemoryManager {
       await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 
       const manager = new MemoryManager(client, db, resolvedOptions);
-      // 任务和正文一起持久化；换模型或上次进程退出后补齐当前模型的任务。
       await manager.embeddingIndex.prepare();
       manager.embeddingIndex.enqueue();
 
@@ -88,53 +107,86 @@ export class MemoryManager {
   }
 
   space(spaceId: string): SpaceMemory {
-    const scope = { type: "space" as const, spaceId };
+    this.assertOpen();
 
-    return createSpaceMemory(spaceId, Memory.create(this.memoryServices, scope), this.global);
+    if (!spaceId?.trim()) {
+      throw new MemoryValidationError("spaceId 不能为空");
+    }
+
+    return createSpaceMemory(this.services, spaceId);
   }
 
-  get(id: string, options: MemoryAccess = {}): Promise<MemoryEntry | null> {
-    return this.operate(() =>
-      this.memoryServices.db.transaction(async (transaction) => {
-        const rows = await transaction
-          .select()
-          .from(memories)
-          .where(and(eq(memories.id, id), accessCondition({ ...options, scopes: "all" })));
-
-        return (await materializeMemoryEntries(transaction, rows))[0] ?? null;
-      }),
-    );
+  getAny(id: string, options?: MemoryReadOptions): Promise<MemoryEntry | null> {
+    return this.operate(() => this.repository.get({ layers: [...ALL_LAYERS] }, id, options));
   }
 
-  searchFullText(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchHit[]> {
-    return this.operate(() =>
-      this.memoryServices.retrieval.searchFullText(query, { ...options, scopes: "all" }),
-    );
+  searchAll(query: string, options: SearchAllMemoryOptions = {}): Promise<MemorySearchHit[]> {
+    const { layers = [...ALL_LAYERS], ...searchOptions } = options;
+
+    return this.operate(() => this.retrieval.search({ layers }, query, searchOptions));
   }
 
-  searchTrigram(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchHit[]> {
-    return this.operate(() =>
-      this.memoryServices.retrieval.searchTrigram(query, { ...options, scopes: "all" }),
-    );
+  searchBySource(
+    query: string,
+    options: MemorySourceSearchOptions = {},
+  ): Promise<MemorySourceSearchHit[]> {
+    const { layers = [...ALL_LAYERS], ...searchOptions } = options;
+
+    return this.operate(() => this.retrieval.searchBySource({ layers }, query, searchOptions));
   }
 
-  searchVector(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchHit[]> {
-    return this.operate(() =>
-      this.memoryServices.retrieval.searchVector(query, { ...options, scopes: "all" }),
-    );
+  async findSpacesBySource(
+    query: string,
+    options: FindMemorySpacesOptions = {},
+  ): Promise<MemorySpaceSourceHit[]> {
+    const limit = integerOption(options.limit ?? 10, "limit");
+    const hits = await this.searchBySource(query, {
+      mode: options.mode,
+      layers: options.layers ?? ["space.long_term", "space.daily"],
+      limit: 1000,
+      signal: options.signal,
+    });
+    const spaces = new Map<string, MemorySpaceSourceHit>();
+
+    for (const hit of hits) {
+      if (!hit.spaceId) {
+        continue;
+      }
+
+      const existing = spaces.get(hit.spaceId);
+
+      if (existing) {
+        existing.score = Math.max(existing.score, hit.score);
+        existing.matchedSources = [...new Set([...existing.matchedSources, ...hit.matchedSources])];
+        existing.memories.push({
+          id: hit.memoryId,
+          revision: hit.revision,
+          layer: hit.layer as "space.long_term" | "space.daily",
+          excerpt: hit.excerpt,
+        });
+      } else {
+        spaces.set(hit.spaceId, {
+          spaceId: hit.spaceId,
+          score: hit.score,
+          matchedSources: [...hit.matchedSources],
+          memories: [
+            {
+              id: hit.memoryId,
+              revision: hit.revision,
+              layer: hit.layer as "space.long_term" | "space.daily",
+              excerpt: hit.excerpt,
+            },
+          ],
+        });
+      }
+    }
+
+    return [...spaces.values()]
+      .sort((left, right) => right.score - left.score || left.spaceId.localeCompare(right.spaceId))
+      .slice(0, limit);
   }
 
-  search(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchHit[]> {
-    return this.operate(() =>
-      this.memoryServices.retrieval.search(query, { ...options, scopes: "all" }),
-    );
-  }
-
-  retryEmbeddings(): Promise<void> {
-    return this.operate(() => this.embeddingIndex.retry());
-  }
-
-  getIndexStatus(): Promise<{ pending: number; ready: number; failed: number }> {
+  getIndexStatus(): Promise<MemoryIndexStatus> {
     return this.operate(() => this.embeddingIndex.status());
   }
 
@@ -142,9 +194,19 @@ export class MemoryManager {
     return this.operate(() => this.embeddingIndex.flush());
   }
 
+  retryIndexes(): Promise<void> {
+    return this.operate(() => this.embeddingIndex.retry());
+  }
+
+  rebuildIndexes(): Promise<void> {
+    return this.operate(async () => {
+      await this.repository.rebuildChunks();
+      await this.embeddingIndex.rebuild();
+    });
+  }
+
   close(): Promise<void> {
     this.closing ??= (async () => {
-      // 已提交的写操作可能继续排入索引，必须先等业务操作再等索引。
       await Promise.allSettled(this.operations);
       await this.embeddingIndex.flush();
       await this.client.close();
@@ -153,9 +215,19 @@ export class MemoryManager {
     return this.closing;
   }
 
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.close();
+  }
+
+  private assertOpen(): void {
+    if (this.closing) {
+      throw new MemoryClosedError();
+    }
+  }
+
   private operate<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closing) {
-      return Promise.reject(new Error("MemoryManager 已关闭或正在关闭"));
+      return Promise.reject(new MemoryClosedError());
     }
 
     const result = Promise.resolve().then(operation);

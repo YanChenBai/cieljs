@@ -1,25 +1,40 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
-import { materializeMemoryEntries, type Database } from "./database.ts";
+import type { Database } from "./database.ts";
 import type { MemoryEmbeddingIndex } from "./embedding-index.ts";
-import { memories, memoryChunks, memoryEmbeddings } from "./schema.ts";
+import { filterCondition, type MemorySelector } from "./query.ts";
+import { materializeMemory } from "./repository.ts";
+import { memories, memoryChunks, memoryEmbeddings, memoryRevisions } from "./schema.ts";
 import { normalizeSearchText } from "./search.ts";
 import type {
-  MemoryScopeSelector,
   MemorySearchHit,
+  MemorySearchMatch,
   MemorySearchOptions,
-  SearchMethod,
+  MemorySourceSearchHit,
+  MemorySourceSearchOptions,
 } from "./types.ts";
-import { filterCondition, integerOption } from "./validation.ts";
+import { MemoryValidationError } from "./errors.ts";
+import { integerOption } from "./validation.ts";
 
-interface RawHit {
+interface RawContentHit {
   id: string;
   revision: number;
   excerpt: string;
   score: number;
 }
 
-type ScopedSearchOptions = MemorySearchOptions & { scopes: MemoryScopeSelector };
+interface RawSourceHit {
+  memoryId: string;
+  revision: number;
+  spaceId: string | null;
+  layer: "global.long_term" | "space.long_term" | "space.daily";
+  date: string | null;
+  sources: string[];
+  content: string;
+  score: number;
+}
+
+type SearchOptions = MemorySearchOptions & { dateFrom?: string; dateTo?: string };
 
 export class MemoryRetrieval {
   constructor(
@@ -28,23 +43,28 @@ export class MemoryRetrieval {
     private readonly tokenize: (text: string) => string[],
   ) {}
 
-  searchFullText(query: string, options: ScopedSearchOptions): Promise<MemorySearchHit[]> {
-    return this.searchSingle("fts", query, options);
-  }
+  async search(
+    selector: MemorySelector,
+    query: string,
+    options: SearchOptions = {},
+  ): Promise<MemorySearchHit[]> {
+    const mode = options.mode ?? "hybrid";
 
-  searchTrigram(query: string, options: ScopedSearchOptions): Promise<MemorySearchHit[]> {
-    return this.searchSingle("trigram", query, options);
-  }
+    if (!["hybrid", "full_text", "trigram", "vector"].includes(mode)) {
+      throw new MemoryValidationError("无效的内容检索模式");
+    }
 
-  searchVector(query: string, options: ScopedSearchOptions): Promise<MemorySearchHit[]> {
-    return this.searchSingle("vector", query, options);
-  }
+    if (mode !== "hybrid") {
+      const method = mode as MemorySearchMatch;
+      const hits = await this.searchRoute(method, selector, query, options);
 
-  async search(query: string, options: ScopedSearchOptions): Promise<MemorySearchHit[]> {
-    const [fts, trigram, vector] = await Promise.all([
-      this.searchRoute("fts", query, options),
-      this.searchRoute("trigram", query, options),
-      this.searchRoute("vector", query, options).catch((error: unknown) => {
+      return this.mergeContentHits(selector, [[method, hits]], options);
+    }
+
+    const routes = await Promise.all([
+      this.searchRoute("full_text", selector, query, options),
+      this.searchRoute("trigram", selector, query, options),
+      this.searchRoute("vector", selector, query, options).catch((error: unknown) => {
         options.signal?.throwIfAborted();
         this.embeddingIndex.reportError(error);
 
@@ -52,54 +72,115 @@ export class MemoryRetrieval {
       }),
     ]);
 
-    options.signal?.throwIfAborted();
-
-    return this.mergeHits(
+    return this.mergeContentHits(
+      selector,
       [
-        ["fts", fts],
-        ["trigram", trigram],
-        ["vector", vector],
+        ["full_text", routes[0]],
+        ["trigram", routes[1]],
+        ["vector", routes[2]],
       ],
       options,
     );
   }
 
-  private async searchSingle(
-    method: SearchMethod,
+  async searchBySource(
+    selector: MemorySelector,
     query: string,
-    options: ScopedSearchOptions,
-  ): Promise<MemorySearchHit[]> {
-    const hits = await this.searchRoute(method, query, options);
-
-    return this.mergeHits([[method, hits]], options);
-  }
-
-  private async searchRoute(
-    method: SearchMethod,
-    query: string,
-    options: ScopedSearchOptions,
-  ): Promise<RawHit[]> {
+    options: MemorySourceSearchOptions = {},
+  ): Promise<MemorySourceSearchHit[]> {
     options.signal?.throwIfAborted();
+    const normalized = query.normalize("NFKC").trim();
 
-    const filter = filterCondition(options);
-    const limit = integerOption(options.candidateLimit ?? 50, "candidateLimit");
-    const normalized = normalizeSearchText(query);
-
-    const hasNoScopes = Array.isArray(options.scopes) && options.scopes.length === 0;
-
-    if (!normalized || hasNoScopes) {
+    if (!normalized) {
       return [];
     }
 
+    const candidateLimit = integerOption((options.limit ?? 10) + (options.offset ?? 0), "limit");
+    const mode = options.mode ?? "auto";
+
+    if (!["auto", "exact", "text"].includes(mode)) {
+      throw new MemoryValidationError("无效的来源检索模式");
+    }
+    const routes: RawSourceHit[][] = [];
+
+    if (mode === "auto" || mode === "exact") {
+      routes.push(await this.searchSourceExact(selector, normalized, options, candidateLimit));
+    }
+
+    if (mode === "auto" || mode === "text") {
+      routes.push(await this.searchSourceText(selector, normalized, options, candidateLimit));
+    }
+
+    options.signal?.throwIfAborted();
+    const merged = new Map<string, RawSourceHit>();
+
+    for (const rows of routes) {
+      for (const row of rows) {
+        const key = `${row.memoryId}:${row.revision}`;
+        const existing = merged.get(key);
+
+        if (!existing || row.score > existing.score) {
+          merged.set(key, row);
+        }
+      }
+    }
+
+    const queryText = normalizeSearchText(normalized);
+    const queryTokens = this.tokenize(queryText).map(normalizeSearchText).filter(Boolean);
+    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 10, "limit");
+
+    return [...merged.values()]
+      .sort(
+        (left, right) => right.score - left.score || left.memoryId.localeCompare(right.memoryId),
+      )
+      .slice(offset, offset + limit)
+      .map((row) => ({
+        memoryId: row.memoryId,
+        revision: row.revision,
+        spaceId: row.spaceId,
+        layer: row.layer,
+        date: row.date,
+        matchedSources: row.sources.filter((source) => {
+          const sourceText = normalizeSearchText(source);
+          const sourceTokens = this.tokenize(sourceText).map(normalizeSearchText);
+
+          return (
+            source === normalized ||
+            sourceText.includes(queryText) ||
+            queryTokens.some((token) => sourceTokens.includes(token))
+          );
+        }),
+        excerpt: createExcerpt(row.content),
+        score: row.score,
+      })) as MemorySourceSearchHit[];
+  }
+
+  private async searchRoute(
+    method: MemorySearchMatch,
+    selector: MemorySelector,
+    query: string,
+    options: SearchOptions,
+  ): Promise<RawContentHit[]> {
+    options.signal?.throwIfAborted();
+    const normalized = normalizeSearchText(query);
+
+    if (!normalized || selector.layers.length === 0) {
+      return [];
+    }
+
+    const limit = integerOption(options.candidateLimit ?? 50, "candidateLimit");
+    const filter = filterCondition(selector, options);
+
     if (method === "vector") {
-      return this.searchVectorRoute(query, filter, limit, options);
+      return this.searchVector(query, filter, limit, options);
     }
 
     let score;
     let match;
 
-    if (method === "fts") {
-      const tokens = this.tokenText(query);
+    if (method === "full_text") {
+      const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(" ");
 
       if (!tokens) {
         return [];
@@ -107,25 +188,31 @@ export class MemoryRetrieval {
 
       const document = sql`to_tsvector('simple', ${memoryChunks.tokenText})`;
       const tsQuery = sql`plainto_tsquery('simple', ${tokens})`;
-
       score = sql<number>`ts_rank_cd(${document}, ${tsQuery})`;
       match = sql`${document} @@ ${tsQuery}`;
     } else {
+      const pattern = `%${escapeLike(normalized)}%`;
       score = sql<number>`similarity(${memoryChunks.searchText}, ${normalized})`;
-      // 显式转义 LIKE 通配符，短中文词也可按字面子串命中。
-      const pattern = `%${normalized.replace(/[\\%_]/g, "\\$&")}%`;
       match = sql`(${memoryChunks.searchText} % ${normalized} OR ${memoryChunks.searchText} LIKE ${pattern})`;
     }
 
     const rows = await this.db
       .select({
         id: memories.id,
-        revision: memories.revision,
+        revision: memoryChunks.revision,
         excerpt: memoryChunks.content,
         score,
       })
       .from(memoryChunks)
       .innerJoin(memories, eq(memories.id, memoryChunks.memoryId))
+      .innerJoin(
+        memoryRevisions,
+        and(
+          eq(memoryRevisions.memoryId, memories.id),
+          eq(memoryRevisions.revision, memories.currentRevision),
+          eq(memoryChunks.revision, memories.currentRevision),
+        ),
+      )
       .where(and(filter, match))
       .orderBy(desc(score), asc(memoryChunks.id))
       .limit(limit);
@@ -135,12 +222,12 @@ export class MemoryRetrieval {
     return rows;
   }
 
-  private async searchVectorRoute(
+  private async searchVector(
     query: string,
     filter: ReturnType<typeof filterCondition>,
     limit: number,
-    options: ScopedSearchOptions,
-  ): Promise<RawHit[]> {
+    options: SearchOptions,
+  ): Promise<RawContentHit[]> {
     const model = this.embeddingIndex.model;
 
     if (!model) {
@@ -159,21 +246,27 @@ export class MemoryRetrieval {
       return [];
     }
 
-    // CASE 避免查询规划器在过滤其他维数之前先计算距离。
     const score = sql<number>`CASE WHEN ${memoryEmbeddings.model} = ${model.model}
       AND ${memoryEmbeddings.dimensions} = ${model.dimensions}
       AND ${memoryEmbeddings.status} = 'ready'
       THEN 1 - (${memoryEmbeddings.embedding} <=> ${JSON.stringify(vector)}::vector) ELSE NULL END`;
-
     const rows = await this.db
       .select({
         id: memories.id,
-        revision: memories.revision,
+        revision: memoryChunks.revision,
         excerpt: memoryChunks.content,
         score,
       })
       .from(memoryChunks)
       .innerJoin(memories, eq(memories.id, memoryChunks.memoryId))
+      .innerJoin(
+        memoryRevisions,
+        and(
+          eq(memoryRevisions.memoryId, memories.id),
+          eq(memoryRevisions.revision, memories.currentRevision),
+          eq(memoryChunks.revision, memories.currentRevision),
+        ),
+      )
       .innerJoin(memoryEmbeddings, eq(memoryEmbeddings.chunkId, memoryChunks.id))
       .where(
         and(
@@ -191,25 +284,22 @@ export class MemoryRetrieval {
     return rows;
   }
 
-  private async mergeHits(
-    routes: Array<[SearchMethod, RawHit[]]>,
-    options: ScopedSearchOptions,
+  private async mergeContentHits(
+    selector: MemorySelector,
+    routes: Array<[MemorySearchMatch, RawContentHit[]]>,
+    options: SearchOptions,
   ): Promise<MemorySearchHit[]> {
-    const limit = integerOption(options.limit ?? 10, "limit");
-    const hits = new Map<string, RawHit & { matches: SearchMethod[] }>();
+    const hits = new Map<string, RawContentHit & { matches: MemorySearchMatch[] }>();
 
     for (const [method, rows] of routes) {
       const seen = new Set<string>();
 
       for (const row of rows) {
-        // 单路内一条记忆只计一次，避免长文本因分块多而获得额外权重。
         if (seen.has(row.id)) {
           continue;
         }
 
         seen.add(row.id);
-
-        // 使用 k=60 的 RRF 融合排名，并降低 trigram 的权重以减少模糊匹配干扰。
         const score = (method === "trigram" ? 0.7 : 1) / (60 + seen.size);
         const existing = hits.get(row.id);
 
@@ -226,35 +316,118 @@ export class MemoryRetrieval {
       return [];
     }
 
-    return this.db.transaction(async (transaction) => {
-      const rows = await transaction
-        .select()
-        .from(memories)
-        .where(and(inArray(memories.id, [...hits.keys()]), filterCondition(options)));
-      const entries = await materializeMemoryEntries(transaction, rows);
+    const rows = await this.db
+      .select({ memory: memories, revision: memoryRevisions })
+      .from(memories)
+      .innerJoin(
+        memoryRevisions,
+        and(
+          eq(memoryRevisions.memoryId, memories.id),
+          eq(memoryRevisions.revision, memories.currentRevision),
+        ),
+      )
+      .where(and(inArray(memories.id, [...hits.keys()]), filterCondition(selector, options)));
 
-      options.signal?.throwIfAborted();
+    options.signal?.throwIfAborted();
+    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 10, "limit");
 
-      return entries
-        .flatMap((memory) => {
-          const hit = hits.get(memory.id)!;
-          // 检索期间发生更新或归档时，不返回旧正文的命中片段。
-          return memory.revision === hit.revision
-            ? [{ memory, excerpt: hit.excerpt, score: hit.score, matches: hit.matches }]
-            : [];
-        })
-        .sort(
-          (left, right) =>
-            right.score - left.score || left.memory.id.localeCompare(right.memory.id),
-        )
-        .slice(0, limit);
-    });
+    return rows
+      .flatMap((row) => {
+        const hit = hits.get(row.memory.id)!;
+
+        if (row.revision.revision !== hit.revision) {
+          return [];
+        }
+
+        return [
+          {
+            memory: materializeMemory(row.memory, row.revision),
+            excerpt: hit.excerpt,
+            score: hit.score,
+            matches: hit.matches,
+          },
+        ];
+      })
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          right.memory.occurredAt.getTime() - left.memory.occurredAt.getTime() ||
+          left.memory.id.localeCompare(right.memory.id),
+      )
+      .slice(offset, offset + limit) as MemorySearchHit[];
   }
 
-  private tokenText(text: string): string {
-    return this.tokenize(normalizeSearchText(text))
-      .map(normalizeSearchText)
-      .filter(Boolean)
-      .join(" ");
+  private searchSourceExact(
+    selector: MemorySelector,
+    query: string,
+    options: MemorySourceSearchOptions,
+    limit: number,
+  ): Promise<RawSourceHit[]> {
+    return this.sourceQuery(
+      selector,
+      options,
+      sql`${memoryRevisions.sources} @> ARRAY[${query}]::text[]`,
+      sql<number>`2`,
+      limit,
+    );
   }
+
+  private searchSourceText(
+    selector: MemorySelector,
+    query: string,
+    options: MemorySourceSearchOptions,
+    limit: number,
+  ): Promise<RawSourceHit[]> {
+    const normalized = normalizeSearchText(query);
+    const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(" ");
+    const pattern = `%${escapeLike(normalized)}%`;
+    const document = sql`to_tsvector('simple', ${memoryRevisions.sourceTokenText})`;
+    const tsQuery = sql`plainto_tsquery('simple', ${tokens})`;
+    const match = sql`(${document} @@ ${tsQuery} OR ${memoryRevisions.sourceSearchText} % ${normalized} OR ${memoryRevisions.sourceSearchText} LIKE ${pattern})`;
+    const score = sql<number>`GREATEST(ts_rank_cd(${document}, ${tsQuery}), similarity(${memoryRevisions.sourceSearchText}, ${normalized}), CASE WHEN ${memoryRevisions.sourceSearchText} LIKE ${pattern} THEN 0.5 ELSE 0 END)`;
+
+    return this.sourceQuery(selector, options, match, score, limit);
+  }
+
+  private sourceQuery(
+    selector: MemorySelector,
+    options: MemorySourceSearchOptions,
+    match: ReturnType<typeof sql>,
+    score: ReturnType<typeof sql<number>>,
+    limit: number,
+  ): Promise<RawSourceHit[]> {
+    return this.db
+      .select({
+        memoryId: memories.id,
+        revision: memoryRevisions.revision,
+        spaceId: memories.spaceId,
+        layer: memories.layer,
+        date: memories.date,
+        sources: memoryRevisions.sources,
+        content: memoryRevisions.content,
+        score,
+      })
+      .from(memoryRevisions)
+      .innerJoin(memories, eq(memories.id, memoryRevisions.memoryId))
+      .where(
+        and(
+          filterCondition(selector, options),
+          options.includeHistory
+            ? undefined
+            : eq(memoryRevisions.revision, memories.currentRevision),
+          match,
+        ),
+      )
+      .orderBy(desc(score), asc(memories.id), desc(memoryRevisions.revision))
+      .limit(limit) as Promise<RawSourceHit[]>;
+  }
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+function createExcerpt(content: string): string {
+  return Array.from(content).slice(0, 400).join("");
 }
