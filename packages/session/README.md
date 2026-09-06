@@ -77,18 +77,32 @@ S2 + 最近保留的原文    → 当前上下文
 
 Agent Tool 从独立入口导入。通过 `sessionTools({ session, space })`，可以同时获得当前会话和当前空间的历史工具：
 
-- `search_session`：找到当前 Session 的相关历史片段。
-- `read_session`：读取当前 Session 中某条消息附近的上下文。
+- `search_current_session_messages`：找到当前 Session 的相关历史片段。
+- `read_current_session_messages`：读取当前 Session 中某条消息附近的上下文。
 - `find_sessions_by_source`：在当前空间中根据业务 ID、名称、昵称、标题或别名等 `sources` 发现相关会话。
-- `search_found_session`：搜索已经发现的会话。
-- `read_found_session`：读取已经发现的会话中某条消息附近的上下文。
+- `search_discovered_session_messages`：搜索已经发现的会话。
+- `read_discovered_session_messages`：读取已经发现的会话中某条消息附近的上下文。
 
-同一直播间内的跨 Session 查询属于基础能力。只有需要越过当前 `spaceId` 时，才显式传入 Manager 与跨空间访问级别：
+### 跨空间搜索与读取
+
+默认不开放跨空间访问，消息正文、来源发现和后续读取都受各自范围约束：当前会话正文直接搜索，同空间的其他会话先按来源发现，再逐个搜索。没有直接搜索当前空间全部会话正文的工具。
+
+| 配置                | 来源发现范围            | 正文搜索与读取范围                                          |
+| ------------------- | ----------------------- | ----------------------------------------------------------- |
+| 不传 `crossSpace`   | 当前 Space              | 当前 Session，以及已发现的同空间 Session                    |
+| `access: "related"` | 所传 Manager 的全部空间 | 当前 Session，以及按来源发现的 Session                      |
+| `access: "all"`     | 所传 Manager 的全部空间 | 额外允许直接搜索、读取该 Manager 中全部 Session，无需先发现 |
+
+下面三组工具是不同授权方式，按需要选择一组：
 
 ```ts
 import { sessionTools } from "@cieljs/session/agent";
 
-const tools = sessionTools({
+// 默认：仅在当前空间内找回历史。
+const localTools = sessionTools({ session, space });
+
+// 跨空间：先按来源发现会话，再搜索、读取。
+const relatedTools = sessionTools({
   session,
   space,
   crossSpace: {
@@ -96,9 +110,32 @@ const tools = sessionTools({
     access: "related",
   },
 });
+
+// 跨空间：也允许直接搜索全部会话正文。
+const allTools = sessionTools({
+  session,
+  space,
+  crossSpace: { manager, access: "all" },
+});
 ```
 
-`crossSpace` 未配置时，来源发现和后续读取始终限制在当前 Space。`access: "related"` 允许按 sources 发现其他空间的 Session；`access: "all"` 还会提供 `search_all_sessions` 与 `read_any_session`。Agent Tool 不提供 `list_sessions`；宿主若需要管理列表，可以调用 `space.list()` 或 `manager.list()`。
+跨空间配置对应的实际调用名称如下。`related` 复用基础工具名，扩大来源发现范围；`all` 额外增加两个工具：
+
+| Tool name                            | 可用配置               | 行为                                                       |
+| ------------------------------------ | ---------------------- | ---------------------------------------------------------- |
+| `search_current_session_messages`    | 默认、`related`、`all` | 始终只搜索当前 Session 正文                                |
+| `read_current_session_messages`      | 默认、`related`、`all` | 始终只读取当前 Session 的消息前后文                        |
+| `find_sessions_by_source`            | 默认、`related`、`all` | 只匹配 `sources`，按上表范围发现会话，不搜索正文           |
+| `search_discovered_session_messages` | 默认、`related`、`all` | 按 `sessionId` 搜索已发现会话的正文                        |
+| `read_discovered_session_messages`   | 默认、`related`、`all` | 按 `sessionId`、`messageId` 读取已发现会话的消息前后文     |
+| `search_all_session_messages`        | 仅 `all`               | 跨全部空间搜索消息正文，不搜索 `sources`                   |
+| `read_any_session_messages`          | 仅 `all`               | 按 `sessionId`、`messageId` 直接读取消息前后文，无需先发现 |
+
+`related` 的调用顺序是 `find_sessions_by_source` → `search_discovered_session_messages` → `read_discovered_session_messages`。发现结果包含 `session.id`、`session.spaceId` 和 `matchedSources`；用 `session.id` 作为后续的 `sessionId`，用正文搜索结果的 `message.id` 作为 `messageId`。发现记录在这组工具实例存续期间有效，重新创建工具后需要重新发现。
+
+`all` 可以直接调用 `search_all_session_messages`，再将结果的 `message.sessionId` 和 `message.id` 交给 `read_any_session_messages`。读取工具返回目标消息及 `before`、`after` 指定的相邻消息，不会返回整段会话。
+
+这些工具全部只读。`all` 只覆盖所传 Manager 的会话库，不会搜索其他独立数据库。Agent Tool 不提供 `list_sessions`；宿主若需要管理列表，可以调用 `space.list()` 或 `manager.list()`。
 
 独立全局问答 Agent 可以用另一个数据目录保存自身 Session，再把普通空间的 Manager 只作为跨会话查询来源。这样问答历史不会混入普通空间数据。
 

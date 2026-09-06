@@ -63,7 +63,6 @@ describe("分层与 revision", () => {
       content: "旧内容",
       kind: "fact",
       sources: [" 主播Ａ ", "主播A", "bilibili:room:1"],
-      metadata: { stable: true },
     });
     const updated = await space.update(original.id, {
       expectedRevision: 1,
@@ -72,7 +71,6 @@ describe("分层与 revision", () => {
 
     expect(updated).toMatchObject({ revision: 2, content: "新内容" });
     expect(updated.sources).toEqual(["主播A", "bilibili:room:1"]);
-    expect(updated.metadata).toEqual({ stable: true });
     expect(await space.getRevision(original.id, 1)).toMatchObject({
       revision: 1,
       content: "旧内容",
@@ -95,15 +93,6 @@ describe("分层与 revision", () => {
       status: "archived",
     });
     expect(await space.getRevision(memory.id, 1)).toMatchObject({ content: "需要遗忘" });
-  });
-
-  test("metadata 拒绝 JSON 之外的运行时值", async () => {
-    await expect(
-      manager.global.remember({
-        content: "invalid metadata",
-        metadata: { date: new Date() } as never,
-      }),
-    ).rejects.toMatchObject({ code: "MEMORY_VALIDATION_FAILED" });
   });
 });
 
@@ -200,13 +189,34 @@ describe("内容和来源搜索", () => {
 });
 
 describe("Agent 接入", () => {
+  test("归档工具名称和返回状态一致，归档后默认不可见", async () => {
+    const space = manager.space("archive-tool-name");
+    const local = await space.longTerm.remember({ content: "待归档的空间事实" });
+    const global = await manager.global.remember({ content: "待归档的全局事实" });
+    const localTools = memoryTools({ space });
+    const globalTools = globalMemoryTools({ memory: manager.global });
+
+    const localResult = await localTools
+      .find((tool) => tool.name === "archive_current_space_memory")!
+      .execute("archive-local", { id: local.id, expectedRevision: local.revision });
+    const globalResult = await globalTools
+      .find((tool) => tool.name === "archive_global_memory")!
+      .execute("archive-global", { id: global.id, expectedRevision: global.revision });
+
+    expect(localResult.details).toEqual({ id: local.id, archived: true });
+    expect(globalResult.details).toEqual({ id: global.id, archived: true });
+    expect(await space.get(local.id)).toBeNull();
+    expect(await manager.global.get(global.id)).toBeNull();
+    expect(await space.getRevision(local.id, 1)).toMatchObject({ content: "待归档的空间事实" });
+  });
+
   test("replace 允许宿主清空来源，append 空来源仍继承旧值", async () => {
     const space = manager.space("empty-sources");
     for (const sourcesMode of ["replace", "append"] as const) {
       const memory = await space.longTerm.remember({ content: "original", sources: ["old"] });
       const tools = memoryTools({ space, sourcesMode, sources: async () => [] });
       const result = await tools
-        .find((tool) => tool.name === "update_memory")!
+        .find((tool) => tool.name === "update_current_space_memory")!
         .execute("update", {
           id: memory.id,
           expectedRevision: 1,
@@ -229,9 +239,9 @@ describe("Agent 接入", () => {
     ];
 
     for (const name of [
-      "search_memory",
+      "search_current_space_memory",
       "search_global_memory",
-      "search_space_memory",
+      "search_discovered_space_memory",
       "search_all_memory",
     ]) {
       const result = await tools
@@ -258,7 +268,7 @@ describe("Agent 接入", () => {
     }
     const memory = (await space.list())[0]!;
     const result = await tools
-      .find((tool) => tool.name === "read_memory")!
+      .find((tool) => tool.name === "read_current_space_memory")!
       .execute("read", { id: memory.id, offset: 20 });
     expect(result.details).toMatchObject({
       memory: { content: content.slice(20, 40) },
@@ -270,16 +280,16 @@ describe("Agent 接入", () => {
     const space = manager.space("agent-space");
     const tools = memoryTools({ space, sources: ["session:1"] });
     expect(tools.map((tool) => tool.name)).toEqual([
-      "search_memory",
-      "search_memory_sources",
-      "read_memory",
-      "remember_daily_memory",
-      "remember_long_term_memory",
-      "update_memory",
-      "forget_memory",
+      "search_current_space_memory",
+      "search_current_space_memory_by_source",
+      "read_current_space_memory",
+      "remember_current_space_daily_memory",
+      "remember_current_space_long_term_memory",
+      "update_current_space_memory",
+      "archive_current_space_memory",
     ]);
 
-    const remember = tools.find((tool) => tool.name === "remember_long_term_memory")!;
+    const remember = tools.find((tool) => tool.name === "remember_current_space_long_term_memory")!;
     const result = await remember.execute("remember-1", { content: "工具写入" });
     expect(result.details).toMatchObject({
       memory: { spaceId: "agent-space", sources: ["session:1"] },
@@ -293,7 +303,7 @@ describe("Agent 接入", () => {
       sources: ["session:old"],
     });
     const tools = memoryTools({ space, sources: ["session:new"] });
-    const update = tools.find((tool) => tool.name === "update_memory")!;
+    const update = tools.find((tool) => tool.name === "update_current_space_memory")!;
     const result = await update.execute("update-1", {
       id: original.id,
       expectedRevision: 1,
@@ -314,13 +324,13 @@ describe("Agent 接入", () => {
       space: manager.space("related-current"),
       crossSpace: { manager, access: "related" },
     });
-    const read = tools.find((tool) => tool.name === "read_space_memory")!;
+    const read = tools.find((tool) => tool.name === "read_discovered_space_memory")!;
 
     await expect(
       read.execute("read-before-find", { spaceId: "related-target", id: target.id }),
     ).rejects.toMatchObject({ code: "MEMORY_ACCESS_DENIED" });
 
-    const find = tools.find((tool) => tool.name === "find_memory_spaces")!;
+    const find = tools.find((tool) => tool.name === "find_memory_spaces_by_source")!;
     await find.execute("find", { query: "anchor:related", mode: "exact" });
     expect(
       (await read.execute("read-after-find", { spaceId: "related-target", id: target.id })).details,
@@ -330,11 +340,11 @@ describe("Agent 接入", () => {
   test("全局工具是独立授权", () => {
     expect(globalMemoryTools({ memory: manager.global }).map((tool) => tool.name)).toEqual([
       "search_global_memory",
-      "search_global_memory_sources",
+      "search_global_memory_by_source",
       "read_global_memory",
       "remember_global_memory",
       "update_global_memory",
-      "forget_global_memory",
+      "archive_global_memory",
     ]);
   });
 

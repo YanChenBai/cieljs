@@ -2,10 +2,6 @@ import type { EmbeddingProvider } from "@cieljs/agent-kit";
 
 export type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/agent-kit";
 
-export type JsonPrimitive = null | boolean | number | string;
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-export type JsonObject = Record<string, JsonValue>;
-
 export type MemoryLayer = "global.long_term" | "space.long_term" | "space.daily";
 export type SpaceMemoryLayer = "space.long_term" | "space.daily";
 export type MemoryKind = "event" | "fact" | "preference" | "summary";
@@ -18,7 +14,6 @@ interface MemoryEntryFields {
   kind: MemoryKind;
   content: string;
   sources: MemorySource[];
-  metadata: JsonObject;
   status: MemoryStatus;
   occurredAt: Date;
   expiresAt: Date | null;
@@ -42,7 +37,6 @@ interface RememberFields {
   occurredAt?: Date;
   expiresAt?: Date | null;
   sources?: MemorySource[];
-  metadata?: JsonObject;
 }
 
 export type LongTermRememberInput = RememberFields;
@@ -64,7 +58,6 @@ export interface UpdateMemoryInput {
   kind?: MemoryKind;
   expiresAt?: Date | null;
   sources?: MemorySource[];
-  metadata?: JsonObject;
 }
 
 export interface ForgetMemoryOptions {
@@ -77,7 +70,6 @@ export interface MemoryRevision {
   kind: MemoryKind;
   content: string;
   sources: MemorySource[];
-  metadata: JsonObject;
   occurredAt: Date;
   expiresAt: Date | null;
   createdAt: Date;

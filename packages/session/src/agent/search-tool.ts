@@ -6,7 +6,7 @@ import type { SessionSearchHit, SessionSearchOptions } from "../types.ts";
 import { sessionResult } from "./helpers.ts";
 
 interface CreateCurrentSearchToolOptions {
-  name: "search_session" | "search_all_sessions";
+  name: "search_current_session_messages" | "search_all_session_messages";
   label: string;
   description: string;
   defaultLimit: number;
@@ -14,7 +14,7 @@ interface CreateCurrentSearchToolOptions {
 }
 
 interface CreateScopedSearchToolOptions {
-  name: "search_found_session";
+  name: "search_discovered_session_messages";
   label: string;
   description: string;
   defaultLimit: number;

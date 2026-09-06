@@ -29,7 +29,7 @@ const updated = await space.update(memory.id, {
 });
 ```
 
-没有提交的字段继承当前 revision。显式提交 `sources` 或 `metadata` 时会整体替换对应值。`expectedRevision` 用于阻止并发更新静默覆盖；冲突时应重新读取最新内容后再判断。
+没有提交的字段继承当前 revision。显式提交 `sources` 时会整体替换对应值。`expectedRevision` 用于阻止并发更新静默覆盖；冲突时应重新读取最新内容后再判断。
 
 ## 遗忘
 

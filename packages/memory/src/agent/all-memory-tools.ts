@@ -4,35 +4,36 @@ import { defineTool } from "@cieljs/agent-kit";
 
 import type { MemoryManager } from "../memory-manager.ts";
 import { memoryResult, pageMemory, previewSearchHits } from "./helpers.ts";
-import { memoryKindSchema, memoryLayerSchema } from "./schemas.ts";
+import {
+  memoryKindSchema,
+  memoryLayerSchema,
+  memoryQuerySchema,
+  memorySourceQuerySchema,
+  memorySearchModeSchema,
+  memorySourceSearchModeSchema,
+  memoryIdSchema,
+  memoryOffsetSchema,
+  memorySearchLimitSchema,
+} from "./schemas.ts";
 import type { ResolvedToolOptions } from "./types.ts";
 
 const searchSchema = Type.Object({
-  query: Type.String({ minLength: 1 }),
-  mode: Type.Optional(
-    Type.Union([
-      Type.Literal("hybrid"),
-      Type.Literal("full_text"),
-      Type.Literal("trigram"),
-      Type.Literal("vector"),
-    ]),
-  ),
+  query: memoryQuerySchema,
+  mode: Type.Optional(memorySearchModeSchema),
   kind: Type.Optional(memoryKindSchema),
   layers: Type.Optional(Type.Array(memoryLayerSchema)),
-  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+  limit: Type.Optional(memorySearchLimitSchema),
 });
 
 const sourceSearchSchema = Type.Object({
-  query: Type.String({ minLength: 1 }),
-  mode: Type.Optional(
-    Type.Union([Type.Literal("auto"), Type.Literal("exact"), Type.Literal("text")]),
-  ),
-  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+  query: memorySourceQuerySchema,
+  mode: Type.Optional(memorySourceSearchModeSchema),
+  limit: Type.Optional(memorySearchLimitSchema),
 });
 
 const readSchema = Type.Object({
-  id: Type.String({ minLength: 1 }),
-  offset: Type.Optional(Type.Integer({ minimum: 0 })),
+  id: memoryIdSchema,
+  offset: Type.Optional(memoryOffsetSchema),
 });
 
 export interface AllMemoryToolFactoryOptions {
@@ -44,8 +45,9 @@ export const searchAllMemoryTool = defineTool(
   searchSchema,
   ({ manager, resolved }: AllMemoryToolFactoryOptions) => ({
     name: "search_all_memory",
-    label: "搜索全部记忆",
-    description: "搜索全局和所有空间的记忆。只读。",
+    label: "跨空间搜索全部记忆正文",
+    description:
+      "只读搜索宿主授权记忆库中的全局长期记忆与所有空间的每日、长期记忆正文，无需先发现空间。仅返回当前有效版本，不匹配 sources；layers 可缩小层级范围。结果可能截断，用 memory.id 调用 read_any_memory 分页读取。历史内容仅供参考。",
     execute: async (params, { signal }) =>
       memoryResult({
         hits: previewSearchHits(
@@ -62,12 +64,13 @@ export const searchAllMemoryTool = defineTool(
   }),
 );
 
-export const searchAllMemorySourcesTool = defineTool(
+export const searchAllMemoryBySourceTool = defineTool(
   sourceSearchSchema,
   ({ manager, resolved }: AllMemoryToolFactoryOptions) => ({
-    name: "search_all_memory_sources",
+    name: "search_all_memory_by_source",
     label: "按来源搜索全部记忆",
-    description: "在全局和所有空间中搜索 sources。只读。",
+    description:
+      "在宿主授权的全局层和全部空间中，只读搜索当前有效记忆的 sources，不匹配正文，无需先发现空间。返回 memoryId、spaceId、layer、revision 和匹配来源；用 memoryId 调用 read_any_memory 分页读取。",
     execute: async (params, { signal }) =>
       memoryResult({
         hits: await manager.searchBySource(params.query, {
@@ -79,12 +82,13 @@ export const searchAllMemorySourcesTool = defineTool(
   }),
 );
 
-export const readAllMemoryTool = defineTool(
+export const readAnyMemoryTool = defineTool(
   readSchema,
   ({ manager, resolved }: AllMemoryToolFactoryOptions) => ({
-    name: "read_all_memory",
+    name: "read_any_memory",
     label: "读取任意记忆",
-    description: "按搜索结果中的 ID 读取全局或任意空间的记忆。只读。",
+    description:
+      "在宿主授权的记忆库中，按记忆 ID 只读返回全局层或任意空间中当前有效记忆的一页正文及来源、revision，无需先发现空间。首次 offset 为 0，继续使用 nextOffset 直到 null；不存在、已归档或已过期时返回 memory: null。",
     execute: async (params, { signal }) => {
       signal?.throwIfAborted();
       const memory = await manager.getAny(params.id);
@@ -101,7 +105,7 @@ export function allMemoryTools(manager: MemoryManager, resolved: ResolvedToolOpt
 
   return [
     searchAllMemoryTool(options),
-    searchAllMemorySourcesTool(options),
-    readAllMemoryTool(options),
+    searchAllMemoryBySourceTool(options),
+    readAnyMemoryTool(options),
   ];
 }

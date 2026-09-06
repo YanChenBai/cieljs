@@ -5,7 +5,6 @@ import {
   date,
   index,
   integer,
-  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -13,7 +12,7 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-import type { JsonObject, MemoryKind, MemoryLayer, MemoryStatus } from "./types.ts";
+import type { MemoryKind, MemoryLayer, MemoryStatus } from "./types.ts";
 
 const vector = customType<{ data: number[]; driverData: string }>({
   dataType: () => "vector",
@@ -64,7 +63,6 @@ export const memoryRevisions = pgTable(
       .default(sql`ARRAY[]::text[]`),
     sourceSearchText: text("source_search_text").notNull().default(""),
     sourceTokenText: text("source_token_text").notNull().default(""),
-    metadata: jsonb("metadata").$type<JsonObject>().notNull().default({}),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

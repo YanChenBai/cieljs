@@ -6,8 +6,7 @@
   <a href="./docs/scopes.md">层级与版本</a> ·
   <a href="./docs/search.md">内容与来源检索</a> ·
   <a href="./docs/embedding.md">向量配置</a> ·
-  <a href="./docs/agent.md">Agent 接入</a> ·
-  <a href="./docs/api-design.md">完整 API 设计</a>
+  <a href="./docs/agent.md">Agent 接入</a>
 </p>
 
 `@cieljs/memory` 使用 PGlite、Drizzle 和 pgvector 保存三层记忆：
@@ -97,7 +96,17 @@ const tools = memoryTools({
 });
 ```
 
-当前空间工具不接受 `spaceId`。`related` 模式要求 Agent 先调用 `find_memory_spaces`，再只读搜索或读取已发现的 space。全局写入工具由宿主通过 `globalMemoryTools()` 单独授权。
+当前空间工具不接受 `spaceId`。跨空间搜索需要通过 `crossSpace` 显式开启：
+
+| 配置                | Agent 可用范围                                                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 不传 `crossSpace`   | 正文、来源搜索及读取都仅限当前空间                                                                                                                                       |
+| `access: "related"` | 用 `find_memory_spaces_by_source` 发现空间，再用 `search_discovered_space_memory`、`search_discovered_space_memory_by_source` 和 `read_discovered_space_memory` 只读访问 |
+| `access: "all"`     | 额外提供 `search_all_memory`、`search_all_memory_by_source` 和 `read_any_memory`，直接搜索、读取全部空间及全局层，无需先发现                                             |
+
+上述跨空间配置不会扩大写入权限。全局写入工具由宿主通过 `globalMemoryTools()` 单独授权；`global` 仅指全局长期记忆，`all` 才包含全局层与全部空间。
+
+完整工具名称、三种配置示例、来源发现与后续读取流程见 [Agent 接入：跨空间搜索与读取](./docs/agent.md#跨空间搜索与读取)。
 
 第一版不包含自动记忆整理。新记忆属于 daily、space long-term 还是 global long-term，由调用者或具体工具显式决定。
 

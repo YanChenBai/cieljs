@@ -33,7 +33,7 @@ export const findSessionsBySourceTool = defineTool(
     description: prompt.inline`
       在${options.scopeDescription}中，按 sources 查找相关会话。
       sources 是宿主记录的业务 ID、用户或房间名称、昵称、标题和别名；只匹配来源，不搜索消息正文。
-      返回 session.id、spaceId 和匹配来源；将 session.id 交给 search_found_session 搜索正文，再用 read_found_session 查看前后文。
+      返回 session.id、session.spaceId 和 matchedSources；将 session.id 交给 search_discovered_session_messages 搜索正文，再用 read_discovered_session_messages 查看前后文。
       已发现会话可在本组工具实例存续期间继续访问；此工具只读，不枚举全部会话。
     `,
     execute: async (params, { signal }) => {

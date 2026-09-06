@@ -1,6 +1,6 @@
 import { MemoryValidationError } from "./errors.ts";
 import { normalizeSearchText } from "./search.ts";
-import type { JsonObject, MemoryKind, MemoryLayer, MemorySource } from "./types.ts";
+import type { MemoryKind, MemoryLayer, MemorySource } from "./types.ts";
 
 export const MAX_MEMORY_SOURCES = 32;
 export const MAX_MEMORY_SOURCE_LENGTH = 512;
@@ -40,14 +40,6 @@ export function assertLayers(layers: MemoryLayer[]): void {
   if (!layers.every(isMemoryLayer)) {
     throw new MemoryValidationError("无效的记忆层级");
   }
-}
-
-export function assertJsonObject(value: JsonObject): void {
-  if (!isPlainObject(value)) {
-    throw new MemoryValidationError("metadata 必须是可序列化的 JSON 对象");
-  }
-
-  assertJsonValue(value, new WeakSet());
 }
 
 export function normalizeSources(sources: MemorySource[]): MemorySource[] {
@@ -102,49 +94,4 @@ export function integerOption(value: number, name: string, min = 1, max = 1000):
 
 export function isMemoryLayer(value: unknown): value is MemoryLayer {
   return value === "global.long_term" || value === "space.long_term" || value === "space.daily";
-}
-
-function assertJsonValue(value: unknown, visited: WeakSet<object>): void {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean" ||
-    (typeof value === "number" && Number.isFinite(value))
-  ) {
-    return;
-  }
-
-  if (typeof value !== "object") {
-    throw new MemoryValidationError("metadata 包含不可序列化的值");
-  }
-
-  if (visited.has(value)) {
-    throw new MemoryValidationError("metadata 不能包含循环引用");
-  }
-
-  visited.add(value);
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      assertJsonValue(item, visited);
-    }
-  } else if (isPlainObject(value)) {
-    for (const item of Object.values(value)) {
-      assertJsonValue(item, visited);
-    }
-  } else {
-    throw new MemoryValidationError("metadata 只能包含普通 JSON 对象和数组");
-  }
-
-  visited.delete(value);
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-
-  const prototype = Object.getPrototypeOf(value) as unknown;
-
-  return prototype === Object.prototype || prototype === null;
 }

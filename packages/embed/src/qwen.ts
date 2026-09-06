@@ -1,6 +1,8 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 // packages/embedding/src/qwen.ts
 
-import { pipeline } from "@huggingface/transformers";
+import { env, pipeline } from "@huggingface/transformers";
 
 import {
   resolveEmbeddingProvider,
@@ -13,6 +15,27 @@ import type { QwenEmbeddingOptions } from "./types.ts";
 export const QWEN_EMBEDDING_MODEL = "Qwen3-Embedding-0.6B";
 
 export const QWEN_EMBEDDING_SOURCE = "onnx-community/Qwen3-Embedding-0.6B-ONNX";
+
+const huggingFacePrefix = `https://huggingface.co/${QWEN_EMBEDDING_SOURCE}/resolve/main/`;
+const modelScopePrefix = `https://modelscope.cn/models/${QWEN_EMBEDDING_SOURCE}/resolve/master/`;
+const fetchModelFile = env.fetch;
+
+// 仅重定向当前模型，保留 Transformers.js 的缓存键和其他模型的下载行为。
+env.fetch = (input, init) => {
+  const url = input.toString();
+
+  if (!url.startsWith(huggingFacePrefix)) {
+    return fetchModelFile(input, init);
+  }
+
+  const headers = new Headers(init?.headers);
+  headers.delete("authorization");
+
+  return fetchModelFile(modelScopePrefix + url.slice(huggingFacePrefix.length), {
+    ...init,
+    headers,
+  });
+};
 
 export const QWEN_EMBEDDING_DIMENSIONS = 1024;
 
@@ -31,6 +54,7 @@ export function qwen(options: QwenEmbeddingOptions = {}): ResolvedEmbeddingProvi
 
   const loadExtractor = () =>
     pipeline("feature-extraction", QWEN_EMBEDDING_SOURCE, {
+      cache_dir: options.cacheDir ?? join(homedir(), ".ciel", "cache", "embedding"),
       dtype,
       device: options.device,
     });
@@ -38,7 +62,10 @@ export function qwen(options: QwenEmbeddingOptions = {}): ResolvedEmbeddingProvi
   let extractorPromise: ReturnType<typeof loadExtractor> | undefined;
 
   const getExtractor = () => {
-    extractorPromise ??= loadExtractor();
+    extractorPromise ??= loadExtractor().catch((error: unknown) => {
+      extractorPromise = undefined;
+      throw error;
+    });
 
     return extractorPromise;
   };

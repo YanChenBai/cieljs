@@ -24,7 +24,6 @@ import type {
 import {
   assertContent,
   assertDate,
-  assertJsonObject,
   assertKind,
   assertTimestamp,
   integerOption,
@@ -62,7 +61,6 @@ export class MemoryRepository {
     const date = input.layer === "space.daily" ? (input.date ?? this.getDate(occurredAt)) : null;
     const kind = input.kind ?? (input.layer === "space.daily" ? "event" : "fact");
     const sources = normalizeSources(input.sources ?? []);
-    const metadata = input.metadata ?? {};
     const id = crypto.randomUUID();
     const createdAt = new Date();
 
@@ -88,7 +86,6 @@ export class MemoryRepository {
           sources,
           sourceSearchText: normalizeSearchText(sources.join("\n")),
           sourceTokenText: this.toTokenText(sources.join("\n")),
-          metadata,
           occurredAt,
           expiresAt: input.expiresAt,
           createdAt,
@@ -182,7 +179,6 @@ export class MemoryRepository {
           sources,
           sourceSearchText: normalizeSearchText(sources.join("\n")),
           sourceTokenText: this.toTokenText(sources.join("\n")),
-          metadata: input.metadata ?? current.revision.metadata,
           occurredAt: current.revision.occurredAt,
           expiresAt: input.expiresAt === undefined ? current.revision.expiresAt : input.expiresAt,
           createdAt: updatedAt,
@@ -412,23 +408,15 @@ export class MemoryRepository {
       assertKind(input.kind);
     }
 
-    if (input.metadata !== undefined) {
-      assertJsonObject(input.metadata);
-    }
-
     normalizeSources(input.sources ?? []);
   }
 
   private validateUpdate(input: UpdateMemoryInput): void {
     integerOption(input.expectedRevision, "expectedRevision", 1, 2147483646);
 
-    const hasPatch = [
-      input.content,
-      input.kind,
-      input.expiresAt,
-      input.sources,
-      input.metadata,
-    ].some((value) => value !== undefined);
+    const hasPatch = [input.content, input.kind, input.expiresAt, input.sources].some(
+      (value) => value !== undefined,
+    );
 
     if (!hasPatch) {
       throw new MemoryValidationError("至少提供一个要更新的字段");
@@ -438,7 +426,6 @@ export class MemoryRepository {
     if (input.kind !== undefined) assertKind(input.kind);
     if (input.expiresAt) assertTimestamp(input.expiresAt);
     if (input.sources !== undefined) normalizeSources(input.sources);
-    if (input.metadata !== undefined) assertJsonObject(input.metadata);
   }
 
   private async replaceChunks(
@@ -481,7 +468,6 @@ export function materializeMemory(memory: MemoryRow, revision: RevisionRow): Mem
     kind: revision.kind,
     content: revision.content,
     sources: [...revision.sources],
-    metadata: structuredClone(revision.metadata),
     occurredAt: revision.occurredAt,
     expiresAt: revision.expiresAt,
     createdAt: memory.createdAt,
@@ -496,7 +482,6 @@ export function materializeRevision(revision: RevisionRow): MemoryRevision {
     kind: revision.kind,
     content: revision.content,
     sources: [...revision.sources],
-    metadata: structuredClone(revision.metadata),
     occurredAt: revision.occurredAt,
     expiresAt: revision.expiresAt,
     createdAt: revision.createdAt,

@@ -159,15 +159,15 @@ describe("Session Agent tools", () => {
     });
 
     expect(tools.map((tool) => tool.name)).toEqual([
-      "search_session",
-      "read_session",
+      "search_current_session_messages",
+      "read_current_session_messages",
       "find_sessions_by_source",
-      "search_found_session",
-      "read_found_session",
+      "search_discovered_session_messages",
+      "read_discovered_session_messages",
     ]);
     expect(tools.some((tool) => tool.name === "list_sessions")).toBe(false);
 
-    const searchFound = tools.find((tool) => tool.name === "search_found_session")!;
+    const searchFound = tools.find((tool) => tool.name === "search_discovered_session_messages")!;
     await expect(
       searchFound.execute(
         "search-before-discovery",
@@ -187,6 +187,12 @@ describe("Session Agent tools", () => {
       sessionId: target.id,
       hits: [{ message: { id: message.id } }],
     });
+    const read = tools.find((tool) => tool.name === "read_discovered_session_messages")!;
+    expect(
+      (await read.execute("read-discovered", { sessionId: target.id, messageId: message.id }))
+        .details,
+    ).toMatchObject({ messages: [{ id: message.id }] });
+    expect(find.description).toContain("全部空间");
   });
 
   test("all 只增加全局搜索与定点读取，不增加枚举工具", async () => {
@@ -198,8 +204,8 @@ describe("Session Agent tools", () => {
     }).map((tool) => tool.name);
 
     expect(names).toContain("find_sessions_by_source");
-    expect(names).toContain("search_all_sessions");
-    expect(names).toContain("read_any_session");
+    expect(names).toContain("search_all_session_messages");
+    expect(names).toContain("read_any_session_messages");
     expect(names).not.toContain("list_sessions");
   });
 
@@ -212,14 +218,15 @@ describe("Session Agent tools", () => {
     const find = tools.find((tool) => tool.name === "find_sessions_by_source")!;
 
     expect(tools.map((tool) => tool.name)).toEqual([
-      "search_session",
-      "read_session",
+      "search_current_session_messages",
+      "read_current_session_messages",
       "find_sessions_by_source",
-      "search_found_session",
-      "read_found_session",
+      "search_discovered_session_messages",
+      "read_discovered_session_messages",
     ]);
 
     const result = await find.execute("find-local", { query: "主播" }, undefined);
+    expect(find.description).toContain("当前绑定空间内的所有会话");
     expect(result.details).toMatchObject({ hits: [{ session: { id: related.id } }] });
     expect(JSON.stringify(result.details)).not.toContain(other.id);
   });

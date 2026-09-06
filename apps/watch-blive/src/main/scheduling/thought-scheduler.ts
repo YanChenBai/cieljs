@@ -1,0 +1,121 @@
+import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Perception } from "@cieljs/perception";
+
+export interface ThoughtSchedulerOptions {
+  perception: Pick<Perception, "snapshot">;
+  agent: Pick<Agent, "prompt">;
+  minimumIntervalMs: number;
+  startedAt: Date;
+  context: () => AgentMessage;
+  beforeRun?: () => void;
+  afterRun?: () => Promise<void> | void;
+  onRunStarted?: (triggerCount: number) => void;
+  onRunFinished?: (durationMs: number) => void;
+  onError?: (error: Error) => void;
+}
+
+interface PendingWindow {
+  startAt: Date;
+  endAt: Date;
+  triggerCount: number;
+}
+
+export class ThoughtScheduler {
+  private capturedThrough: number;
+  private lastRunAt = Number.NEGATIVE_INFINITY;
+  private pending?: PendingWindow;
+  private active?: Promise<void>;
+  private timer?: ReturnType<typeof setTimeout>;
+  private closed = false;
+
+  constructor(private readonly options: ThoughtSchedulerOptions) {
+    this.capturedThrough = options.startedAt.getTime() - 1;
+  }
+
+  trigger(at = new Date()): void {
+    if (this.closed) {
+      return;
+    }
+
+    const startAt = this.pending?.startAt ?? new Date(this.capturedThrough + 1);
+    const triggerCount = (this.pending?.triggerCount ?? 0) + 1;
+
+    this.capturedThrough = Math.max(this.capturedThrough, at.getTime());
+    this.pending = { startAt, endAt: at, triggerCount };
+
+    this.schedule();
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    this.pending = undefined;
+
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+
+    await this.active;
+  }
+
+  private schedule(): void {
+    if (this.closed || this.active || this.timer || !this.pending) {
+      return;
+    }
+
+    const delay = Math.max(0, this.lastRunAt + this.options.minimumIntervalMs - Date.now());
+
+    if (delay === 0) {
+      this.startRun();
+      return;
+    }
+
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      this.startRun();
+    }, delay);
+  }
+
+  private startRun(): void {
+    const window = this.pending;
+
+    if (!window || this.closed) {
+      return;
+    }
+
+    this.pending = undefined;
+    this.lastRunAt = Date.now();
+    this.options.beforeRun?.();
+    this.options.onRunStarted?.(window.triggerCount);
+    this.active = this.run(window).finally(() => {
+      this.active = undefined;
+      this.schedule();
+    });
+  }
+
+  private async run(window: PendingWindow): Promise<void> {
+    const startedAt = Date.now();
+
+    try {
+      const snapshot = await this.options.perception.snapshot({
+        startAt: window.startAt,
+        endAt: window.endAt,
+      });
+      const messages = await snapshot.compose();
+
+      if (this.closed) {
+        return;
+      }
+
+      await this.options.agent.prompt([...messages, this.options.context()]);
+      await this.options.afterRun?.();
+      this.options.onRunFinished?.(Date.now() - startedAt);
+    } catch (error) {
+      this.options.onError?.(toError(error));
+    }
+  }
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}

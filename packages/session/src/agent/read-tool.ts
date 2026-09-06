@@ -6,7 +6,7 @@ import type { Session } from "../session.ts";
 import { sessionResult } from "./helpers.ts";
 
 interface CreateCurrentReadToolOptions {
-  name: "read_session";
+  name: "read_current_session_messages";
   label: string;
   description: string;
   maxReadMessages: number;
@@ -14,7 +14,7 @@ interface CreateCurrentReadToolOptions {
 }
 
 interface CreateScopedReadToolOptions {
-  name: "read_found_session" | "read_any_session";
+  name: "read_discovered_session_messages" | "read_any_session_messages";
   label: string;
   description: string;
   maxReadMessages: number;

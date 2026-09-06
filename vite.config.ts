@@ -14,6 +14,7 @@ export default defineConfig({
     ],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
+      "typescript/no-floating-promises": "off",
     },
     options: {
       typeAware: true,

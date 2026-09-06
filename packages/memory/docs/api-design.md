@@ -79,18 +79,6 @@ import { globalMemoryTools, loadMemoryContext, memoryTools } from "@cieljs/memor
 
 Schema、数据库连接、检索实现、索引任务和内部校验器不作为公开子路径导出。
 
-## 基础 JSON 类型
-
-```ts
-export type JsonPrimitive = null | boolean | number | string;
-
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-
-export type JsonObject = Record<string, JsonValue>;
-```
-
-`metadata` 只接受可序列化 JSON，不接受 `Date`、`BigInt`、函数、Symbol、`undefined` 或循环引用。
-
 ## Sources
 
 ### 类型
@@ -166,7 +154,6 @@ interface MemoryEntryFields {
   kind: MemoryKind;
   content: string;
   sources: MemorySource[];
-  metadata: JsonObject;
 
   status: MemoryStatus;
 
@@ -213,7 +200,6 @@ interface RememberFields {
   occurredAt?: Date;
   expiresAt?: Date | null;
   sources?: MemorySource[];
-  metadata?: JsonObject;
 }
 
 export type LongTermRememberInput = RememberFields;
@@ -251,15 +237,10 @@ export interface UpdateMemoryInput {
    * 传入时替换整个来源数组
    */
   sources?: MemorySource[];
-
-  /**
-   * 传入时替换整个 metadata 对象
-   */
-  metadata?: JsonObject;
 }
 ```
 
-没有传入的字段保持当前值。`sources` 和 `metadata` 使用整体替换语义，不做隐式合并。
+没有传入的字段保持当前值。`sources` 使用整体替换语义，不做隐式合并。
 
 更新不允许修改：
 
@@ -322,7 +303,7 @@ export interface ForgetMemoryOptions {
 - 把逻辑记忆状态改为 `archived`
 - 保存 `archivedAt`
 - 从正常内容检索和来源检索中移除
-- 保留所有 revision、sources 和 metadata
+- 保留所有 revision 和 sources
 
 第一版不提供物理删除 `purge()`，也不提供 Agent 恢复工具。
 
@@ -336,7 +317,6 @@ export interface MemoryRevision {
   kind: MemoryKind;
   content: string;
   sources: MemorySource[];
-  metadata: JsonObject;
 
   occurredAt: Date;
   expiresAt: Date | null;
@@ -724,20 +704,20 @@ export function memoryTools(options: MemoryToolsOptions): AgentTool[];
 默认提供：
 
 ```text
-search_memory
-search_memory_sources
-read_memory
-remember_daily_memory
-remember_long_term_memory
-update_memory
-forget_memory
+search_current_space_memory
+search_current_space_memory_by_source
+read_current_space_memory
+remember_current_space_daily_memory
+remember_current_space_long_term_memory
+update_current_space_memory
+archive_current_space_memory
 ```
 
 这些工具全部绑定当前 space。
 
 ### 写入工具参数
 
-`remember_daily_memory`：
+`remember_current_space_daily_memory`：
 
 ```ts
 interface RememberDailyMemoryToolInput {
@@ -746,11 +726,10 @@ interface RememberDailyMemoryToolInput {
   date?: string;
   occurredAt?: string;
   expiresAt?: string;
-  metadata?: JsonObject;
 }
 ```
 
-`remember_long_term_memory`：
+`remember_current_space_long_term_memory`：
 
 ```ts
 interface RememberLongTermMemoryToolInput {
@@ -758,11 +737,10 @@ interface RememberLongTermMemoryToolInput {
   kind?: MemoryKind;
   occurredAt?: string;
   expiresAt?: string;
-  metadata?: JsonObject;
 }
 ```
 
-`update_memory`：
+`update_current_space_memory`：
 
 ```ts
 interface UpdateMemoryToolInput {
@@ -772,11 +750,10 @@ interface UpdateMemoryToolInput {
   content?: string;
   kind?: MemoryKind;
   expiresAt?: string | null;
-  metadata?: JsonObject;
 }
 ```
 
-`forget_memory`：
+`archive_current_space_memory`：
 
 ```ts
 interface ForgetMemoryToolInput {
@@ -787,7 +764,7 @@ interface ForgetMemoryToolInput {
 
 Agent 不传 `sources`。工具通过静态 sources 或 `MemorySourceProvider` 注入当前 session、消息、事件或其他业务来源。
 
-更新前，Agent 必须先通过 `read_memory` 取得完整正文和最新 revision。搜索结果中的 excerpt 不能作为完整正文直接覆盖旧版本。
+更新前，Agent 必须先通过 `read_current_space_memory` 取得完整正文和最新 revision。搜索结果中的 excerpt 不能作为完整正文直接覆盖旧版本。
 
 ## Agent 跨 Space 工具
 
@@ -807,20 +784,20 @@ export interface CrossSpaceMemoryOptions {
 `related` 增加：
 
 ```text
-find_memory_spaces
-search_space_memory
-search_space_memory_sources
-read_space_memory
+find_memory_spaces_by_source
+search_discovered_space_memory
+search_discovered_space_memory_by_source
+read_discovered_space_memory
 ```
 
-Agent 必须先调用 `find_memory_spaces`。工具实例记录本次已经发现的 `spaceId`，后续三个工具只接受当前 space 或已经发现的 space。
+Agent 必须先调用 `find_memory_spaces_by_source`。工具实例记录本次已经发现的 `spaceId`，后续三个工具只接受当前 space 或已经发现的 space。
 
 `all` 在 `related` 基础上增加：
 
 ```text
 search_all_memory
-search_all_memory_sources
-read_all_memory
+search_all_memory_by_source
+read_any_memory
 ```
 
 这些跨 space 工具全部只读。开启跨 space 搜索不会扩大 `remember`、`update` 或 `forget` 的作用范围。
@@ -849,11 +826,11 @@ export function globalMemoryTools(options: GlobalMemoryToolsOptions): AgentTool[
 
 ```text
 search_global_memory
-search_global_memory_sources
+search_global_memory_by_source
 read_global_memory
 remember_global_memory
 update_global_memory
-forget_global_memory
+archive_global_memory
 ```
 
 前三个工具用于在全局长期记忆中定位要读取或更新的记录。`remember`、`update` 和 `forget` 配置在调用 `globalMemoryTools()` 后默认开启，也可以分别关闭。
@@ -944,8 +921,6 @@ export const memoryRevisions = pgTable(
       .default(sql`ARRAY[]::text[]`),
 
     sourceSearchText: text("source_search_text").notNull().default(""),
-
-    metadata: jsonb("metadata").$type<JsonObject>().notNull().default({}),
 
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
@@ -1082,7 +1057,7 @@ const tools = memoryTools({
 
 ### 为什么拆分两个 remember 工具
 
-Daily 和 long-term 是不同生命周期。拆成 `remember_daily_memory` 与 `remember_long_term_memory` 后，工具本身固定目标层级，不需要 Agent 传数据库 layer 字符串。
+Daily 和 long-term 是不同生命周期。拆成 `remember_current_space_daily_memory` 与 `remember_current_space_long_term_memory` 后，工具本身固定目标层级，不需要 Agent 传数据库 layer 字符串。
 
 ### 为什么 update 只传新值和 expectedRevision
 

@@ -1,0 +1,17 @@
+import { defineConfig } from "vite-plus";
+import vue from "@vitejs/plugin-vue";
+
+export default defineConfig({
+  pack: {
+    plugins: [vue()],
+    entry: {
+      host: "src/host/index.ts",
+      client: "src/client/index.ts",
+      protocol: "src/protocol/index.ts",
+      index: "src/ui/index.ts",
+      style: "src/ui/style.css",
+    },
+    dts: true,
+    exports: false,
+  },
+});

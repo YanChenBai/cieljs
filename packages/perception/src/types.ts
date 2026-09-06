@@ -1,0 +1,69 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { ASR, ASROptions, ASRResult, Unsubscribe } from "@cieljs/hearing";
+
+export interface PerceptionOptions {
+  readonly asr?: ASROptions;
+  readonly vision?: false | VisionOptions;
+  readonly hearingPrompt?: string;
+  readonly visionPrompt?: string;
+  readonly retentionMs?: number;
+}
+
+export interface VisionOptions {
+  readonly sampleIntervalMs?: number;
+  readonly differenceThreshold?: number;
+  readonly maxFrames?: number;
+}
+
+export interface ImageInput {
+  readonly data: Buffer;
+  readonly at: Date;
+  readonly source?: string;
+}
+
+export interface ImageStream {
+  write(input: ImageInput): Promise<void>;
+}
+
+export interface SnapshotOptions {
+  readonly startAt?: Date;
+  readonly endAt?: Date;
+}
+
+export interface PerceptionSnapshot {
+  readonly id: string;
+  readonly startAt: Date;
+  readonly endAt: Date;
+  readonly transcripts: readonly ASRResult[];
+  readonly frames: readonly PerceptionFrame[];
+
+  compose(): Promise<AgentMessage[]>;
+}
+
+export interface PerceptionFrame {
+  readonly source: string;
+  readonly at: Date;
+  readonly data: Buffer;
+  readonly mimeType: string;
+}
+
+export interface SpeechEndEvent {
+  readonly at: Date;
+  readonly result?: ASRResult;
+  readonly snapshot: PerceptionSnapshot;
+}
+
+export interface PerceptionEventMap {
+  speechend(event: SpeechEndEvent): void;
+  error(error: Error): void;
+}
+
+export interface Perception {
+  readonly asr: ASR;
+  readonly image?: ImageStream;
+
+  on<K extends keyof PerceptionEventMap>(event: K, callback: PerceptionEventMap[K]): Unsubscribe;
+
+  snapshot(options?: SnapshotOptions): Promise<PerceptionSnapshot>;
+  close(): Promise<void>;
+}
