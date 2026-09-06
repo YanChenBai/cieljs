@@ -54,6 +54,7 @@ catalog:
   markstream-vue: ^2.0.7
   "@vitejs/plugin-vue": ^6.0.8
   "@viyuni/rolldown-plugin-tailwindcss": ^0.0.1
+  veldorajs: ^0.0.1
 
 catalogMode: prefer
 
@@ -67,6 +68,7 @@ minimumReleaseAgeExclude:
   - "@orpc/contract@2.0.0-beta.33"
   - "@orpc/server@2.0.0-beta.33"
   - "@orpc/shared@2.0.0-beta.33"
+  - veldorajs@0.0.1 || 0.0.2
 
 overrides:
   onnxruntime-node: 1.27.0

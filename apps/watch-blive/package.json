@@ -12,9 +12,9 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "vp run typecheck:node && vp run typecheck:web",
-    "start": "evp preview",
-    "dev": "evp dev",
-    "build": "vp run typecheck && evp build",
+    "start": "vld preview",
+    "dev": "vld dev",
+    "build": "vp run typecheck && vld build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
@@ -37,7 +37,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@byc/electron-vite-plus": "^0.0.2",
     "@electron-toolkit/tsconfig": "catalog:",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "catalog:",
@@ -47,6 +46,7 @@
     "electron-updater": "^6.3.9",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
+    "veldorajs": "0.0.2",
     "vite": "catalog:",
     "vue-tsc": "^3.1.6"
   }
