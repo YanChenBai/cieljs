@@ -201,7 +201,7 @@ describe("观看生命周期", () => {
       },
     }));
     await runtime.start({ mode: { type: "explore", areaId: 1 } });
-    await vi.advanceTimersByTimeAsync(210_001);
+    await vi.advanceTimersByTimeAsync(90_001);
     expect(api.rooms).toHaveBeenCalledTimes(2);
     expect(runtime.room?.roomId).toBe(789);
     expect(sessionClose.mock.invocationCallOrder[0]).toBeLessThan(

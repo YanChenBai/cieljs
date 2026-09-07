@@ -394,8 +394,8 @@ importers:
         specifier: ~5.9.3
         version: 5.9.3
       veldorajs:
-        specifier: 0.0.2
-        version: 0.0.2(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(typescript@5.9.3)(yaml@2.9.0))(supports-color@7.2.0)
+        specifier: 0.0.3
+        version: 0.0.3(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(typescript@5.9.3)(yaml@2.9.0))(supports-color@7.2.0)
       vite:
         specifier: 'catalog:'
         version: '@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(typescript@5.9.3)(yaml@2.9.0)'
@@ -4505,8 +4505,8 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  veldorajs@0.0.2:
-    resolution: {integrity: sha512-i+lScSxyVvzQPJZ7LII7CmweRbThjgYBZ/jg/qfJG0MnctUH/Dbc5nnapxj/SPMNZuBON7JPSoi5zKj8bnO9Jw==}
+  veldorajs@0.0.3:
+    resolution: {integrity: sha512-mTKWo9KF/zxVzulMzBZVofZzqxeiu757/jlEjPGNXlo0FBdfIOQOi1UauQdTlwvEhAw5BmmM7IIXdcZPAFDy+g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -8364,7 +8364,7 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  veldorajs@0.0.2(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(typescript@5.9.3)(yaml@2.9.0))(supports-color@7.2.0):
+  veldorajs@0.0.3(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(typescript@5.9.3)(yaml@2.9.0))(supports-color@7.2.0):
     dependencies:
       '@babel/core': 7.29.7(supports-color@7.2.0)
       '@babel/plugin-transform-arrow-functions': 7.29.7(@babel/core@7.29.7(supports-color@7.2.0))

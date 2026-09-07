@@ -46,7 +46,7 @@
     "electron-updater": "^6.3.9",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
-    "veldorajs": "0.0.2",
+    "veldorajs": "0.0.3",
     "vite": "catalog:",
     "vue-tsc": "^3.1.6"
   }

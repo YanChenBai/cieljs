@@ -312,7 +312,7 @@ class WatchBliveRuntime implements WatchBlive {
         session,
         perception,
         media,
-        minimumThinkIntervalMs: this.options.minimumThinkIntervalMs ?? 10_000,
+        minimumThinkIntervalMs: this.options.minimumThinkIntervalMs ?? 5_000,
         periodicObservationMs: this.options.periodicObservationMs ?? 30_000,
         canSwitch: () => this.canSwitch(startedAt),
         beforeRun: () => this.danmakuGate.beginRun(),
@@ -395,7 +395,7 @@ class WatchBliveRuntime implements WatchBlive {
         return;
       }
 
-      await delay(500);
+      await delay(60);
     }
 
     throw new Error(`直播间 ${roomId} 页面未在预期时间内就绪`);

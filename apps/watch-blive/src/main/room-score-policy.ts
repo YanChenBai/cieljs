@@ -17,6 +17,14 @@ export class RoomScorePolicy {
       return { shouldSwitch: false };
     }
 
+    if (
+      evaluation.action === "explore" &&
+      evaluation.confidence >= 0.85 &&
+      evaluation.score <= 50
+    ) {
+      return this.switch("confirmed-explore");
+    }
+
     this.evaluations.push(evaluation);
     this.evaluations = this.evaluations.slice(-3);
 

@@ -8,7 +8,9 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   electron: {
-    main: {},
+    main: {
+      filterConsole: (line) => line.includes("Failed to resolve address"),
+    },
     preload: {
       build: {
         externalizeDeps: false,
@@ -36,9 +38,6 @@ export default defineConfig({
         vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === "webview" } } }),
         tailwindcss(),
       ],
-      server: {
-        port: 3000,
-      },
     },
   },
 });

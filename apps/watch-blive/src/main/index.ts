@@ -1,7 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "path";
 
-import icon from "../../resources/icon.png?asset";
 import { LivePage } from "./bilibili/live-page.ts";
 import { isAllowedPageUrl } from "./bilibili/page-executor.ts";
 import { loadWatchEnvironment, prepareWatchResources, migrateWatchResources } from "./config.ts";
@@ -20,7 +19,6 @@ function createWindow(): void {
     titleBarStyle: "hidden",
     titleBarOverlay: { color: "#18181b", symbolColor: "#eaddea", height: 36 },
     backgroundColor: "#18181b",
-    ...(process.platform === "linux" ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "../preload/index.mjs"),
       contextIsolation: true,
