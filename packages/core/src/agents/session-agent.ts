@@ -68,10 +68,10 @@ export async function createCielSessionAgent(options: {
     await session.update({ sources });
     sourcesKey = nextSourcesKey;
   };
-  const resolveAndRefreshSources = async () => {
+  async function resolveAndRefreshSources(): Promise<undefined> {
     const sources = options.resolveSources();
     await refreshSources(sources);
-  };
+  }
 
   const tools = [
     ...options.tools,
@@ -109,9 +109,7 @@ export async function createCielSessionAgent(options: {
 
       await resolveAndRefreshSources();
     },
-    beforeToolCall: async () => {
-      await resolveAndRefreshSources();
-    },
+    beforeToolCall: resolveAndRefreshSources,
     transformContext: createSessionContextTransformer({
       manager: options.memoryManager,
       space: memorySpace,

@@ -31,6 +31,7 @@ function createWatchRouter(mainWindow: BrowserWindow, livePage: LivePage, devtoo
   const listeners = new Set<(event: WatchBridgeEvent) => void>();
   let runtime: WatchBlive | undefined;
   let unsubscribe: (() => void) | undefined;
+
   function requireRuntime() {
     if (runtime) return runtime;
     runtime = createWatchBlive({
@@ -50,6 +51,7 @@ function createWatchRouter(mainWindow: BrowserWindow, livePage: LivePage, devtoo
     });
     return runtime;
   }
+
   const router = {
     devtools: createDevtoolsRouter(devtools),
     account: {
@@ -109,6 +111,7 @@ function createWatchRouter(mainWindow: BrowserWindow, livePage: LivePage, devtoo
       }),
     },
   };
+
   return {
     router,
     close: async () => {

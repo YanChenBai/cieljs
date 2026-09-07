@@ -46,10 +46,11 @@ export async function runInvestigation(options: {
     await session.update({ sources });
     sourcesKey = nextSourcesKey;
   };
-  const resolveAndRefreshSources = async () => {
+
+  async function resolveAndRefreshSources(): Promise<undefined> {
     const sources = options.resolveSources();
     await refreshSources(sources);
-  };
+  }
 
   const tools = [
     ...createInvestigationTools({
@@ -67,9 +68,7 @@ export async function runInvestigation(options: {
     sessionId: session.id,
     streamFn: streamSimple,
     prepareRun: resolveAndRefreshSources,
-    beforeToolCall: async () => {
-      await resolveAndRefreshSources();
-    },
+    beforeToolCall: resolveAndRefreshSources,
     transformContext: createInvestigationContextTransformer({
       spaceId: options.spaceId,
       resolveSources: options.resolveSources,

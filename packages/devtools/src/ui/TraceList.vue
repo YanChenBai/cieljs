@@ -19,14 +19,15 @@ function duration(entry: TraceEntry) {
       :class="{ selected: selectedId === entry.id }"
       :aria-pressed="selectedId === entry.id"
       @click="$emit('select', entry)"
-      ><span class="dt-step-icon" :data-kind="entry.kind">{{
-        entry.kind === "tool" ? "{}" : entry.kind === "message" ? "≡" : "◇"
-      }}</span
-      ><span class="dt-step-name">{{ entry.label ? `${entry.label} · ` : "" }}{{ entry.name }}</span
-      ><span class="dt-duration" :title="entry.status === 'running' ? '执行中' : '执行耗时'">{{
-        duration(entry)
-      }}</span></Button.Root
     >
+      <span class="dt-step-icon" :data-kind="entry.kind">
+        {{ entry.kind === "tool" ? "{}" : entry.kind === "message" ? "≡" : "◇" }}
+      </span>
+      <span class="dt-step-name">{{ entry.label ? `${entry.label} · ` : "" }}{{ entry.name }}</span>
+      <span class="dt-duration" :title="entry.status === 'running' ? '执行中' : '执行耗时'">
+        {{ duration(entry) }}
+      </span>
+    </Button.Root>
     <p v-if="!entries.length" class="dt-empty">暂无执行步骤</p>
   </div>
 </template>

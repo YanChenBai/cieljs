@@ -64,10 +64,10 @@ function moveSplit(event: PointerEvent) {
   <section class="ciel-devtools" aria-label="Ciel DevTools">
     <Tabs.Root v-model="tab">
       <div class="dt-toolbar">
-        <Tabs.List aria-label="DevTools 视图" class="dt-tabs"
-          ><Tabs.Item value="conversation" class="dt-tab">对话</Tabs.Item
-          ><Tabs.Item value="execution" class="dt-tab">执行记录</Tabs.Item></Tabs.List
-        >
+        <Tabs.List aria-label="DevTools 视图" class="dt-tabs">
+          <Tabs.Item value="conversation" class="dt-tab">对话</Tabs.Item>
+          <Tabs.Item value="execution" class="dt-tab">执行记录</Tabs.Item>
+        </Tabs.List>
         <input
           v-if="tab === 'execution'"
           v-model="query"
@@ -111,7 +111,8 @@ function moveSplit(event: PointerEvent) {
             :entries="filtered"
             :selected-id="selectedId"
             @select="selectedId = $event.id"
-          /><Button.Root v-if="hasOlder" class="dt-button" @click="older">加载历史记录</Button.Root>
+          />
+          <Button.Root v-if="hasOlder" class="dt-button" @click="older"> 加载历史记录</Button.Root>
         </div>
         <div
           v-if="selected"
@@ -128,21 +129,23 @@ function moveSplit(event: PointerEvent) {
           @keydown.left.prevent="split = Math.max(20, split - 2)"
           @keydown.right.prevent="split = Math.min(75, split + 2)"
         />
-        <TraceDetail v-if="selected" :client="client" :entry="selected" @close="selectedId = ''"
-          ><template #content="scope"
-            ><slot name="content" v-bind="scope"
-              ><ContentRenderer :value="scope.value" /></slot></template
-        ></TraceDetail>
+        <TraceDetail v-if="selected" :client="client" :entry="selected" @close="selectedId = ''">
+          <template #content="scope">
+            <slot name="content" v-bind="scope">
+              <ContentRenderer :value="scope.value" />
+            </slot>
+          </template>
+        </TraceDetail>
       </Tabs.Panel>
       <Tabs.Panel v-follow-scroll value="conversation" class="dt-conversation">
         <p v-if="!messages.length" class="dt-empty">开始观看后，对话会出现在这里。</p>
-        <MessageView v-for="entry in messages" :key="entry.id" :client="client" :entry="entry"
-          ><template #content="scope"
-            ><slot name="content" v-bind="scope"
-              ><ContentRenderer
-                :value="scope.value"
-                :final="entry.status !== 'running'" /></slot></template
-        ></MessageView>
+        <MessageView v-for="entry in messages" :key="entry.id" :client="client" :entry="entry">
+          <template #content="scope">
+            <slot name="content" v-bind="scope">
+              <ContentRenderer :value="scope.value" :final="entry.status !== 'running'" />
+            </slot>
+          </template>
+        </MessageView>
       </Tabs.Panel>
     </Tabs.Root>
   </section>

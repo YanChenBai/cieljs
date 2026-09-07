@@ -3,6 +3,7 @@ import Disclosure from "./Disclosure.vue";
 import { computed } from "vue";
 import MarkdownRender from "markstream-vue";
 import VueJsonPretty from "vue-json-pretty";
+
 const props = withDefaults(defineProps<{ value: unknown; final?: boolean }>(), { final: true });
 const text = computed(() => {
   const value = props.value;
@@ -11,6 +12,7 @@ const text = computed(() => {
     return value.content;
   return undefined;
 });
+
 const blocks = computed(() => {
   const value = props.value;
   if (!value || typeof value !== "object") return [];
@@ -18,6 +20,7 @@ const blocks = computed(() => {
   if ("content" in value && Array.isArray(value.content)) return value.content;
   return [];
 });
+
 const json = computed(() => {
   const seen = new WeakSet<object>();
   return JSON.parse(
@@ -31,9 +34,11 @@ const json = computed(() => {
     }),
   );
 });
+
 // 仅格式化完整独立的 JSON 行，保留原始消息与已有 Markdown 代码块。
 function readableText(value: string) {
   let fenced = false;
+
   return value
     .split("\n")
     .map((line) => {
@@ -53,13 +58,16 @@ function readableText(value: string) {
     })
     .join("\n");
 }
+
 function imageSource(block: Record<string, unknown>) {
   if (
     typeof block.mimeType !== "string" ||
     !/^image\/(png|jpeg|webp|gif)$/.test(block.mimeType) ||
     typeof block.data !== "string"
-  )
+  ) {
     return undefined;
+  }
+
   return `data:${block.mimeType};base64,${block.data}`;
 }
 </script>

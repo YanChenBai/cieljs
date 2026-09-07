@@ -29,14 +29,18 @@ watch(
 <template>
   <article class="dt-message">
     <header>
-      <strong>{{
-        entry.name === "assistant"
-          ? "Ciel"
-          : entry.name === "user"
-            ? "观察输入"
-            : (entry.label ?? entry.name)
-      }}</strong
-      ><small>{{ entry.status === "running" ? "生成中…" : entry.model?.name }}</small>
+      <strong>
+        {{
+          entry.name === "assistant"
+            ? "Ciel"
+            : entry.name === "user"
+              ? "观察输入"
+              : (entry.label ?? entry.name)
+        }}
+      </strong>
+      <small>
+        {{ entry.status === "running" ? "生成中…" : entry.model?.name }}
+      </small>
     </header>
     <p v-if="error" class="dt-error">{{ error }}</p>
     <slot
@@ -46,7 +50,8 @@ watch(
       section="output"
       :value="value"
       :default-renderer="ContentRenderer"
-      ><ContentRenderer :value="value" :final="entry.status !== 'running'"
-    /></slot>
+    >
+      <ContentRenderer :value="value" :final="entry.status !== 'running'" />
+    </slot>
   </article>
 </template>

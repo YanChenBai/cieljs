@@ -7,9 +7,11 @@ const props = withDefaults(defineProps<{ title: string; defaultOpen?: boolean }>
 const open = shallowRef(props.defaultOpen);
 </script>
 <template>
-  <Collapsible.Root v-model="open" class="dt-section"
-    ><Collapsible.Activator class="dt-disclosure"
-      ><Collapsible.Cue class="dt-cue">›</Collapsible.Cue>{{ title }}</Collapsible.Activator
-    ><Collapsible.Content class="dt-section-content"><slot /></Collapsible.Content
-  ></Collapsible.Root>
+  <Collapsible.Root v-model="open" class="dt-section">
+    <Collapsible.Activator class="dt-disclosure">
+      <Collapsible.Cue class="dt-cue">›</Collapsible.Cue>
+      {{ title }}
+    </Collapsible.Activator>
+    <Collapsible.Content class="dt-section-content"><slot /></Collapsible.Content>
+  </Collapsible.Root>
 </template>
