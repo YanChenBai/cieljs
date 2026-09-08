@@ -1,17 +1,11 @@
-import { createORPCClient } from '@orpc/client';
-import { RPCLink } from '@orpc/client/message-port';
-import { RPCLink as WebSocketLink } from '@orpc/client/websocket';
+import { createORPCClient, type ClientLink } from '@orpc/client';
 import type { RouterClient } from '@orpc/server';
 
 import type { DevtoolsRouter } from '../host/router.ts';
 
 export type DevtoolsClient = RouterClient<DevtoolsRouter>;
 
-export function createMessagePortClient(port: MessagePort): DevtoolsClient {
-  port.start();
-  return createORPCClient(new RPCLink({ port }));
-}
-
-export function createWebSocketClient(connect: () => WebSocket): DevtoolsClient {
-  return createORPCClient(new WebSocketLink({ connect }));
+/** 应用选择 oRPC 适配器，并负责连接的建立、鉴权和释放。 */
+export function createDevtoolsClient(link: ClientLink<Record<never, never>>): DevtoolsClient {
+  return createORPCClient(link);
 }

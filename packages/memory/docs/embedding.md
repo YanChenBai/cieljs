@@ -1,6 +1,6 @@
 # 向量检索
 
-Embedding 配置与 `@cieljs/agent-kit` 共用：
+Embedding 配置与 `@cieljs/model-kit` 共用：
 
 ```ts
 const manager = await MemoryManager.open({

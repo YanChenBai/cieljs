@@ -1,4 +1,4 @@
-import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from '@cieljs/agent-kit';
+import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from '@cieljs/model-kit';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { Database, Transaction } from './database.ts';

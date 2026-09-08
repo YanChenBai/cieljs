@@ -8,6 +8,7 @@ import { streamSimple } from '@earendil-works/pi-ai/compat';
 
 import { createSessionContextTransformer } from './context.ts';
 import { ManagedAgent } from './managed-agent.ts';
+import { createSessionSourceSync } from './session-sources.ts';
 import { assertUniqueTools } from './tools.ts';
 
 export class SessionAgentHandle {
@@ -57,21 +58,11 @@ export async function createCielSessionAgent(options: {
   });
   const messages = await session.context();
 
-  let sourcesKey = JSON.stringify(initialSources);
-  const refreshSources = async (sources: string[]) => {
-    const nextSourcesKey = JSON.stringify(sources);
-
-    if (nextSourcesKey === sourcesKey) {
-      return;
-    }
-
-    await session.update({ sources });
-    sourcesKey = nextSourcesKey;
-  };
-  async function resolveAndRefreshSources(): Promise<undefined> {
-    const sources = options.resolveSources();
-    await refreshSources(sources);
-  }
+  const { refreshSources, resolveAndRefreshSources } = createSessionSourceSync(
+    session,
+    initialSources,
+    options.resolveSources,
+  );
 
   const tools = [
     ...options.tools,

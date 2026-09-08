@@ -21,7 +21,7 @@
 将你使用的 SDK 或本地模型封装成批量函数。下面的工厂直接接收已配置好模型、地址和凭据的调用函数：
 
 ```ts
-import type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/agent-kit';
+import type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/model-kit';
 
 type GenerateEmbeddings = (texts: string[], options: EmbeddingOptions) => Promise<number[][]>;
 
@@ -48,7 +48,7 @@ export function createEmbeddingProvider(
 下面的函数接收第二步创建的 Provider，写入消息并验证检索：
 
 ```ts
-import type { EmbeddingProvider } from '@cieljs/agent-kit';
+import type { EmbeddingProvider } from '@cieljs/model-kit';
 import { SessionManager } from '@cieljs/session';
 
 export async function verifyEmbedding(embedding: EmbeddingProvider) {

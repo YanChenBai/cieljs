@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@cieljs/agent-kit": "workspace:*",
+    "@cieljs/model-kit": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@electric-sql/pglite": "catalog:",
     "@electric-sql/pglite-pgvector": "catalog:",

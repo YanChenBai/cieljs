@@ -8,6 +8,7 @@ import type { InvestigationResult } from '../types.ts';
 import { createInvestigationContextTransformer } from './context.ts';
 import { createInvestigationTools } from './investigation-tools.ts';
 import { ManagedAgent } from './managed-agent.ts';
+import { createSessionSourceSync } from './session-sources.ts';
 import { assertUniqueTools } from './tools.ts';
 
 export async function runInvestigation(options: {
@@ -35,22 +36,11 @@ export async function runInvestigation(options: {
   });
   const context = await session.context();
 
-  let sourcesKey = JSON.stringify(initialSources);
-  const refreshSources = async (sources: string[]) => {
-    const nextSourcesKey = JSON.stringify(sources);
-
-    if (nextSourcesKey === sourcesKey) {
-      return;
-    }
-
-    await session.update({ sources });
-    sourcesKey = nextSourcesKey;
-  };
-
-  async function resolveAndRefreshSources(): Promise<undefined> {
-    const sources = options.resolveSources();
-    await refreshSources(sources);
-  }
+  const { refreshSources, resolveAndRefreshSources } = createSessionSourceSync(
+    session,
+    initialSources,
+    options.resolveSources,
+  );
 
   const tools = [
     ...createInvestigationTools({

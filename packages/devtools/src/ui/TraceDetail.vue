@@ -1,43 +1,20 @@
 <script setup lang="ts">
 import { Button, Tabs } from '@vuetify/v0/components';
-import { shallowRef, watch } from 'vue';
+import { shallowRef } from 'vue';
 
 import type { DevtoolsClient } from '../client/index.ts';
 import type { TraceEntry } from '../protocol/index.ts';
 import ContentRenderer from './ContentRenderer.vue';
 import Disclosure from './Disclosure.vue';
+import { useTraceValue, type TraceSection } from './useTraceValue.ts';
 const props = defineProps<{ client: DevtoolsClient; entry: TraceEntry }>();
 defineEmits<{ close: [] }>();
-const tab = shallowRef('overview');
-const sections = shallowRef<{ key: 'input' | 'output' | 'raw'; value: unknown }[]>([]);
-const error = shallowRef('');
-watch(
-  () => [props.entry.id, props.entry.revision],
-  async (_next, _old, onCleanup) => {
-    let disposed = false;
-    onCleanup(() => {
-      disposed = true;
-    });
-    if (_next[0] !== _old?.[0]) sections.value = [];
-    error.value = '';
-    try {
-      const values = await Promise.all(
-        (['input', 'output', 'raw'] as const).map(async key => ({
-          key,
-          value: props.entry[key]
-            ? await props.client.values.get({
-                id: props.entry[key]!.id,
-                path: props.entry[key]!.path,
-              })
-            : undefined,
-        })),
-      );
-      if (!disposed) sections.value = values;
-    } catch (cause) {
-      if (!disposed) error.value = String(cause);
-    }
-  },
-  { immediate: true },
+const tab = shallowRef<TraceSection | 'overview'>('overview');
+const sections = ['input', 'output', 'raw'] as const;
+const { value, error, loading } = useTraceValue(
+  () => props.client,
+  () => props.entry,
+  () => (tab.value === 'overview' ? undefined : tab.value),
 );
 const tabs = [
   { value: 'overview', label: '概览' },
@@ -100,21 +77,24 @@ const tabs = [
       </Tabs.Panel>
       <Tabs.Panel
         v-for="section in sections"
-        :key="section.key"
-        :value="section.key"
+        :key="section"
+        :value="section"
         class="dt-detail-body dt-payload"
       >
-        <p v-if="section.value === undefined" class="dt-empty">此步骤没有该内容</p>
-        <slot
-          v-else
-          name="content"
-          :entry="entry"
-          :section="section.key"
-          :value="section.value"
-          :default-renderer="ContentRenderer"
-        >
-          <ContentRenderer :value="section.value" />
-        </slot>
+        <template v-if="tab === section">
+          <p v-if="loading" class="dt-empty">加载中…</p>
+          <p v-else-if="value === undefined" class="dt-empty">此步骤没有该内容</p>
+          <slot
+            v-else
+            name="content"
+            :entry="entry"
+            :section="section"
+            :value="value"
+            :default-renderer="ContentRenderer"
+          >
+            <ContentRenderer :value="value" />
+          </slot>
+        </template>
       </Tabs.Panel>
     </Tabs.Root>
   </div>

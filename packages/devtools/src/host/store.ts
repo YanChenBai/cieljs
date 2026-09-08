@@ -1,11 +1,13 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { serialize, deserialize } from 'node:v8';
 
 /** 二进制快照保留图片、循环对象和原始类型，不执行 getter。 */
 export class TraceStore {
   private readonly db: DatabaseSync;
+  private readonly writeRecord: StatementSync;
+  private readonly readRecord: StatementSync;
 
   constructor(directory?: string) {
     if (directory) mkdirSync(directory, { recursive: true });
@@ -16,6 +18,9 @@ export class TraceStore {
       CREATE INDEX IF NOT EXISTS records_order ON records(category, sequence);
       CREATE INDEX IF NOT EXISTS records_run ON records(run_id, category, sequence);
     `);
+    // token 事件会频繁写入同一条消息，复用 SQL 语句避免反复编译。
+    this.writeRecord = this.db.prepare('INSERT OR REPLACE INTO records VALUES (?, ?, ?, ?, ?)');
+    this.readRecord = this.db.prepare('SELECT value FROM records WHERE id = ?');
   }
 
   get sequence() {
@@ -23,13 +28,11 @@ export class TraceStore {
   }
 
   put(id: string, category: string, sequence: number, value: unknown, runId?: string) {
-    this.db
-      .prepare('INSERT OR REPLACE INTO records VALUES (?, ?, ?, ?, ?)')
-      .run(id, category, sequence, runId ?? null, serialize(snapshot(value)));
+    this.writeRecord.run(id, category, sequence, runId ?? null, serialize(snapshot(value)));
   }
 
   get<T>(id: string): T | undefined {
-    const row = this.db.prepare('SELECT value FROM records WHERE id = ?').get(id);
+    const row = this.readRecord.get(id);
     return row ? (deserialize(row.value as Uint8Array) as T) : undefined;
   }
 

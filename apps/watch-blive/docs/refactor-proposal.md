@@ -32,7 +32,7 @@ export interface DefineCielOptions {
 }
 ```
 
-`EmbeddingProvider` 复用 agent-kit 的通用接口，Core 不依赖或创建 `@cieljs/embed`。省略 embedding 即关闭向量模型；应用需要时显式传入 `qwen({ cacheDir })`。共享 provider 注入 session、memory；investigation 保持不构建向量索引。外部 provider 的模型资源由创建它的应用管理，Core 关闭自身索引任务和存储。
+`EmbeddingProvider` 复用 model-kit 的通用接口，Core 不依赖或创建 `@cieljs/embed`。省略 embedding 即关闭向量模型；应用需要时显式传入 `qwen({ cacheDir })`。共享 provider 注入 session、memory；investigation 保持不构建向量索引。外部 provider 的模型资源由创建它的应用管理，Core 关闭自身索引任务和存储。
 
 investigation 省略时，仍允许 `investigate()`：数据库默认放在 session.dataDir 同级的 `investigation` 目录；显式提供 investigation 时必须包含 dataDir。继续检查三个数据库目录互不重叠。全部 Agent 默认使用顶层 model。
 

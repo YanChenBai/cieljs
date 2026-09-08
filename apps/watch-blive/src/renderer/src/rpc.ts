@@ -2,7 +2,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/message-port';
 import type { RouterClient } from '@orpc/server';
 
-import type { WatchRouter } from '../../main/ipc.ts';
+import type { WatchRouter } from '../../main/router.ts';
 import type { WatchBliveBridge } from '../../shared/ipc.ts';
 
 const channel = new MessageChannel();

@@ -1,6 +1,6 @@
-import type { EmbeddingProvider } from '@cieljs/agent-kit';
 import type { McpOptions } from '@cieljs/mcp';
 import type { MemoryManagerOptions } from '@cieljs/memory';
+import type { EmbeddingProvider } from '@cieljs/model-kit';
 import type { SessionManagerOptions } from '@cieljs/session';
 import type { Agent, AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';

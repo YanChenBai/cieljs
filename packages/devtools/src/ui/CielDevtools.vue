@@ -3,61 +3,18 @@ import { Button, Tabs } from '@vuetify/v0/components';
 import { computed, shallowRef } from 'vue';
 
 import type { DevtoolsClient } from '../client/index.ts';
-import type { TraceEntry } from '../protocol/index.ts';
 import ContentRenderer from './ContentRenderer.vue';
+import ExecutionView from './ExecutionView.vue';
 import { vFollowScroll } from './follow-scroll.ts';
 import MessageView from './MessageView.vue';
-import TraceDetail from './TraceDetail.vue';
-import TraceList from './TraceList.vue';
 import { useDevtools } from './useDevtools.ts';
 const props = defineProps<{ client: DevtoolsClient }>();
-const { steps, entries, error, hasOlder, older, connect, clear } = useDevtools(props.client);
-const query = shallowRef('');
-const selectedId = shallowRef('');
-const grouped = computed(() => {
-  const records = new Map<string, TraceEntry>();
-  for (const step of steps.value) {
-    const key =
-      step.kind === 'message' && step.messageId
-        ? `${step.runId}:message:${step.messageId}`
-        : step.kind === 'tool' && step.toolCallId
-          ? `${step.runId}:tool:${step.toolCallId}`
-          : step.id;
-    const previous = records.get(key);
-    records.set(key, {
-      ...step,
-      id: key,
-      revision: step.sequence,
-      startedAt: previous?.startedAt ?? step.startedAt,
-      input: step.input ?? previous?.input,
-      output: step.output ?? previous?.output,
-      name:
-        step.kind === 'message' ? 'message' : step.kind === 'tool' ? 'tool_execution' : step.name,
-    });
-  }
-  return [...records.values()];
-});
-const selected = computed(() => grouped.value.find(entry => entry.id === selectedId.value));
-const filtered = computed(() =>
-  grouped.value.filter(entry =>
-    `${entry.label ?? ''} ${entry.name} ${entry.id} ${entry.sessionId} ${entry.toolCallId ?? ''}`
-      .toLowerCase()
-      .includes(query.value.toLowerCase()),
-  ),
+const { steps, entries, error, hasOlder, loadingOlder, older, connect, clear } = useDevtools(
+  props.client,
 );
+const query = shallowRef('');
 const messages = computed(() => entries.value.filter(entry => entry.kind === 'message').slice(-50));
 const tab = shallowRef('conversation');
-const split = shallowRef(36);
-function resize(event: PointerEvent) {
-  const handle = event.currentTarget as HTMLElement;
-  handle.setPointerCapture(event.pointerId);
-}
-function moveSplit(event: PointerEvent) {
-  const handle = event.currentTarget as HTMLElement;
-  if (!handle.hasPointerCapture(event.pointerId)) return;
-  const bounds = handle.parentElement!.getBoundingClientRect();
-  split.value = Math.max(20, Math.min(75, ((event.clientX - bounds.left) / bounds.width) * 100));
-}
 </script>
 <template>
   <section class="ciel-devtools" aria-label="Ciel DevTools">
@@ -99,42 +56,19 @@ function moveSplit(event: PointerEvent) {
       <p v-if="error" class="dt-error">
         {{ error }}<Button.Root class="dt-button" @click="connect">重新连接</Button.Root>
       </p>
-      <Tabs.Panel
-        value="execution"
-        class="dt-network"
-        :class="{ 'has-detail': selected }"
-        :style="{ '--dt-split': `${split}%` }"
-      >
-        <div v-follow-scroll class="dt-list-panel">
-          <TraceList
-            :entries="filtered"
-            :selected-id="selectedId"
-            @select="selectedId = $event.id"
-          />
-          <Button.Root v-if="hasOlder" class="dt-button" @click="older"> 加载历史记录</Button.Root>
-        </div>
-        <div
-          v-if="selected"
-          class="dt-resizer"
-          role="separator"
-          aria-label="调整执行列表宽度"
-          aria-orientation="vertical"
-          :aria-valuenow="Math.round(split)"
-          aria-valuemin="20"
-          aria-valuemax="75"
-          tabindex="0"
-          @pointerdown="resize"
-          @pointermove="moveSplit"
-          @keydown.left.prevent="split = Math.max(20, split - 2)"
-          @keydown.right.prevent="split = Math.min(75, split + 2)"
-        />
-        <TraceDetail v-if="selected" :client="client" :entry="selected" @close="selectedId = ''">
+      <Tabs.Panel value="execution" class="dt-execution-panel">
+        <ExecutionView
+          :client="client"
+          :steps="steps"
+          :query="query"
+          :has-older="hasOlder"
+          :loading-older="loadingOlder"
+          @older="older"
+        >
           <template #content="scope">
-            <slot name="content" v-bind="scope">
-              <ContentRenderer :value="scope.value" />
-            </slot>
+            <slot name="content" v-bind="scope"><ContentRenderer :value="scope.value" /></slot>
           </template>
-        </TraceDetail>
+        </ExecutionView>
       </Tabs.Panel>
       <Tabs.Panel v-follow-scroll value="conversation" class="dt-conversation">
         <p v-if="!messages.length" class="dt-empty">开始观看后，对话会出现在这里。</p>

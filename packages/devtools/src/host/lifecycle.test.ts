@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MessageChannel } from 'node:worker_threads';
 
-import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/message-port';
+import { createRouterClient } from '@orpc/server';
 import type { RouterClient } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/message-port';
 import { afterEach, expect, it } from 'vite-plus/test';
 
+import { createDevtoolsClient } from '../client/index.ts';
 import type { TraceEvent, TraceEntry } from '../protocol/index.ts';
 import { DevtoolsHost } from './host.ts';
 import { createDevtoolsRouter } from './router.ts';
@@ -108,7 +109,7 @@ it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {
   handler.upgrade(channel.port1);
   channel.port1.start();
   channel.port2.start();
-  const client: RouterClient<typeof router> = createORPCClient(
+  const client: RouterClient<typeof router> = createDevtoolsClient(
     new RPCLink({ port: channel.port2 }),
   );
   host.record('hello', '完整输出');
@@ -120,4 +121,15 @@ it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {
   controller.abort();
   await stream.return?.();
   await handler.close(channel.port1);
+});
+
+it('宿主关闭会结束等待中的更新订阅', async () => {
+  const host = new DevtoolsHost();
+  cleanup.push(() => host.close());
+  const client = createRouterClient(createDevtoolsRouter(host));
+  const updates = await client.updates();
+  await updates.next();
+  const pending = updates.next();
+  host.close();
+  expect((await pending).done).toBe(true);
 });

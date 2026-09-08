@@ -1,7 +1,9 @@
+import { createRouterClient } from '@orpc/server';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import type { TraceEntry } from '../protocol/index.ts';
 import { DevtoolsHost } from './host.ts';
+import { createDevtoolsRouter } from './router.ts';
 
 const hosts: DevtoolsHost[] = [];
 function host(capacity?: number) {
@@ -10,9 +12,7 @@ function host(capacity?: number) {
   return value;
 }
 function entries(value: DevtoolsHost): TraceEntry[] {
-  const result = value.request({ type: 'snapshot' });
-  if (!('entries' in result)) throw new Error('Expected snapshot');
-  return result.entries;
+  return value.store.list<TraceEntry>('entry');
 }
 afterEach(() => {
   for (const value of hosts) value.close();
@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe('DevTools 按需内容', () => {
-  it('大对象、循环引用和二进制不会进入事件消息', () => {
+  it('大对象、循环引用和二进制不会进入事件消息', async () => {
     const value = host();
     const data: Record<string, unknown> = {
       image: { type: 'image', mimeType: 'image/png', data: 'x'.repeat(200_000) },
@@ -32,19 +32,16 @@ describe('DevTools 按需内容', () => {
     const snapshot = entries(value);
     expect(JSON.stringify(snapshot).length).toBeLessThan(500);
     const id = snapshot[0]!.output!.id;
-    expect(value.request({ type: 'read', id, path: ['image'] })).toMatchObject({
-      kind: 'image',
-      nextOffset: 64_000,
-      total: 200_000,
+    const client = createRouterClient(createDevtoolsRouter(value));
+    expect(await client.values.get({ id, path: ['image'] })).toMatchObject({
+      data: 'x'.repeat(200_000),
     });
-    expect(value.request({ type: 'read', id, path: ['buffer'] })).toMatchObject({
-      kind: 'binary',
-      nextOffset: 256,
-    });
-    expect(value.request({ type: 'read', id, path: ['self'] })).toMatchObject({ kind: 'object' });
+    expect(await client.values.get({ id, path: ['buffer'] })).toBeInstanceOf(Uint8Array);
+    const stored = value.store.get<Record<string, unknown>>(id)!;
+    expect(stored.self).toBe(stored);
   });
 
-  it('每页最多 100 项，拒绝 getter 和原型访问', () => {
+  it('内容读取不执行 getter，并拒绝原型路径', async () => {
     const value = host();
     const getter = vi.fn(() => 'secret');
     const data = Object.fromEntries(
@@ -53,26 +50,19 @@ describe('DevTools 按需内容', () => {
     Object.defineProperty(data, 'secret', { get: getter });
     value.record('large', data);
     const id = entries(value)[0]!.output!.id;
-    const page = value.request({ type: 'read', id });
-    expect(page).toMatchObject({ nextOffset: 100 });
-    expect('items' in page && page.items).toHaveLength(100);
-    expect(value.request({ type: 'read', id, path: ['secret'] })).toMatchObject({
-      text: '[Getter / Setter]',
-    });
-    expect(() => value.request({ type: 'read', id, path: ['__proto__'] })).toThrow('路径');
+    const client = createRouterClient(createDevtoolsRouter(value));
+    expect(await client.values.get({ id, path: ['secret'] })).toBe('[Getter / Setter]');
+    await expect(client.values.get({ id, path: ['__proto__'] })).rejects.toThrow();
     expect(getter).not.toHaveBeenCalled();
   });
 
-  it('淘汰和清空视图仍可读取完整内容', () => {
+  it('内存淘汰后仍可从存储读取完整内容', async () => {
     const value = host(1);
     value.record('first', { text: 'one' });
     const first = entries(value)[0]!.output!.id;
     value.record('second', { text: 'two' });
-    expect(entries(value)).toHaveLength(1);
-    expect(value.request({ type: 'read', id: first })).toMatchObject({ kind: 'object' });
-    const second = entries(value)[0]!.output!.id;
-    value.request({ type: 'clear' });
-    expect(value.request({ type: 'read', id: second })).toMatchObject({ kind: 'object' });
+    const client = createRouterClient(createDevtoolsRouter(value));
+    expect(await client.values.get({ id: first })).toEqual({ text: 'one' });
   });
 
   it('流式更新合并同一条消息，工具输入输出可追踪', () => {
@@ -104,7 +94,8 @@ describe('DevTools 按需内容', () => {
     });
   });
 
-  it('非法分页位置在宿主边界被拒绝', () => {
-    expect(() => host().request({ type: 'read', id: 'x', offset: -1 })).toThrow('分页');
+  it('非法分页位置由 oRPC schema 拒绝', async () => {
+    const client = createRouterClient(createDevtoolsRouter(host()));
+    await expect(client.steps.list({ cursor: -1 })).rejects.toThrow();
   });
 });

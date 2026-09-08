@@ -1,32 +1,29 @@
 import { randomUUID } from 'node:crypto';
 
-import type { Agent, AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 
-import type { TraceEvent } from '../protocol/index.ts';
-import {
-  parseRequest,
-  type DevtoolsResponse,
-  type DevtoolsUpdate,
-  type TraceEntry,
-  type ValuePage,
-  type ValueRef,
-} from '../protocol/index.ts';
+import type { DevtoolsUpdate, TraceEntry, TraceEvent, ValueRef } from '../protocol/index.ts';
 import { TraceStore } from './store.ts';
+import { messageContent, preview } from './trace-content.ts';
+import { createTraceStep } from './trace-step.ts';
 
 /** 宿主保存独立的完整快照；内存列表淘汰不删除磁盘记录。 */
 export class DevtoolsHost {
   private readonly entries = new Map<string, TraceEntry>();
-  private readonly values = new Map<string, unknown>();
   private readonly listeners = new Set<(update: DevtoolsUpdate) => void>();
   private readonly dirty = new Set<string>();
   private readonly stepChanges = new Map<string, TraceEntry>();
-  private readonly removed = new Set<string>();
   private sequence = 0;
   readonly store: TraceStore;
   private eventSequence = 0;
   private readonly wakeListeners = new Set<() => void>();
   private closed = false;
+  private readonly lifetime = new AbortController();
   private timer?: ReturnType<typeof setTimeout>;
+
+  get signal() {
+    return this.lifetime.signal;
+  }
 
   constructor(
     private readonly capacity = 300,
@@ -43,34 +40,6 @@ export class DevtoolsHost {
     return () => {
       this.listeners.delete(listener);
     };
-  }
-
-  request(input: unknown): DevtoolsResponse {
-    const request = parseRequest(input);
-    if (request.type === 'snapshot') return { entries: [...this.entries.values()] };
-    if (request.type === 'clear') {
-      for (const id of this.entries.keys()) this.removed.add(id);
-      this.entries.clear();
-      this.values.clear();
-      this.dirty.clear();
-      this.flush();
-      return { cleared: true };
-    }
-    let value = this.values.get(request.id) ?? this.store.get(request.id);
-    if (value === undefined) throw new Error('内容不存在');
-    for (const key of request.path ?? []) {
-      if (!value || typeof value !== 'object') throw new Error('内容路径不存在');
-      if (value instanceof Map || value instanceof Set) {
-        if (!/^\d+$/.test(key) || Number(key) >= value.size) throw new Error('集合索引不存在');
-        const iterator = value instanceof Map ? value.entries() : value.values();
-        for (let index = 0; index <= Number(key); index++) value = iterator.next().value;
-        continue;
-      }
-      const descriptor = Object.getOwnPropertyDescriptor(value, key);
-      if (!descriptor || !('value' in descriptor)) throw new Error('不读取 getter 或继承属性');
-      value = descriptor.value;
-    }
-    return readValue(value, request.offset ?? 0);
   }
 
   record(name: string, output: unknown, sessionId = 'watch-blive') {
@@ -113,6 +82,9 @@ export class DevtoolsHost {
         runId = randomUUID();
         turnId = undefined;
         callMessages.clear();
+        tools.clear();
+        message = undefined;
+        turn = undefined;
       }
       if (event.type === 'turn_start') turnId = randomUUID();
       const eventSequence = ++this.eventSequence;
@@ -213,46 +185,7 @@ export class DevtoolsHost {
         event,
       };
       this.store.put(rawId, 'event', eventSequence, trace, runId);
-      const step: TraceEntry = {
-        id: `step:${eventSequence}`,
-        sequence: eventSequence,
-        sessionId,
-        runId,
-        turnId,
-        messageId: trace.messageId,
-        toolCallId: trace.toolCallId,
-        kind: event.type.startsWith('tool_')
-          ? 'tool'
-          : event.type.startsWith('message_')
-            ? 'message'
-            : 'event',
-        name: event.type,
-        status: event.type === 'tool_execution_end' && event.isError ? 'error' : 'completed',
-        startedAt: trace.timestamp,
-        endedAt: trace.timestamp,
-        raw: { id: rawId, preview: event.type },
-        revision: eventSequence,
-      };
-      const outputKey =
-        'message' in event
-          ? 'message'
-          : 'result' in event
-            ? 'result'
-            : 'partialResult' in event
-              ? 'partialResult'
-              : 'messages' in event
-                ? 'messages'
-                : undefined;
-      if (outputKey) step.output = { id: rawId, path: ['event', outputKey], preview: '完整内容' };
-      if ('args' in event) step.input = { id: rawId, path: ['event', 'args'], preview: '参数' };
-      if ('toolName' in event) {
-        const tool = meta?.tools?.find(tool => tool.name === event.toolName);
-        step.label = tool?.label ?? event.toolName;
-        step.description = tool?.description;
-      }
-      if ('message' in event)
-        step.label = event.message.role === 'assistant' ? 'Ciel' : event.message.role;
-      if (model) step.model = { id: model.id, name: model.name, provider: model.provider };
+      const step = createTraceStep(trace, meta.tools, model);
       this.store.put(step.id, 'step', eventSequence, step, runId);
       this.stepChanges.set(step.id, step);
       this.timer ??= setTimeout(() => this.flush(), 60);
@@ -279,6 +212,7 @@ export class DevtoolsHost {
           ascending: true,
         });
         for (const event of events) {
+          if (this.closed || signal?.aborted) return;
           afterSequence = event.sequence;
           yield event;
         }
@@ -293,14 +227,14 @@ export class DevtoolsHost {
   close() {
     if (this.closed) return;
     this.closed = true;
+    this.lifetime.abort();
+    this.stepChanges.clear();
     for (const wake of this.wakeListeners) wake();
     this.store.close();
     clearTimeout(this.timer);
     this.listeners.clear();
     this.entries.clear();
-    this.values.clear();
     this.dirty.clear();
-    this.removed.clear();
   }
 
   private create(sessionId: string, kind: TraceEntry['kind'], name: string): TraceEntry {
@@ -317,7 +251,6 @@ export class DevtoolsHost {
 
   private storeValue(id: string, value: unknown): ValueRef {
     this.store.put(id, 'value', this.eventSequence, value);
-    this.values.set(id, this.store.get(id));
     return { id, preview: preview(value) };
   }
 
@@ -330,10 +263,7 @@ export class DevtoolsHost {
     while (this.entries.size > this.capacity) {
       const id = this.entries.keys().next().value!;
       this.entries.delete(id);
-      this.values.delete(`${id}:input`);
-      this.values.delete(`${id}:output`);
       this.dirty.delete(id);
-      this.removed.add(id);
     }
     this.timer ??= setTimeout(() => this.flush(), 60);
   }
@@ -343,128 +273,10 @@ export class DevtoolsHost {
     this.timer = undefined;
     const update = {
       entries: [...this.dirty].flatMap(id => this.entries.get(id) ?? []),
-      removed: [...this.removed],
       steps: [...this.stepChanges.values()],
     };
     this.dirty.clear();
-    this.removed.clear();
     this.stepChanges.clear();
     for (const listener of this.listeners) listener(update);
   }
-}
-
-function messageContent(message: AgentMessage) {
-  if (message.role !== 'assistant' && message.role !== 'user' && message.role !== 'toolResult') {
-    return { text: '', thinking: '' };
-  }
-  if (typeof message.content === 'string') return { text: message.content, thinking: '' };
-  let text = '';
-  let thinking = '';
-  for (const block of message.content) {
-    if (block.type === 'text') text += block.text;
-    if (block.type === 'thinking') thinking += block.thinking;
-  }
-  return { text: text, thinking: thinking };
-}
-
-function preview(value: unknown): string {
-  if (typeof value === 'string')
-    return value.length > 160 ? `${value.slice(0, 160)}… (${value.length} chars)` : value;
-  if (value === null || typeof value !== 'object') return String(value).slice(0, 160);
-  if (ArrayBuffer.isView(value)) return `${value.constructor.name} (${value.byteLength} bytes)`;
-  if (value instanceof ArrayBuffer) return `ArrayBuffer (${value.byteLength} bytes)`;
-  if (Array.isArray(value)) return `Array (${value.length})`;
-  if (value instanceof Date) return String(value);
-  if (value instanceof Error) return `${value.name}: ${value.message.slice(0, 160)}`;
-  if (value instanceof Map || value instanceof Set)
-    return `${value.constructor.name} (${value.size})`;
-  return 'Object';
-}
-
-function readValue(value: unknown, offset: number): ValuePage {
-  const summary = preview(value);
-  if (value instanceof Date)
-    return { kind: 'text', preview: summary, text: String(value), total: 1, offset };
-  if (value instanceof Map || value instanceof Set) {
-    const items = [];
-    const iterator = value instanceof Map ? value.entries() : value.values();
-    for (let index = 0; index < Math.min(value.size, offset + 100); index++) {
-      const item = iterator.next().value;
-      if (index >= offset)
-        items.push({ key: String(index), preview: preview(item), expandable: true });
-    }
-    return {
-      kind: 'object',
-      preview: summary,
-      items,
-      total: value.size,
-      offset,
-      nextOffset: offset + 100 < value.size ? offset + 100 : undefined,
-    };
-  }
-  if (typeof value === 'string') {
-    const text = value.slice(offset, offset + 64_000);
-    return {
-      kind: 'text',
-      preview: summary,
-      text,
-      total: value.length,
-      offset,
-      nextOffset: offset + text.length < value.length ? offset + text.length : undefined,
-    };
-  }
-  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
-    const bytes =
-      value instanceof ArrayBuffer
-        ? new Uint8Array(value)
-        : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
-    const text = Array.from(bytes.subarray(offset, offset + 256), byte =>
-      byte.toString(16).padStart(2, '0'),
-    ).join(' ');
-    return {
-      kind: 'binary',
-      preview: summary,
-      text,
-      total: bytes.length,
-      offset,
-      nextOffset: offset + 256 < bytes.length ? offset + 256 : undefined,
-    };
-  }
-  if (!value || typeof value !== 'object')
-    return { kind: 'text', preview: summary, text: summary, total: 1, offset };
-  const imageData: unknown = Object.getOwnPropertyDescriptor(value, 'data')?.value;
-  const mimeType: unknown = Object.getOwnPropertyDescriptor(value, 'mimeType')?.value;
-  if (
-    Object.getOwnPropertyDescriptor(value, 'type')?.value === 'image' &&
-    typeof imageData === 'string' &&
-    typeof mimeType === 'string' &&
-    /^image\/(png|jpeg|webp|gif)$/.test(mimeType)
-  ) {
-    return {
-      kind: 'image',
-      preview: `${mimeType} (${imageData.length} chars)`,
-      mimeType,
-      text: imageData.slice(offset, offset + 64_000),
-      total: imageData.length,
-      offset,
-      nextOffset: offset + 64_000 < imageData.length ? offset + 64_000 : undefined,
-    };
-  }
-  const keys = Object.getOwnPropertyNames(value);
-  const items = keys.slice(offset, offset + 100).map(key => {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
-    return {
-      key,
-      preview: 'value' in descriptor ? preview(descriptor.value) : '[Getter / Setter]',
-      expandable: 'value' in descriptor,
-    };
-  });
-  return {
-    kind: 'object',
-    preview: summary,
-    items,
-    total: keys.length,
-    offset,
-    nextOffset: offset + 100 < keys.length ? offset + 100 : undefined,
-  };
 }

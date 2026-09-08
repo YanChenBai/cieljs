@@ -1,6 +1,6 @@
-import type { EmbeddingProvider } from '@cieljs/agent-kit';
+import type { EmbeddingProvider } from '@cieljs/model-kit';
 
-export type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/agent-kit';
+export type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/model-kit';
 
 export type MemoryLayer = 'global.long_term' | 'space.long_term' | 'space.daily';
 export type SpaceMemoryLayer = 'space.long_term' | 'space.daily';

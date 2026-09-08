@@ -1,6 +1,3 @@
-import { resolve, dirname, join, sep } from 'node:path';
-import { platform } from 'node:process';
-
 import { createMcp, type Mcp } from '@cieljs/mcp';
 import { MemoryManager } from '@cieljs/memory';
 import { SessionManager } from '@cieljs/session';
@@ -8,6 +5,7 @@ import { SessionManager } from '@cieljs/session';
 import { runInvestigation } from './agents/investigation-agent.ts';
 import { createCielSessionAgent, type SessionAgentHandle } from './agents/session-agent.ts';
 import { createSourceResolver } from './sources.ts';
+import { assertDistinctStorage, investigationStorage } from './storage.ts';
 import type {
   Ciel,
   CielSession,
@@ -22,39 +20,6 @@ interface CielResources {
   sessionManager: SessionManager;
   investigationManager: SessionManager;
   memoryManager: MemoryManager;
-}
-
-function investigationStorage(options: DefineCielOptions) {
-  return (
-    options.investigation ?? {
-      dataDir: join(dirname(resolve(options.session.dataDir)), 'investigation'),
-    }
-  );
-}
-
-function storageIdentity(dataDir: string) {
-  const identity = resolve(dataDir);
-
-  return platform === 'win32' ? identity.toLocaleLowerCase('en-US') : identity;
-}
-
-function assertDistinctStorage(options: DefineCielOptions) {
-  const paths = [
-    storageIdentity(options.session.dataDir),
-    storageIdentity(options.memory.dataDir),
-    storageIdentity(investigationStorage(options).dataDir),
-  ];
-
-  if (
-    paths.some((path, index) =>
-      paths.some(
-        (other, otherIndex) =>
-          index !== otherIndex && (path === other || path.startsWith(`${other}${sep}`)),
-      ),
-    )
-  ) {
-    throw new Error('Session、Memory 与 Investigation 必须使用不同的 dataDir');
-  }
 }
 
 class CielSessionRuntime implements CielSession {
@@ -93,6 +58,10 @@ class CielRuntime implements Ciel {
   }
 
   start(): Promise<void> {
+    if (this.closePromise) {
+      return Promise.reject(new Error('Ciel 已开始关闭'));
+    }
+
     if (this.currentStatus === 'running') {
       return Promise.resolve();
     }
@@ -198,7 +167,7 @@ class CielRuntime implements Ciel {
         this.mcp = await createMcp(mcpOptions);
       }
 
-      this.currentStatus = 'running';
+      if (this.currentStatus !== 'closing') this.currentStatus = 'running';
     } catch (error) {
       await Promise.allSettled([
         this.sessionManager?.close(),
@@ -211,7 +180,7 @@ class CielRuntime implements Ciel {
       this.memoryManager = undefined;
       this.mcp = undefined;
       this.startPromise = undefined;
-      this.currentStatus = 'idle';
+      if (this.currentStatus !== 'closing') this.currentStatus = 'idle';
 
       throw error;
     }
@@ -222,11 +191,13 @@ class CielRuntime implements Ciel {
       return;
     }
 
-    if (this.currentStatus === 'starting' && this.startPromise) {
-      await this.startPromise;
-    }
-
+    // 先阻止新操作；即使启动失败，关闭仍需完成并进入终态。
+    const starting = this.startPromise;
     this.currentStatus = 'closing';
+    if (starting) {
+      await Promise.allSettled([starting]);
+      this.currentStatus = 'closing';
+    }
     const openingResults = await Promise.allSettled(this.sessionOpenings);
     const activeResults = await Promise.allSettled([
       ...[...this.sessions].map(session => session.close()),
@@ -252,7 +223,7 @@ class CielRuntime implements Ciel {
   }
 
   private assertRunning() {
-    if (this.currentStatus !== 'running') {
+    if (this.closePromise || this.currentStatus !== 'running') {
       throw new Error(`Ciel 当前不可用：${this.currentStatus}`);
     }
   }

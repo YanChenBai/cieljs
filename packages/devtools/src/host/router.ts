@@ -51,7 +51,10 @@ export function createDevtoolsRouter(host: DevtoolsHost) {
           id.extend({
             path: z
               .array(
-                z.string().refine(key => !['__proto__', 'constructor', 'prototype'].includes(key)),
+                z
+                  .string()
+                  .max(1024)
+                  .refine(key => !['__proto__', 'constructor', 'prototype'].includes(key)),
               )
               .max(32)
               .optional(),
@@ -73,9 +76,13 @@ export function createDevtoolsRouter(host: DevtoolsHost) {
         .input(z.object({ afterSequence: z.number().int().nonnegative().optional() }))
         .handler(({ input, signal }) => host.events(input.afterSequence, signal)),
     },
-    updates: os.handler(async function* ({ signal }) {
+    updates: os.handler(async function* ({ signal: requestSignal }) {
+      // 宿主关闭与客户端取消都必须唤醒等待中的订阅。
+      const signal = requestSignal ? AbortSignal.any([requestSignal, host.signal]) : host.signal;
+      if (signal.aborted) return;
+
       let wake: (() => void) | undefined;
-      let dirty = true;
+      let dirty = false;
       const changed = new Map<string, TraceEntry>();
       const steps = new Map<string, TraceEntry>();
       const notify = (update?: { entries: TraceEntry[]; steps?: TraceEntry[] }) => {

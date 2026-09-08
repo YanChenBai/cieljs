@@ -31,7 +31,7 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
-    "@cieljs/agent-kit": "workspace:*",
+    "@cieljs/model-kit": "workspace:*",
     "@huggingface/transformers": "^4.2.0"
   },
   "devDependencies": {

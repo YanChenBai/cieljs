@@ -1,0 +1,23 @@
+{
+  "name": "@cieljs/model-kit",
+  "version": "0.0.0",
+  "description": "通用模型能力契约与校验，不依赖 Agent 或推理运行时。",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "test": "vp test",
+    "check": "vp check"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

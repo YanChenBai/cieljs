@@ -207,3 +207,28 @@ describe('defineCiel', () => {
     faux.unregister();
   }, 20_000);
 });
+
+test('启动失败时并发关闭仍进入终态，且拒绝重新启动', async () => {
+  const storage = await createStorage();
+  const faux = registerFauxProvider();
+  createMcp.mockRejectedValueOnce(new Error('MCP 启动失败'));
+  const ciel = defineCiel({
+    model: faux.getModel(),
+    systemPrompt: 'test',
+    ...storage,
+    mcp: { enabled: true },
+  });
+  try {
+    const starting = ciel.start();
+    const startFailure = expect(starting).rejects.toThrow('MCP 启动失败');
+    const closing = ciel.close();
+    await expect(ciel.start()).rejects.toThrow('关闭');
+    await startFailure;
+    await closing;
+    expect(ciel.status).toBe('closed');
+    await ciel.close();
+  } finally {
+    await ciel.close();
+    faux.unregister();
+  }
+}, 20_000);

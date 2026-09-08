@@ -6,7 +6,7 @@ import {
   resolveEmbeddingProvider,
   type EmbeddingOptions,
   type ResolvedEmbeddingProvider,
-} from '@cieljs/agent-kit';
+} from '@cieljs/model-kit';
 import { env, pipeline } from '@huggingface/transformers';
 
 import type { QwenEmbeddingOptions } from './types.ts';

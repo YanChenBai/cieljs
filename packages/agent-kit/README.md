@@ -1,40 +1,6 @@
-<h1 align="center">@cieljs/agent-kit</h1>
+# @cieljs/agent-kit
 
-<p align="center">共享 Agent、Prompt 与 Embedding 的轻量公共契约。</p>
-
-`@cieljs/agent-kit` 收拢多个包共同使用的基础能力，不负责具体模型、存储或业务流程。
-`@cieljs/session`、`@cieljs/memory` 和 `@cieljs/embed` 都通过这里的契约保持兼容。
-
-## Embedding Provider
-
-业务层可以创建一个 Provider，同时交给会话与记忆模块使用：
-
-```ts
-import type { EmbeddingProvider } from '@cieljs/agent-kit';
-
-const embedding: EmbeddingProvider = {
-  model: 'provider/model-version',
-  dimensions: 1_024,
-  batchSize: 32,
-  async embedBatch(texts, { purpose, signal }) {
-    return client.embed({ texts, purpose, signal });
-  },
-};
-```
-
-`purpose` 区分检索查询与待索引文档，Provider 可以据此添加不同前缀或选择任务类型。
-`embed()` 是可选入口；省略时，`resolveEmbeddingProvider()` 会通过单元素
-`embedBatch()` 补齐它，并填充默认的 `batchSize`。
-
-对于外部模型返回的结果，可以使用 `assertEmbeddingVectors()` 校验数量、维数、有限值
-和非零向量：
-
-```ts
-import { assertEmbeddingVectors } from '@cieljs/agent-kit';
-
-const vectors = await embedding.embedBatch(texts, { purpose: 'document' });
-assertEmbeddingVectors(vectors, texts.length, embedding.dimensions);
-```
+Agent 工具定义与提示词工具。Embedding 契约和校验已迁移到 `@cieljs/model-kit`，调用方应更新 import 与依赖。
 
 ## Prompt 模板
 

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from '@cieljs/agent-kit';
+import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from '@cieljs/model-kit';
 import type { PGlite } from '@electric-sql/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 

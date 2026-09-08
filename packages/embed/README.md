@@ -4,7 +4,7 @@
 
 `@cieljs/embed` 基于 Transformers.js 加载
 `onnx-community/Qwen3-Embedding-0.6B-ONNX`，并实现
-`@cieljs/agent-kit` 的 `ResolvedEmbeddingProvider` 契约。模型按需加载，同一个
+`@cieljs/model-kit` 的 `ResolvedEmbeddingProvider` 契约。模型按需加载，同一个
 Provider 会复用已经创建的推理管线。模型文件默认从 ModelScope 的同名仓库下载，
 沿用原有本地缓存；下载失败后，下次调用会重新尝试加载。
 

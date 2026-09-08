@@ -1,3 +1,4 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 
@@ -28,4 +29,19 @@ export function parseDecision<T extends TSchema>(text: string, schema: T): Stati
   } catch (error) {
     throw new Error('Agent 输出不是有效的决策 JSON', { cause: error });
   }
+}
+
+export function messageText(message: AgentMessage): string {
+  if (message.role !== 'assistant' && message.role !== 'user') {
+    throw new Error(`无法从 ${message.role} 消息读取文本决策`);
+  }
+
+  if (typeof message.content === 'string') {
+    return message.content;
+  }
+
+  return message.content
+    .filter(item => item.type === 'text')
+    .map(item => item.text)
+    .join('');
 }

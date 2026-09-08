@@ -1,11 +1,6 @@
-import { mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
-
-import { defineCiel, type Ciel, type CielSession } from '@cieljs/core';
+import type { Ciel, CielSession } from '@cieljs/core';
 import type { DevtoolsHost } from '@cieljs/devtools/host';
 import { createPerception, type Perception, type PerceptionOptions } from '@cieljs/perception';
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type {
@@ -15,18 +10,15 @@ import type {
   WatchEvent,
   WatchStatus,
 } from '../shared/types.ts';
-import { parseDecision, RoomDecisionSchema, RoomSelectionSchema } from './agent/decisions.ts';
+import { createWatchCiel } from './agent/ciel.ts';
+import { parseDecision, RoomDecisionSchema, messageText } from './agent/decisions.ts';
+import { selectExplorationRoom } from './agent/exploration.ts';
 import { createRoomSessionOptions } from './agent/room-session.ts';
 import { createDanmakuTool, DanmakuRunGate } from './agent/tools.ts';
 import { BilibiliApi } from './bilibili/api.ts';
 import { LivePage } from './bilibili/live-page.ts';
 import { LiveMedia } from './media/live-media.ts';
-import {
-  createCandidateSources,
-  createExplorationQuestion,
-  createSystemPrompt,
-  ROOM_REVIEW_AFTER_MS,
-} from './prompts.ts';
+import { ROOM_REVIEW_AFTER_MS } from './prompts.ts';
 import { RoomScorePolicy } from './room-score-policy.ts';
 import { RoomVisit } from './room-visit.ts';
 
@@ -55,8 +47,6 @@ export interface WatchBlive {
   close(): Promise<void>;
   onEvent(listener: (event: WatchEvent) => void): () => void;
 }
-
-const EXPLORATION_SYSTEM_PROMPT = `你负责从宿主提供的真实 Bilibili 直播间候选中选择一个房间。可通过只读工具检索其他房间的 Session 与 Memory，结合来源判断；不编造候选，最终只返回指定 JSON。`;
 
 export function createWatchBlive(options: WatchBliveOptions): WatchBlive {
   return new WatchBliveRuntime(options);
@@ -200,10 +190,6 @@ class WatchBliveRuntime implements WatchBlive {
   }
 
   private createCiel(): Ciel {
-    const root = resolve(this.options.dataDir ?? join(homedir(), '.ciel'));
-
-    mkdirSync(root, { recursive: true });
-
     const danmakuTool = createDanmakuTool(
       {
         delivery: () => this.requireStartOptions().danmakuDelivery,
@@ -216,17 +202,11 @@ class WatchBliveRuntime implements WatchBlive {
       this.danmakuGate,
     );
 
-    return defineCiel({
+    return createWatchCiel({
       model: this.options.model,
-      systemPrompt: createSystemPrompt(this.requireStartOptions().mode),
-      tools: [danmakuTool],
-      session: { dataDir: join(root, 'session') },
-      memory: { dataDir: join(root, 'memory') },
-      investigation: {
-        dataDir: join(root, 'investigation'),
-        systemPrompt: EXPLORATION_SYSTEM_PROMPT,
-      },
-      mcp: { enabled: true, configFile: join(root, 'mcp.json') },
+      mode: this.requireStartOptions().mode,
+      dataDir: this.options.dataDir,
+      danmakuTool,
     });
   }
 
@@ -239,33 +219,14 @@ class WatchBliveRuntime implements WatchBlive {
     this.setStatus('exploring');
     this.emit({ type: 'exploration_started', areaId });
 
-    const candidates = await this.api.rooms(areaId);
-    this.options.devtools?.record('list_live_rooms', candidates, 'bilibili:exploration');
-    signal.throwIfAborted();
-
-    if (candidates.length === 0) {
-      throw new Error(`分区 ${areaId} 当前没有直播候选`);
-    }
-
-    const result = await ciel.investigate({
-      spaceId: 'bilibili:exploration',
+    const room = await selectExplorationRoom({
+      areaId,
       signal,
-      crossSpace: true,
-      sources: createCandidateSources(areaId, candidates),
-      question: createExplorationQuestion(candidates),
-      onEvent: this.options.devtools?.agentListener(`bilibili:exploration:${Date.now()}`),
+      ciel,
+      api: this.api,
+      devtools: this.options.devtools,
+      emit: event => this.emit(event),
     });
-    signal.throwIfAborted();
-    const selection = parseDecision(messageText(result.answer), RoomSelectionSchema);
-    const candidate = candidates.find(item => item.roomId === selection.roomId);
-
-    if (!candidate) {
-      throw new Error(`Agent 选择的直播间 ${selection.roomId} 不在本轮候选中`);
-    }
-
-    this.emit({ type: 'room_selected', roomId: candidate.roomId, reason: selection.reason });
-
-    const room = await this.api.room(candidate.roomId);
     await this.openRoom(room, signal);
   }
 
@@ -497,21 +458,6 @@ function validateStartOptions(options: StartWatchOptions): void {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new Error(`${options.mode.type === 'follow' ? 'roomId' : 'areaId'} 必须是正整数`);
   }
-}
-
-function messageText(message: AgentMessage): string {
-  if (message.role !== 'assistant' && message.role !== 'user') {
-    throw new Error(`无法从 ${message.role} 消息读取文本决策`);
-  }
-
-  if (typeof message.content === 'string') {
-    return message.content;
-  }
-
-  return message.content
-    .filter(item => item.type === 'text')
-    .map(item => item.text)
-    .join('');
 }
 
 function delay(ms: number): Promise<void> {

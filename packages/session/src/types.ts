@@ -1,7 +1,7 @@
-import type { EmbeddingProvider } from '@cieljs/agent-kit';
+import type { EmbeddingProvider } from '@cieljs/model-kit';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-export type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/agent-kit';
+export type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/model-kit';
 
 export type SessionSource = string;
 

@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
 import type { WatchBridgeEvent, WatchSnapshot } from '../../../shared/ipc.ts';
 import type { Account, LiveArea, StartWatchOptions } from '../../../shared/types.ts';
 import { watchBridge } from '../rpc.ts';
+import { describeWatchEvent } from './watch-event.ts';
 
 export function useWatchBlive() {
   const events = shallowRef<{ id: number; time: string; text: string }[]>([]);
@@ -16,15 +17,7 @@ export function useWatchBlive() {
   const active = computed(() => !['idle', 'closed'].includes(state.value.status));
 
   function receive(event: WatchBridgeEvent) {
-    let text = '';
-    if (event.type === 'room_opened')
-      text = `进入 ${event.room.streamerName} · ${event.room.roomId}`;
-    if (event.type === 'room_closed') text = `离开 ${event.roomId}：${event.reason}`;
-    if (event.type === 'exploration_started') text = `正在寻找直播间 · 分区 ${event.areaId}`;
-    if (event.type === 'room_selected') text = `选中直播间 ${event.roomId}`;
-    if (event.type === 'danmaku_delivered') text = `已发送：${event.content}`;
-    if (event.type === 'danmaku_simulated') text = `模拟弹幕：${event.content}`;
-    if (event.type === 'error') text = event.message;
+    const text = describeWatchEvent(event);
     if (text)
       events.value = [
         ...events.value,
@@ -60,7 +53,6 @@ export function useWatchBlive() {
   }
   onMounted(() =>
     run('initialize', async () => {
-      state.value = await watchBridge.snapshot();
       areas.value = await watchBridge.areas();
       if (ready.value) await refreshAccount();
     }),
