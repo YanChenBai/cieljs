@@ -25,6 +25,10 @@ export const watchBridge: WatchBliveBridge = {
   logout: () => rpc.account.logout(),
   account: () => rpc.account.get(),
   areas: () => rpc.watch.areas(),
+  configuration: () => rpc.setup.configuration(),
+  hearingModels: () => rpc.setup.hearingModels(),
+  installHearingModels: () => rpc.setup.installHearingModels(),
+  pickRecordingFile: () => rpc.recording.pickFile(),
   snapshot: () => rpc.watch.snapshot(),
   onEvent(listener) {
     const controller = new AbortController();

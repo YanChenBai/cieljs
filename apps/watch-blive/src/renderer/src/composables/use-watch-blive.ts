@@ -1,7 +1,14 @@
+import { useTimer } from '@vuetify/v0';
 import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
 
 import type { WatchBridgeEvent, WatchSnapshot } from '../../../shared/ipc.ts';
-import type { Account, LiveArea, StartWatchOptions } from '../../../shared/types.ts';
+import type {
+  Account,
+  HearingModelStatus,
+  LiveArea,
+  StartWatchOptions,
+  WatchConfigurationStatus,
+} from '../../../shared/types.ts';
 import { watchBridge } from '../rpc.ts';
 import { describeWatchEvent } from './watch-event.ts';
 
@@ -11,10 +18,43 @@ export function useWatchBlive() {
   const state = shallowRef<WatchSnapshot>({ status: 'idle' });
   const account = shallowRef<Account>();
   const areas = shallowRef<readonly LiveArea[]>([]);
+  const configuration = shallowRef<WatchConfigurationStatus>();
+  const hearingModels = shallowRef<HearingModelStatus>();
   const error = shallowRef('');
   const pending = shallowRef('');
   const ready = shallowRef(false);
   const active = computed(() => !['idle', 'closed'].includes(state.value.status));
+
+  let disposed = false;
+  const setupTimer = useTimer(
+    () => {
+      void refreshSetup();
+    },
+    { duration: 1_000 },
+  );
+  onUnmounted(() => {
+    disposed = true;
+  });
+
+  // 串行轮询可恢复后台安装进度，同时发现用户在外部编辑的配置。
+  async function refreshSetup() {
+    try {
+      const [config, models] = await Promise.all([
+        watchBridge.configuration(),
+        watchBridge.hearingModels(),
+      ]);
+      if (disposed) return;
+      configuration.value = config;
+      hearingModels.value = models;
+    } catch (cause) {
+      if (!disposed) error.value = cause instanceof Error ? cause.message : String(cause);
+    } finally {
+      if (!disposed) setupTimer.start();
+    }
+  }
+  onMounted(() => {
+    void refreshSetup();
+  });
 
   function receive(event: WatchBridgeEvent) {
     const text = describeWatchEvent(event);
@@ -60,6 +100,12 @@ export function useWatchBlive() {
 
   onMounted(() =>
     run('initialize', async () => {
+      const [loadedConfiguration, loadedModels] = await Promise.all([
+        watchBridge.configuration(),
+        watchBridge.hearingModels(),
+      ]);
+      configuration.value = loadedConfiguration;
+      hearingModels.value = loadedModels;
       areas.value = await watchBridge.areas();
       if (ready.value) await refreshAccount();
     }),
@@ -70,6 +116,8 @@ export function useWatchBlive() {
     state,
     account,
     areas,
+    configuration,
+    hearingModels,
     error,
     pending,
     ready,
@@ -87,5 +135,9 @@ export function useWatchBlive() {
         account.value = undefined;
       }),
     refreshAccount: () => run('refresh', refreshAccount),
+    installHearingModels: () =>
+      run('install-models', async () => {
+        hearingModels.value = await watchBridge.installHearingModels();
+      }),
   };
 }

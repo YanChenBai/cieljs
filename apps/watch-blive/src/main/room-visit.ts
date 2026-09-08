@@ -2,7 +2,7 @@ import type { CielSession } from '@cieljs/core';
 import type { DevtoolsHost } from '@cieljs/devtools/host';
 import type { Perception } from '@cieljs/perception';
 
-import type { RoomInfo, WatchEvent } from '../shared/types.ts';
+import type { RoomInfo, StreamerHistory, WatchEvent, WatchMode } from '../shared/types.ts';
 import type { LiveMedia } from './media/live-media.ts';
 import { createRoomContext, type SentDanmaku } from './prompts.ts';
 import { ThoughtScheduler } from './scheduling/thought-scheduler.ts';
@@ -11,6 +11,8 @@ interface RoomVisitOptions {
   devtools?: DevtoolsHost;
   generation: number;
   room: RoomInfo;
+  mode: WatchMode;
+  streamerHistory?: StreamerHistory;
   startedAt: number;
   session: CielSession;
   perception: Perception;
@@ -42,9 +44,11 @@ export class RoomVisit {
         role: 'user',
         content: createRoomContext({
           room: options.room,
+          mode: options.mode,
           startedAt: options.startedAt,
           history: this.history,
           canSwitch: options.canSwitch(),
+          streamerHistory: options.streamerHistory,
         }),
         timestamp: Date.now(),
       }),
@@ -84,6 +88,17 @@ export class RoomVisit {
   close(): Promise<void> {
     this.closePromise ??= this.closeResources();
     return this.closePromise;
+  }
+
+  async finishRecording(): Promise<void> {
+    clearInterval(this.periodicTimer);
+    this.unsubscribeSpeechEnd?.();
+    await this.options.media.close();
+    // close 会 flush ASR 并等待尾部识别发布；快照在关闭后仍可读取。
+    await this.options.perception.close();
+    await this.scheduler.finish(
+      '录播已经播放结束。请基于本次 Session 中的全部亲历内容给出最终总结：覆盖主题、关键内容、分析结论、值得记住的信息与仍不确定之处；继续遵守录播模式的记忆规则。',
+    );
   }
 
   private async closeResources() {

@@ -13,6 +13,7 @@ import { assertUniqueTools } from './tools.ts';
 
 export async function runInvestigation(options: {
   model: Model<Api>;
+  apiKey?: string;
   systemPrompt: string;
   tools: AgentTool[];
   sessionManager: SessionManager;
@@ -56,7 +57,8 @@ export async function runInvestigation(options: {
 
   const agent = new ManagedAgent({
     sessionId: session.id,
-    streamFn: streamSimple,
+    streamFn: (model, context, streamOptions) =>
+      streamSimple(model, context, { ...streamOptions, apiKey: options.apiKey }),
     prepareRun: resolveAndRefreshSources,
     beforeToolCall: resolveAndRefreshSources,
     transformContext: createInvestigationContextTransformer({

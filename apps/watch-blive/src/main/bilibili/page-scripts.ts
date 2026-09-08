@@ -1,6 +1,6 @@
 /** UID 就绪前不查账号 API，页面未初始化与未登录都返回空值。 */
 export const READ_ACCOUNT_SCRIPT = `(async () => {
-  const uid = window.BilibiliLive?.UID;
+  const uid = window.BilibiliLive?.UID || __LIVE_USER_LOGIN_STATUS__.uid;
   if (typeof uid !== 'number' || uid === 0) return null;
 
   const response = await fetch('https://api.bilibili.com/x/web-interface/nav', {

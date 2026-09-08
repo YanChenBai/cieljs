@@ -34,3 +34,47 @@ describe('直播分区查询', () => {
     await expect(api.rooms(1)).rejects.toThrow('-403');
   });
 });
+
+describe('主播近期公开信息', () => {
+  it('动态置顶优先，并从动态卡片提取投稿标题列表', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          code: 0,
+          data: {
+            items: [
+              {
+                id_str: 'normal',
+                modules: { module_dynamic: { desc: { text: '普通动态' } } },
+              },
+              {
+                id_str: 'video',
+                modules: {
+                  module_author: { pub_ts: 123 },
+                  module_dynamic: {
+                    major: { archive: { bvid: 'BV1xx', title: '动态里的投稿' } },
+                  },
+                  module_tag: { text: '置顶' },
+                },
+              },
+            ],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          code: 0,
+          data: { list: { vlist: [{ bvid: 'BV2xx', title: '近期投稿', created: 456 }] } },
+        }),
+      );
+    const api = new BilibiliApi({ fetch });
+
+    const history = await api.streamerHistory(456);
+
+    expect(history.dynamics.map(item => item.title)).toEqual(['动态里的投稿', '普通动态']);
+    expect(history.videos).toEqual([
+      expect.objectContaining({ id: 'BV2xx', title: '近期投稿', publishedAt: 456 }),
+    ]);
+  });
+});

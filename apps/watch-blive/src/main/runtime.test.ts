@@ -71,6 +71,7 @@ function setup() {
     playUrl: vi.fn().mockResolvedValue('https://example.com/live'),
     rooms: vi.fn().mockResolvedValue([room]),
     room: vi.fn().mockResolvedValue(room),
+    streamerHistory: vi.fn().mockResolvedValue({ dynamics: [], videos: [] }),
   };
   runtime = createWatchBlive({
     model: faux.getModel(),
@@ -164,6 +165,54 @@ describe('观看生命周期', () => {
     await rejected;
     await stopping;
     expect(page.open).not.toHaveBeenCalled();
+  });
+  it('录播复用房间 Space，但使用独立日期 Session 且不打开直播页面', async () => {
+    const { page } = setup();
+
+    await runtime.start({
+      mode: {
+        type: 'recording',
+        roomId: 123,
+        source: { type: 'file', path: 'C:\\Videos\\recording.mp4' },
+        date: '2026-09-07',
+      },
+    });
+
+    expect(page.open).not.toHaveBeenCalled();
+    expect(mocks.session).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spaceId: 'bilibili:room:123',
+        sessionId: 'bilibili:room:123:recording:2026-09-07',
+      }),
+    );
+    expect(mocks.mediaOptions[0]).toMatchObject({
+      input: 'C:\\Videos\\recording.mp4',
+      live: false,
+      roomId: 123,
+    });
+  });
+  it('录播自然结束后生成最终总结再关闭访问', async () => {
+    const { sessionClose } = setup();
+    await runtime.start({
+      mode: {
+        type: 'recording',
+        roomId: 123,
+        source: { type: 'url', url: 'https://example.com/recording.mp4' },
+      },
+    });
+    const session = await mocks.session.mock.results[0]!.value;
+
+    mocks.mediaOptions[0]!.onStopped?.();
+
+    await vi.waitFor(() => expect(runtime.status).toBe('idle'));
+    expect(session.agent.prompt).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ content: expect.stringContaining('最终总结') }),
+      ]),
+    );
+    expect(session.agent.prompt.mock.invocationCallOrder[0]).toBeLessThan(
+      sessionClose.mock.invocationCallOrder[0],
+    );
   });
   it('连续低分会真正重新探索和开房，不在思考结束回调中死锁', async () => {
     vi.useFakeTimers();

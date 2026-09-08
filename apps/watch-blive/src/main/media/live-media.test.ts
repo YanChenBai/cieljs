@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 import type { Perception } from '@cieljs/perception';
 import { beforeEach, expect, it, vi } from 'vite-plus/test';
 
-import { LiveMedia } from './live-media.ts';
+import { ffmpegArguments, LiveMedia } from './live-media.ts';
 
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('node:child_process', () => ({ spawn }));
@@ -27,7 +27,8 @@ function setup() {
   const onError = vi.fn();
   const media = new LiveMedia({
     roomId: 123,
-    playUrl: 'https://example.com/live',
+    input: 'https://example.com/live',
+    live: true,
     perception: {} as Perception,
     onStopped,
     onError,
@@ -58,4 +59,17 @@ it('主动停止会等待 close，但不当作下播或异常退出', async () =
   await media.close();
   expect(child.kill).toHaveBeenCalledWith('SIGTERM');
   expect(onStopped).not.toHaveBeenCalled();
+});
+
+it('录播按实时速度读取，直播保留断线重连参数', () => {
+  const recording = ffmpegArguments(123, 'C:\\Videos\\recording.mp4', false);
+  const live = ffmpegArguments(123, 'https://example.com/live.flv', true);
+
+  expect(recording.slice(recording.indexOf('-re'), recording.indexOf('-i') + 2)).toEqual([
+    '-re',
+    '-i',
+    'C:\\Videos\\recording.mp4',
+  ]);
+  expect(live).toContain('-reconnect');
+  expect(live).not.toContain('-re');
 });

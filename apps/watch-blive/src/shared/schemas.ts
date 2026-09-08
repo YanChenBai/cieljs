@@ -6,6 +6,15 @@ export const StartWatchSchema = Type.Object({
   mode: Type.Union([
     Type.Object({ type: Type.Literal('follow'), roomId: PositiveIntegerSchema }),
     Type.Object({ type: Type.Literal('explore'), areaId: PositiveIntegerSchema }),
+    Type.Object({
+      type: Type.Literal('recording'),
+      roomId: PositiveIntegerSchema,
+      source: Type.Union([
+        Type.Object({ type: Type.Literal('url'), url: Type.String({ minLength: 1 }) }),
+        Type.Object({ type: Type.Literal('file'), path: Type.String({ minLength: 1 }) }),
+      ]),
+      date: Type.Optional(Type.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' })),
+    }),
   ]),
   danmakuDelivery: Type.Optional(Type.Union([Type.Literal('simulate'), Type.Literal('live')])),
 });

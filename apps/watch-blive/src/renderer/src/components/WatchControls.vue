@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { Button } from '@vuetify/v0/components';
-import { LoaderCircle, Play, Square } from 'lucide-vue-next';
+import { FileVideo, LoaderCircle, Play, Square } from 'lucide-vue-next';
 import { computed, shallowRef } from 'vue';
 
 import type { LiveArea, StartWatchOptions, WatchMode } from '../../../shared/types.ts';
+import { watchBridge } from '../rpc.ts';
 
 const props = defineProps<{
   areas: readonly LiveArea[];
   active: boolean;
   pending: string;
   ready: boolean;
+  livePageReady: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -22,6 +24,11 @@ const roomId = shallowRef<number>();
 const areaId = shallowRef<number>();
 const live = shallowRef(false);
 const areaSearch = shallowRef('');
+const recordingSource = shallowRef<'url' | 'file'>('url');
+const recordingUrl = shallowRef('');
+const recordingFile = shallowRef('');
+const recordingDate = shallowRef('');
+const pickingFile = shallowRef(false);
 
 const filteredAreas = computed(() => {
   const query = areaSearch.value.trim().toLocaleLowerCase();
@@ -39,24 +46,66 @@ const filteredAreas = computed(() => {
 // 模式和目标 ID 一起推导，校验与提交始终使用同一份选择。
 const selectedMode = computed<WatchMode>(() => {
   if (mode.value === 'follow') return { type: 'follow', roomId: roomId.value ?? 0 };
+  if (mode.value === 'recording') {
+    const source =
+      recordingSource.value === 'url'
+        ? { type: 'url' as const, url: recordingUrl.value.trim() }
+        : { type: 'file' as const, path: recordingFile.value };
+    const date = recordingDate.value;
+
+    return {
+      type: 'recording',
+      roomId: roomId.value ?? 0,
+      source,
+      ...(date ? { date } : {}),
+    };
+  }
 
   return { type: 'explore', areaId: areaId.value ?? 0 };
 });
 
 const valid = computed(() => {
   const selected = selectedMode.value;
-  const id = selected.type === 'follow' ? selected.roomId : selected.areaId;
+  const id = selected.type === 'explore' ? selected.areaId : selected.roomId;
 
-  return Number.isSafeInteger(id) && id > 0;
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return false;
+  }
+
+  if (selected.type !== 'recording') {
+    return true;
+  }
+
+  const hasSource =
+    selected.source.type === 'url'
+      ? /^https?:\/\//u.test(selected.source.url)
+      : !!selected.source.path;
+
+  return hasSource;
 });
 
+async function pickRecordingFile() {
+  pickingFile.value = true;
+
+  try {
+    const path = await watchBridge.pickRecordingFile();
+
+    if (path) {
+      recordingFile.value = path;
+    }
+  } finally {
+    pickingFile.value = false;
+  }
+}
+
 function start() {
-  const canStart = valid.value && props.ready && !props.pending && !props.active;
+  const mediaReady = mode.value === 'recording' || props.livePageReady;
+  const canStart = valid.value && props.ready && mediaReady && !props.pending && !props.active;
   if (!canStart) return;
 
   emit('start', {
     mode: selectedMode.value,
-    danmakuDelivery: live.value ? 'live' : 'simulate',
+    danmakuDelivery: mode.value !== 'recording' && live.value ? 'live' : 'simulate',
   });
 }
 </script>
@@ -70,9 +119,10 @@ function start() {
           >观看模式<select v-model="mode">
             <option value="follow">单推 · 只看这位主播</option>
             <option value="explore">探索 · 发现感兴趣的直播</option>
+            <option value="recording">录播 · 总结、分析和记忆</option>
           </select></label
         >
-        <label v-if="mode === 'follow'"
+        <label v-if="mode !== 'explore'"
           >直播间 roomId<input
             v-model.number="roomId"
             type="number"
@@ -81,7 +131,7 @@ function start() {
             required
             placeholder="输入直播间号"
         /></label>
-        <template v-else>
+        <template v-if="mode === 'explore'">
           <label
             >搜索分区
             <input
@@ -105,18 +155,61 @@ function start() {
           </label>
           <p v-if="filteredAreas.length === 0" class="hint">没有匹配的分区，试试其他关键词。</p>
         </template>
-        <label class="check"><input v-model="live" type="checkbox" />真实发送弹幕</label>
-        <p class="hint">
+        <template v-if="mode === 'recording'">
+          <label
+            >视频来源<select v-model="recordingSource">
+              <option value="url">在线视频 URL</option>
+              <option value="file">本地视频</option>
+            </select></label
+          >
+          <label v-if="recordingSource === 'url'"
+            >视频 URL<input
+              v-model="recordingUrl"
+              type="url"
+              required
+              placeholder="https://example.com/video.mp4"
+          /></label>
+          <p v-if="recordingSource === 'url'" class="hint">
+            请填写 FFmpeg 可直接读取的视频或流地址。
+          </p>
+          <div v-else class="mb-[13px]">
+            <Button.Root
+              class="action w-full"
+              type="button"
+              :disabled="pickingFile"
+              @click="pickRecordingFile"
+            >
+              <LoaderCircle v-if="pickingFile" class="spinning" :size="16" />
+              <FileVideo v-else :size="16" />
+              {{ recordingFile ? '重新选择视频' : '选择本地视频' }}
+            </Button.Root>
+            <p
+              v-if="recordingFile"
+              class="text-muted mt-2 mb-0 text-[10px] leading-[1.5] break-all"
+            >
+              {{ recordingFile }}
+            </p>
+          </div>
+          <label
+            >录播日期（可选）<input v-model="recordingDate" type="date" />
+            <span class="hint block">留空时使用今天；录播使用独立 Session。</span>
+          </label>
+        </template>
+        <label v-if="mode !== 'recording'" class="check"
+          ><input v-model="live" type="checkbox" />真实发送弹幕</label
+        >
+        <p v-if="mode !== 'recording'" class="hint">
           {{
             live ? '弹幕将发送到当前直播间，需要先登录。' : '默认模拟互动，不会向直播间发送弹幕。'
           }}
         </p>
+        <p v-else class="hint">录播模式不会发送或模拟弹幕，只进行总结、分析和记忆。</p>
       </fieldset>
       <Button.Root
         v-if="!active || pending === 'start'"
         class="action primary"
         @click="start"
-        :disabled="!ready || !!pending || !valid"
+        :disabled="!ready || (mode !== 'recording' && !livePageReady) || !!pending || !valid"
         :aria-busy="pending === 'start'"
       >
         <LoaderCircle v-if="pending === 'start'" class="spinning" :size="16" />

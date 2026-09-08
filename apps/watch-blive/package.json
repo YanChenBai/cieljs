@@ -25,6 +25,7 @@
     "@cieljs/agent-kit": "workspace:*",
     "@cieljs/core": "workspace:*",
     "@cieljs/devtools": "workspace:*",
+    "@cieljs/hearing": "workspace:*",
     "@cieljs/perception": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",

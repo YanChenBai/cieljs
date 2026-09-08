@@ -1,10 +1,49 @@
 export type DanmakuDelivery = 'simulate' | 'live';
 
-export type WatchMode = { type: 'explore'; areaId: number } | { type: 'follow'; roomId: number };
+export type RecordingSource = { type: 'url'; url: string } | { type: 'file'; path: string };
+
+export type WatchMode =
+  | { type: 'explore'; areaId: number }
+  | { type: 'follow'; roomId: number }
+  | { type: 'recording'; roomId: number; source: RecordingSource; date?: string };
 
 export interface StartWatchOptions {
   mode: WatchMode;
   danmakuDelivery?: DanmakuDelivery;
+}
+
+export interface WatchConfigurationStatus {
+  path: string;
+  valid: boolean;
+  message?: string;
+}
+
+export interface HearingModelStatus {
+  installing?: boolean;
+  error?: string;
+  progress?: {
+    file: string;
+    receivedBytes: number;
+    totalBytes?: number;
+    attempt?: number;
+    message?: string;
+  };
+  modelsPath: string;
+  missingFiles: readonly string[];
+  valid: boolean;
+}
+
+export interface StreamerHistoryItem {
+  id: string;
+  type: 'dynamic' | 'video';
+  title: string;
+  publishedAt?: number;
+  pinned: boolean;
+}
+
+export interface StreamerHistory {
+  dynamics: readonly StreamerHistoryItem[];
+  videos: readonly StreamerHistoryItem[];
 }
 
 export interface Account {
@@ -60,4 +99,5 @@ export type WatchEvent =
   | { type: 'danmaku_deferred'; reason: string }
   | { type: 'danmaku_simulated'; content: string }
   | { type: 'danmaku_delivered'; content: string; roomId: number }
+  | { type: 'recording_finished'; roomId: number }
   | { type: 'error'; stage: string; error: Error };

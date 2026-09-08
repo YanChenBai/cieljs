@@ -27,6 +27,7 @@ import { RoomVisit } from './room-visit.ts';
 export interface WatchBliveOptions {
   devtools?: DevtoolsHost;
   model: Model<Api>;
+  apiKey?: string;
   livePage: LivePage;
   dataDir?: string;
   api?: BilibiliApi;
@@ -151,9 +152,15 @@ class WatchBliveRuntime implements WatchBlive {
     this.setStatus('starting');
 
     try {
-      this.accountValue = await this.options.livePage.account();
+      if (options.mode.type !== 'recording') {
+        this.accountValue = await this.options.livePage.account();
+      }
 
-      if (this.startOptions.danmakuDelivery === 'live' && !this.accountValue) {
+      if (
+        options.mode.type !== 'recording' &&
+        this.startOptions.danmakuDelivery === 'live' &&
+        !this.accountValue
+      ) {
         this.setStatus('awaiting-login');
         throw new Error('真实弹幕模式需要先登录 Bilibili');
       }
@@ -166,8 +173,11 @@ class WatchBliveRuntime implements WatchBlive {
       if (options.mode.type === 'follow') {
         const room = await this.api.room(options.mode.roomId);
         await this.openRoom(room, signal);
-      } else {
+      } else if (options.mode.type === 'explore') {
         await this.explore(options.mode.areaId, signal);
+      } else {
+        const room = await this.api.room(options.mode.roomId);
+        await this.openRecording(room, options.mode, signal);
       }
     } catch (error) {
       await this.disposeRuntime();
@@ -202,21 +212,27 @@ class WatchBliveRuntime implements WatchBlive {
   }
 
   private createCiel(): Ciel {
-    const danmakuTool = createDanmakuTool(
-      {
-        delivery: () => this.requireStartOptions().danmakuDelivery,
-        livePage: this.options.livePage,
-        room: () => this.visit?.room,
-        sentDanmaku: () => this.visit?.history.map(item => item.content) ?? [],
-        canSend: () => this.currentStatus === 'watching' && !this.runController?.signal.aborted,
-        emit: event => this.recordDanmakuEvent(event),
-      },
-      this.danmakuGate,
-    );
+    const mode = this.requireStartOptions().mode;
+    let danmakuTool;
+
+    if (mode.type !== 'recording') {
+      danmakuTool = createDanmakuTool(
+        {
+          delivery: () => this.requireStartOptions().danmakuDelivery,
+          livePage: this.options.livePage,
+          room: () => this.visit?.room,
+          sentDanmaku: () => this.visit?.history.map(item => item.content) ?? [],
+          canSend: () => this.currentStatus === 'watching' && !this.runController?.signal.aborted,
+          emit: event => this.recordDanmakuEvent(event),
+        },
+        this.danmakuGate,
+      );
+    }
 
     return createWatchCiel({
       model: this.options.model,
-      mode: this.requireStartOptions().mode,
+      apiKey: this.options.apiKey,
+      mode,
       dataDir: this.options.dataDir,
       danmakuTool,
     });
@@ -261,6 +277,7 @@ class WatchBliveRuntime implements WatchBlive {
     });
 
     try {
+      const streamerHistory = await this.loadStreamerHistory(room.streamerUid);
       await this.options.livePage.open(room.roomId, signal);
       await this.waitUntilReady(room.roomId, generation, signal);
 
@@ -274,7 +291,8 @@ class WatchBliveRuntime implements WatchBlive {
       this.liveStatusMonitor = monitor;
       const media = new LiveMedia({
         roomId: room.roomId,
-        playUrl,
+        input: playUrl,
+        live: true,
         perception,
         ffmpegPath: this.options.ffmpegPath,
         onError: error => this.emitError('media', error),
@@ -284,6 +302,8 @@ class WatchBliveRuntime implements WatchBlive {
         devtools: this.options.devtools,
         generation,
         room,
+        mode: this.requireStartOptions().mode,
+        streamerHistory,
         startedAt,
         session,
         perception,
@@ -311,13 +331,113 @@ class WatchBliveRuntime implements WatchBlive {
     }
   }
 
+  private async openRecording(
+    room: RoomInfo,
+    mode: Extract<StartWatchOptions['mode'], { type: 'recording' }>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    signal.throwIfAborted();
+    await this.closeVisit('switch');
+    signal.throwIfAborted();
+    this.setStatus('opening');
+
+    const generation = ++this.visitGeneration;
+    let session: CielSession | undefined;
+    const perception = (this.options.createPerception ?? createPerception)({
+      vision: { sampleIntervalMs: 6_666, differenceThreshold: 0.03, maxFrames: 9 },
+      retentionMs: 60_000,
+      ...this.options.perception,
+    });
+
+    try {
+      const streamerHistory = await this.loadStreamerHistory(room.streamerUid);
+      const startedAt = Date.now();
+      session = await this.requireCiel().session(
+        createRoomSessionOptions(room, new Date(startedAt), mode),
+      );
+      signal.throwIfAborted();
+
+      const media = new LiveMedia({
+        roomId: room.roomId,
+        input: mode.source.type === 'url' ? mode.source.url : mode.source.path,
+        live: false,
+        perception,
+        ffmpegPath: this.options.ffmpegPath,
+        onError: error => this.emitError('media', error),
+        onStopped: error => this.endRecording(generation, signal, error),
+      });
+      const visit = new RoomVisit({
+        devtools: this.options.devtools,
+        generation,
+        room,
+        mode,
+        streamerHistory,
+        startedAt,
+        session,
+        perception,
+        media,
+        minimumThinkIntervalMs: this.options.minimumThinkIntervalMs ?? 5_000,
+        periodicObservationMs: this.options.periodicObservationMs ?? 30_000,
+        canSwitch: () => false,
+        beforeRun: () => undefined,
+        afterRun: () => undefined,
+        emit: event => this.emit(event),
+      });
+
+      this.visit = visit;
+      visit.start();
+      this.setStatus('watching');
+      this.emit({ type: 'room_opened', room });
+    } catch (error) {
+      if (this.visit?.generation === generation) {
+        await this.closeVisit('open_failed');
+      } else {
+        await Promise.all([session?.close(), perception.close()]);
+      }
+      throw error;
+    }
+  }
+
+  private endRecording(generation: number, signal: AbortSignal, error?: Error): void {
+    const visit = this.visit;
+
+    if (!visit || visit.generation !== generation || signal.aborted) {
+      return;
+    }
+
+    if (error) {
+      this.emitError('media', error);
+    } else {
+      this.emit({ type: 'recording_finished', roomId: visit.room.roomId });
+    }
+
+    void this.enqueue(async () => {
+      try {
+        await visit.finishRecording();
+      } catch (cause) {
+        this.emitError('recording_summary', cause);
+      } finally {
+        await this.stopRuntime();
+      }
+    }).catch(cause => this.emitError('stop', cause));
+  }
+
+  private async loadStreamerHistory(streamerUid: number) {
+    try {
+      return await this.api.streamerHistory(streamerUid);
+    } catch (error) {
+      this.emitError('streamer_history', error);
+      return undefined;
+    }
+  }
+
   private inspectDecision(generation: number, signal: AbortSignal): void {
     const visit = this.visit;
     const mode = this.requireStartOptions().mode;
 
     if (
       this.currentStatus !== 'watching' ||
-      mode.type === 'follow' ||
+      mode.type !== 'explore' ||
       !visit ||
       visit.generation !== generation ||
       signal.aborted
@@ -453,7 +573,9 @@ class WatchBliveRuntime implements WatchBlive {
       return;
     }
 
-    this.options.livePage.close();
+    if (this.startOptions?.mode.type !== 'recording') {
+      this.options.livePage.close();
+    }
     await visit.close();
 
     this.emit({ type: 'room_closed', roomId: visit.room.roomId, reason });
@@ -533,11 +655,40 @@ class WatchBliveRuntime implements WatchBlive {
 }
 
 function validateStartOptions(options: StartWatchOptions): void {
-  const value = options.mode.type === 'follow' ? options.mode.roomId : options.mode.areaId;
+  const value = options.mode.type === 'explore' ? options.mode.areaId : options.mode.roomId;
 
   if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`${options.mode.type === 'follow' ? 'roomId' : 'areaId'} 必须是正整数`);
+    throw new Error(`${options.mode.type === 'explore' ? 'areaId' : 'roomId'} 必须是正整数`);
   }
+
+  if (options.mode.type !== 'recording') {
+    return;
+  }
+
+  if (options.mode.source.type === 'url') {
+    const url = URL.parse(options.mode.source.url);
+
+    if (!url || !['http:', 'https:'].includes(url.protocol)) {
+      throw new Error('录播 URL 必须是有效的 HTTP 或 HTTPS 地址');
+    }
+  } else if (!options.mode.source.path.trim()) {
+    throw new Error('请选择本地视频文件');
+  }
+
+  if (options.mode.date && !isValidDate(options.mode.date)) {
+    throw new Error('录播日期必须是有效的 YYYY-MM-DD 日期');
+  }
+}
+
+function isValidDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+
+  if (!match) {
+    return false;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
 }
 
 function delay(ms: number): Promise<void> {

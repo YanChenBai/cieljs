@@ -9,6 +9,7 @@ import AccountControls from './components/AccountControls.vue';
 import '@cieljs/devtools/style.css';
 import EventTimeline from './components/EventTimeline.vue';
 import LiveRoomWebview from './components/LiveRoomWebview.vue';
+import RuntimeSetup from './components/RuntimeSetup.vue';
 import WatchControls from './components/WatchControls.vue';
 import { useSidebar } from './composables/use-sidebar.ts';
 import { useWatchBlive } from './composables/use-watch-blive.ts';
@@ -19,6 +20,8 @@ const {
   state,
   account,
   areas,
+  configuration,
+  hearingModels,
   error,
   pending,
   ready,
@@ -29,6 +32,7 @@ const {
   login,
   logout,
   refreshAccount,
+  installHearingModels,
 } = useWatchBlive();
 
 const { collapsed, width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyboardResize } =
@@ -96,11 +100,18 @@ const roomTitle = computed(() => {
           @logout="logout"
           @refresh="refreshAccount"
         />
+        <RuntimeSetup
+          :configuration="configuration"
+          :models="hearingModels"
+          :pending="pending"
+          @install-models="installHearingModels"
+        />
         <WatchControls
           :areas="areas"
           :active="active"
           :pending="pending"
-          :ready="ready"
+          :ready="!!configuration?.valid && !!hearingModels?.valid"
+          :live-page-ready="ready"
           @start="start"
           @stop="stop"
         />

@@ -1,6 +1,6 @@
 // @env node
 
-import { access } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -94,8 +94,8 @@ export async function checkConfiguration(): Promise<ConfigurationCheck> {
 
 async function exists(file: string): Promise<boolean> {
   try {
-    await access(file);
-    return true;
+    const info = await stat(file);
+    return info.isFile() && info.size > 0;
   } catch {
     return false;
   }

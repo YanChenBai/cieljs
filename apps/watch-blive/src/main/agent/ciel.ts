@@ -14,16 +14,18 @@ const EXPLORATION_SYSTEM_PROMPT = `你负责从宿主提供的真实 Bilibili �
 /** 三类存储独立落盘；工具闭包由宿主维护当前房间和发送权限。 */
 export function createWatchCiel(options: {
   model: Model<Api>;
+  apiKey?: string;
   mode: StartWatchOptions['mode'];
   dataDir?: string;
-  danmakuTool: AgentTool;
+  danmakuTool?: AgentTool;
 }) {
   const root = resolve(options.dataDir ?? join(homedir(), '.ciel'));
   mkdirSync(root, { recursive: true });
   return defineCiel({
     model: options.model,
+    apiKey: options.apiKey,
     systemPrompt: createSystemPrompt(options.mode),
-    tools: [options.danmakuTool],
+    tools: options.danmakuTool ? [options.danmakuTool] : [],
     session: { dataDir: join(root, 'session') },
     memory: { dataDir: join(root, 'memory') },
     investigation: {

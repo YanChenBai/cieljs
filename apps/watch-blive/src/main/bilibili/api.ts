@@ -1,4 +1,10 @@
-import type { LiveArea, RoomCandidate, RoomInfo } from '../../shared/types.ts';
+import type {
+  LiveArea,
+  RoomCandidate,
+  RoomInfo,
+  StreamerHistory,
+  StreamerHistoryItem,
+} from '../../shared/types.ts';
 
 interface ApiResponse<T> {
   code: number;
@@ -155,6 +161,60 @@ export class BilibiliApi {
     return `${url.host}${codec.base_url}${url.extra ?? ''}`;
   }
 
+  async streamerHistory(streamerUid: number): Promise<StreamerHistory> {
+    assertPositiveInteger(streamerUid, 'streamerUid');
+
+    const query = new URLSearchParams({
+      host_mid: String(streamerUid),
+      features: 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote',
+    });
+    const dynamicRequest = this.request<DynamicFeedPayload>(
+      `https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space?${query}`,
+      `https://space.bilibili.com/${streamerUid}/dynamic`,
+    );
+    const archiveQuery = new URLSearchParams({
+      mid: String(streamerUid),
+      pn: '1',
+      ps: '8',
+      order: 'pubdate',
+    });
+    const archiveRequest = this.request<ArchiveListPayload>(
+      `https://api.bilibili.com/x/space/arc/search?${archiveQuery}`,
+      `https://space.bilibili.com/${streamerUid}/video`,
+    );
+    const [dynamicResult, archiveResult] = await Promise.allSettled([
+      dynamicRequest,
+      archiveRequest,
+    ]);
+
+    if (dynamicResult.status === 'rejected' && archiveResult.status === 'rejected') {
+      throw new AggregateError(
+        [dynamicResult.reason, archiveResult.reason],
+        `无法读取主播 ${streamerUid} 的近期公开信息`,
+      );
+    }
+
+    const dynamicItems =
+      dynamicResult.status === 'fulfilled'
+        ? (dynamicResult.value.items ?? []).flatMap(parseHistoryItem)
+        : [];
+    const sorted = dynamicItems.toSorted(
+      (left, right) => Number(right.pinned) - Number(left.pinned),
+    );
+    const archiveItems =
+      archiveResult.status === 'fulfilled'
+        ? (archiveResult.value.list?.vlist ?? []).flatMap(parseArchiveItem)
+        : [];
+
+    return {
+      dynamics: sorted.slice(0, 8),
+      videos: (archiveItems.length
+        ? archiveItems
+        : sorted.filter(item => item.type === 'video')
+      ).slice(0, 8),
+    };
+  }
+
   private async streamerStatus(streamerUid: number) {
     const data = await this.request<Record<string, StreamerStatusPayload>>(
       `https://api.live.bilibili.com/room/v1/Room/get_status_info_by_uids?uids[]=${streamerUid}`,
@@ -163,9 +223,15 @@ export class BilibiliApi {
     return data[String(streamerUid)];
   }
 
-  private async request<T>(url: string): Promise<T> {
+  private async request<T>(url: string, referer = 'https://live.bilibili.com/'): Promise<T> {
     const response = await this.fetch(url, {
-      headers: { Accept: 'application/json', Referer: 'https://live.bilibili.com/' },
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        Referer: referer,
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+          '(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+      },
       signal: AbortSignal.timeout(this.timeoutMs),
     });
 
@@ -217,6 +283,33 @@ interface PlayInfoPayload {
   playurl_info?: { playurl?: { stream?: readonly StreamPayload[] } };
 }
 
+interface DynamicFeedPayload {
+  items?: readonly DynamicItemPayload[];
+}
+
+interface ArchiveListPayload {
+  list?: { vlist?: readonly ArchiveItemPayload[] };
+}
+
+interface ArchiveItemPayload {
+  bvid?: string;
+  title?: string;
+  created?: number;
+}
+
+interface DynamicItemPayload {
+  id_str?: string;
+  type?: string;
+  modules?: {
+    module_author?: { pub_ts?: number };
+    module_dynamic?: {
+      desc?: { text?: string };
+      major?: { archive?: { bvid?: string; title?: string } };
+    };
+    module_tag?: { text?: string };
+  };
+}
+
 interface StreamPayload {
   protocol_name?: string;
   format?: readonly {
@@ -237,4 +330,42 @@ function assertPositiveInteger(value: number, name: string): void {
 
 function validId(value: number | undefined): value is number {
   return Number.isSafeInteger(value) && (value ?? 0) > 0;
+}
+
+function parseHistoryItem(item: DynamicItemPayload): StreamerHistoryItem[] {
+  const archive = item.modules?.module_dynamic?.major?.archive;
+  const description = item.modules?.module_dynamic?.desc?.text?.trim();
+  const title = archive?.title?.trim() || description;
+
+  if (!title) {
+    return [];
+  }
+
+  return [
+    {
+      id: archive?.bvid || item.id_str || title,
+      type: archive ? 'video' : 'dynamic',
+      title,
+      publishedAt: item.modules?.module_author?.pub_ts,
+      pinned: item.modules?.module_tag?.text?.includes('置顶') ?? false,
+    },
+  ];
+}
+
+function parseArchiveItem(item: ArchiveItemPayload): StreamerHistoryItem[] {
+  const title = item.title?.trim();
+
+  if (!title) {
+    return [];
+  }
+
+  return [
+    {
+      id: item.bvid || title,
+      type: 'video',
+      title,
+      publishedAt: item.created,
+      pinned: false,
+    },
+  ];
 }

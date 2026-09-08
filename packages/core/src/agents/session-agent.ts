@@ -38,6 +38,7 @@ export class SessionAgentHandle {
 
 export async function createCielSessionAgent(options: {
   model: Model<Api>;
+  apiKey?: string;
   systemPrompt: string;
   tools: AgentTool[];
   sessionManager: SessionManager;
@@ -90,7 +91,8 @@ export async function createCielSessionAgent(options: {
   let isClosed = false;
   const agent = new ManagedAgent({
     sessionId: session.id,
-    streamFn: streamSimple,
+    streamFn: (model, context, streamOptions) =>
+      streamSimple(model, context, { ...streamOptions, apiKey: options.apiKey }),
     prepareRun: async () => {
       options.assertRunning();
 

@@ -7,7 +7,7 @@ vp run @cieljs/hearing#install-model
 vp run @cieljs/hearing#install-model -- --force
 ```
 
-安装器下载三组模型并写入包目录下的 `models/`：
+安装器下载三组模型并写入 `CIEL_DATA_DIR/models/`；未配置 `CIEL_DATA_DIR` 时默认使用 `~/.ciel/models/`：
 
 | 目录                       | 模型                                | 来源                                              |
 | -------------------------- | ----------------------------------- | ------------------------------------------------- |
@@ -19,7 +19,7 @@ vp run @cieljs/hearing#install-model -- --force
 
 ## 目录布局
 
-模型和声纹都放在包目录下：
+模型和声纹都放在 Ciel 数据目录下：
 
 ```text
 models/asr/qwen3-asr-1.7b-int8/...

@@ -55,3 +55,24 @@ describe('ThoughtScheduler', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 });
+
+it('最终总结包含间隔内尚未思考的尾段感知', async () => {
+  const tail = { role: 'user' as const, content: '最后一句语音', timestamp: 2 };
+  const prompt = vi.fn().mockResolvedValue(undefined);
+  const snapshot = vi.fn().mockResolvedValue({ compose: async () => [tail] });
+  const scheduler = new ThoughtScheduler({
+    perception: { snapshot },
+    agent: { prompt },
+    minimumIntervalMs: 60_000,
+    startedAt: new Date(0),
+    context: () => ({ role: 'user', content: '上下文', timestamp: 0 }),
+  });
+  scheduler.trigger(new Date(1));
+  await vi.waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
+  scheduler.trigger(new Date(2));
+  await scheduler.finish('最终总结');
+  expect(snapshot).toHaveBeenLastCalledWith({ startAt: new Date(2), endAt: expect.any(Date) });
+  expect(prompt).toHaveBeenLastCalledWith(
+    expect.arrayContaining([tail, expect.objectContaining({ content: '最终总结' })]),
+  );
+});

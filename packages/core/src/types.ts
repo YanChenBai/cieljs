@@ -20,6 +20,8 @@ export interface CielMcpOptions extends McpOptions {
 
 export interface DefineCielOptions {
   model: Model<Api>;
+  /** 请求级 API key，不写入全局环境变量或持久化存储。 */
+  apiKey?: string;
   systemPrompt: string;
   session: Omit<SessionStorageOptions, 'embedding'>;
   memory: Omit<MemoryStorageOptions, 'embedding'>;

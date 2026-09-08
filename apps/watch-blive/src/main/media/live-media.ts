@@ -9,7 +9,8 @@ const USER_AGENT =
 
 export interface LiveMediaOptions {
   roomId: number;
-  playUrl: string;
+  input: string;
+  live: boolean;
   perception: Perception;
   ffmpegPath?: string;
   onError?: (error: Error) => void;
@@ -32,10 +33,14 @@ export class LiveMedia {
     }
 
     const executable = this.options.ffmpegPath ?? (process.env.FFMPEG_PATH?.trim() || 'ffmpeg');
-    const child = spawn(executable, ffmpegArguments(this.options.roomId, this.options.playUrl), {
-      stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
+    const child = spawn(
+      executable,
+      ffmpegArguments(this.options.roomId, this.options.input, this.options.live),
+      {
+        stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      },
+    );
 
     this.child = child;
     this.exited = new Promise(resolveExit => child.once('close', () => resolveExit()));
@@ -139,31 +144,37 @@ export class LiveMedia {
   }
 }
 
-export function ffmpegArguments(roomId: number, playUrl: string): string[] {
+export function ffmpegArguments(roomId: number, input: string, live: boolean): string[] {
+  const inputArguments = live
+    ? [
+        '-reconnect',
+        '1',
+        '-reconnect_at_eof',
+        '1',
+        '-reconnect_on_network_error',
+        '1',
+        '-reconnect_on_http_error',
+        '4xx,5xx',
+        '-reconnect_streamed',
+        '1',
+        '-reconnect_delay_max',
+        '5',
+        '-user_agent',
+        USER_AGENT,
+        '-referer',
+        `https://live.bilibili.com/${roomId}`,
+        '-headers',
+        'Origin: https://live.bilibili.com\r\n',
+      ]
+    : ['-re'];
+
   return [
     '-hide_banner',
     '-loglevel',
     'error',
-    '-reconnect',
-    '1',
-    '-reconnect_at_eof',
-    '1',
-    '-reconnect_on_network_error',
-    '1',
-    '-reconnect_on_http_error',
-    '4xx,5xx',
-    '-reconnect_streamed',
-    '1',
-    '-reconnect_delay_max',
-    '5',
-    '-user_agent',
-    USER_AGENT,
-    '-referer',
-    `https://live.bilibili.com/${roomId}`,
-    '-headers',
-    'Origin: https://live.bilibili.com\r\n',
+    ...inputArguments,
     '-i',
-    playUrl,
+    input,
     '-map',
     '0:a:0?',
     '-vn',

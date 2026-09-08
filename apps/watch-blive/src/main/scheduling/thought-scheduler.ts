@@ -27,6 +27,7 @@ export class ThoughtScheduler {
   private active?: Promise<void>;
   private timer?: ReturnType<typeof setTimeout>;
   private closed = false;
+  private finishing = false;
 
   constructor(private readonly options: ThoughtSchedulerOptions) {
     this.capturedThrough = options.startedAt.getTime() - 1;
@@ -58,8 +59,28 @@ export class ThoughtScheduler {
     await this.active;
   }
 
+  /** 录播结束后把尚未消费的感知附在总结请求前，避免关闭时丢掉尾段。 */
+  async finish(summary: string): Promise<void> {
+    this.finishing = true;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+    await this.active;
+    const startAt = this.pending?.startAt ?? new Date(this.capturedThrough + 1);
+    await this.close();
+    const endAt = new Date(Math.max(Date.now(), startAt.getTime()));
+    const snapshot = await this.options.perception.snapshot({ startAt, endAt });
+    const messages = await snapshot.compose();
+    await this.options.agent.prompt([
+      ...messages,
+      this.options.context(),
+      { role: 'user', content: summary, timestamp: Date.now() },
+    ]);
+  }
+
   private schedule(): void {
-    if (this.closed || this.active || this.timer || !this.pending) {
+    if (this.closed || this.finishing || this.active || this.timer || !this.pending) {
       return;
     }
 

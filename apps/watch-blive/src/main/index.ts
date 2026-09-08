@@ -4,7 +4,7 @@ import { app, BrowserWindow } from 'electron';
 
 import { LivePage } from './bilibili/live-page.ts';
 import { isAllowedPageUrl } from './bilibili/page-executor.ts';
-import { loadWatchEnvironment, prepareWatchResources, migrateWatchResources } from './config.ts';
+import { prepareWatchResources, migrateWatchResources } from './config.ts';
 import { registerWatchBliveIpc } from './ipc.ts';
 
 function createWindow(): void {
@@ -80,7 +80,6 @@ function createWindow(): void {
   }
 }
 
-loadWatchEnvironment(app.getAppPath());
 prepareWatchResources();
 
 app.whenReady().then(async () => {

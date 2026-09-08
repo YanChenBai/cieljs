@@ -38,4 +38,22 @@ describe('房间身份', () => {
     expect(other.spaceId).not.toBe(first.spaceId);
     expect(other.sessionId).not.toBe(first.sessionId);
   });
+
+  it('录播复用房间 Space，但使用独立 Session 并支持指定日期', () => {
+    const automatic = createRoomSessionOptions(room, new Date('2026-09-06T16:00:00Z'), {
+      type: 'recording',
+      roomId: 123,
+      source: { type: 'url', url: 'https://example.com/video.mp4' },
+    });
+    const specified = createRoomSessionOptions(room, new Date('2026-09-06T16:00:00Z'), {
+      type: 'recording',
+      roomId: 123,
+      source: { type: 'file', path: 'C:\\Videos\\recording.mp4' },
+      date: '2026-08-01',
+    });
+
+    expect(automatic.spaceId).toBe('bilibili:room:123');
+    expect(automatic.sessionId).toBe('bilibili:room:123:recording:2026-09-07');
+    expect(specified.sessionId).toBe('bilibili:room:123:recording:2026-08-01');
+  });
 });

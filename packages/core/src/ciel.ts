@@ -87,6 +87,7 @@ class CielRuntime implements Ciel {
     const resolveSources = createSourceResolver(options.sources);
     const opening = createCielSessionAgent({
       model: this.options.model,
+      apiKey: this.options.apiKey,
       systemPrompt: this.options.systemPrompt,
       tools: [...(this.options.tools ?? []), ...(this.mcp?.tools ?? [])],
       sessionManager: resources.sessionManager,
@@ -120,6 +121,7 @@ class CielRuntime implements Ciel {
     const resolveSources = createSourceResolver(options.sources);
     const investigation = runInvestigation({
       model: this.options.model,
+      apiKey: this.options.apiKey,
       systemPrompt: this.options.investigation?.systemPrompt ?? this.options.systemPrompt,
       tools: this.options.investigation?.tools ?? [],
       sessionManager: resources.sessionManager,

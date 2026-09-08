@@ -241,6 +241,9 @@ importers:
       '@cieljs/devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
+      '@cieljs/hearing':
+        specifier: workspace:*
+        version: link:../../packages/hearing
       '@cieljs/perception':
         specifier: workspace:*
         version: link:../../packages/perception

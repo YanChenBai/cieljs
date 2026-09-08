@@ -1,10 +1,12 @@
 import type {
   Account,
+  HearingModelStatus,
   LiveArea,
   RoomInfo,
   StartWatchOptions,
   WatchEvent,
   WatchStatus,
+  WatchConfigurationStatus,
 } from './types.ts';
 
 export const WATCH_BLIVE_IPC = {
@@ -35,6 +37,10 @@ export interface WatchBliveBridge {
   logout(): Promise<void>;
   account(): Promise<Account | undefined>;
   areas(): Promise<readonly LiveArea[]>;
+  configuration(): Promise<WatchConfigurationStatus>;
+  hearingModels(): Promise<HearingModelStatus>;
+  installHearingModels(): Promise<HearingModelStatus>;
+  pickRecordingFile(): Promise<string | undefined>;
   snapshot(): Promise<WatchSnapshot>;
   onEvent(listener: (event: WatchBridgeEvent) => void): () => void;
 }
