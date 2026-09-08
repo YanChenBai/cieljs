@@ -1,6 +1,6 @@
 import { expect, it } from 'vite-plus/test';
 
-import type { TraceEntry } from '../protocol/index.ts';
+import type { TraceEntry } from '../../protocol/index.ts';
 import { groupTraceSteps, mergeTraceEntries } from './trace-entries.ts';
 
 const entry = (sequence: number, overrides: Partial<TraceEntry> = {}): TraceEntry => ({

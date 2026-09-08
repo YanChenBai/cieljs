@@ -1,26 +1,32 @@
 <script setup lang="ts">
-import type { DevtoolsClient } from '../client/index.ts';
-import type { TraceEntry } from '../protocol/index.ts';
-import ContentRenderer from './ContentRenderer.vue';
-import { useTraceValue } from './useTraceValue.ts';
+import { computed } from 'vue';
+
+import type { DevtoolsClient } from '../../../client/index.ts';
+import type { TraceEntry } from '../../../protocol/index.ts';
+import { useTraceValue } from '../../composables/use-trace-value.ts';
+import ContentRenderer from '../content/ContentRenderer.vue';
+
 const props = defineProps<{ client: DevtoolsClient; entry: TraceEntry }>();
+
 const { value, error } = useTraceValue(
   () => props.client,
   () => props.entry,
   () => 'output',
 );
+
+const author = computed(() => {
+  if (props.entry.name === 'assistant') return 'Ciel';
+  if (props.entry.name === 'user') return '观察输入';
+
+  return props.entry.label ?? props.entry.name;
+});
 </script>
+
 <template>
   <article class="dt-message">
     <header>
       <strong>
-        {{
-          entry.name === 'assistant'
-            ? 'Ciel'
-            : entry.name === 'user'
-              ? '观察输入'
-              : (entry.label ?? entry.name)
-        }}
+        {{ author }}
       </strong>
       <small>
         {{ entry.status === 'running' ? '生成中…' : entry.model?.name }}

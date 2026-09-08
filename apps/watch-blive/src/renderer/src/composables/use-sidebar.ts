@@ -4,11 +4,11 @@ export function useSidebar(side: 'left' | 'right' = 'left') {
   const collapsed = shallowRef(false);
   const width = shallowRef(side === 'left' ? 280 : 420);
   const viewportWidth = shallowRef(window.innerWidth);
+  // 两侧面板分别为直播区域预留空间，避免缩窗后侧栏挤满整个工作区。
+  const maximumWidth = side === 'left' ? 380 : 900;
+  const reservedWidth = side === 'left' ? 600 : 640;
   const maxWidth = computed(() =>
-    Math.max(
-      260,
-      Math.min(side === 'left' ? 380 : 900, viewportWidth.value - (side === 'right' ? 640 : 600)),
-    ),
+    Math.max(260, Math.min(maximumWidth, viewportWidth.value - reservedWidth)),
   );
   const dragging = shallowRef(false);
 
@@ -23,6 +23,7 @@ export function useSidebar(side: 'left' | 'right' = 'left') {
 
   function startDrag(event: PointerEvent) {
     if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return;
+
     event.currentTarget.setPointerCapture(event.pointerId);
     dragging.value = true;
     event.preventDefault();
@@ -43,6 +44,7 @@ export function useSidebar(side: 'left' | 'right' = 'left') {
     else if (event.key === 'Home') resize(260);
     else if (event.key === 'End') resize(maxWidth.value);
     else return;
+
     event.preventDefault();
   }
 

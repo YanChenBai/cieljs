@@ -144,7 +144,7 @@ apps/watch-blive/
           LiveRoomWebview.vue
           EventTimeline.vue
         composables/
-          useWatchBlive.ts
+          use-watch-blive.ts
           useLiveRoomWebview.ts
     shared/
       ipc.ts

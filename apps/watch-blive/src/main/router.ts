@@ -52,9 +52,10 @@ export function createWatchRouter(
     devtools: createDevtoolsRouter(devtools),
     account: {
       get: os.handler(() => livePage.account()),
-      login: os.handler(async () => {
+      login: os.handler(async ({ signal }) => {
         await runtime?.stop();
         await livePage.login();
+        return livePage.waitForLogin(signal);
       }),
       logout: os.handler(async () => {
         await runtime?.stop();

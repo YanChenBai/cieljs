@@ -9,7 +9,7 @@ export default defineConfig({
       client: 'src/client/index.ts',
       protocol: 'src/protocol/index.ts',
       index: 'src/ui/index.ts',
-      style: 'src/ui/style.css',
+      style: 'src/ui/styles/main.css',
     },
     dts: true,
     exports: false,

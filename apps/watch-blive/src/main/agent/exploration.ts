@@ -33,6 +33,7 @@ export async function selectExplorationRoom(options: {
     onEvent: devtools?.agentListener(`bilibili:exploration:${Date.now()}`),
   });
   signal.throwIfAborted();
+
   const selection = parseDecision(messageText(result.answer), RoomSelectionSchema);
   const candidate = candidates.find(item => item.roomId === selection.roomId);
 
@@ -42,6 +43,5 @@ export async function selectExplorationRoom(options: {
 
   emit({ type: 'room_selected', roomId: candidate.roomId, reason: selection.reason });
 
-  const room = await api.room(candidate.roomId);
-  return room;
+  return api.room(candidate.roomId);
 }

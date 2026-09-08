@@ -31,7 +31,7 @@ export interface WatchBliveBridge {
   attachLiveWebContents(input: { id: number }): Promise<void>;
   start(options: StartWatchOptions): Promise<void>;
   stop(): Promise<void>;
-  login(): Promise<void>;
+  login(): Promise<Account>;
   logout(): Promise<void>;
   account(): Promise<Account | undefined>;
   areas(): Promise<readonly LiveArea[]>;

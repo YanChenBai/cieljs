@@ -13,6 +13,7 @@ export interface LiveMediaOptions {
   perception: Perception;
   ffmpegPath?: string;
   onError?: (error: Error) => void;
+  onStopped?: (error?: Error) => void;
 }
 
 export class LiveMedia {
@@ -47,19 +48,20 @@ export class LiveMedia {
     (child.stdio[3] as Readable | null)?.on('data', (chunk: Buffer) => {
       this.writeImages(child, Buffer.from(chunk));
     });
-    child.once('error', error => this.options.onError?.(error));
+    let processError: Error | undefined;
+    child.once('error', error => {
+      processError = error;
+    });
     child.once('close', (code, signal) => {
-      if (this.child !== child) {
-        return;
-      }
-
+      // 主动关闭会先清空 child；仅自然结束或崩溃需要宿主做状态判断。
+      if (this.child !== child) return;
       this.child = undefined;
-
-      if (code !== 0) {
-        this.options.onError?.(
-          new Error(`FFmpeg 异常退出（code=${String(code)}, signal=${String(signal)}）`),
-        );
+      let error = processError;
+      if (!error && code !== 0) {
+        error = new Error(`FFmpeg 异常退出（code=${String(code)}, signal=${String(signal)}）`);
       }
+      if (this.options.onStopped) this.options.onStopped(error);
+      else if (error) this.options.onError?.(error);
     });
   }
 

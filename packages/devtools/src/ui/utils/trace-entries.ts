@@ -1,4 +1,4 @@
-import type { TraceEntry } from '../protocol/index.ts';
+import type { TraceEntry } from '../../protocol/index.ts';
 
 /** 历史分页和实时推送可能重叠；按 ID 去重，并保留较新的修订。 */
 export function mergeTraceEntries(current: TraceEntry[], incoming: TraceEntry[]) {

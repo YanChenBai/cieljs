@@ -3,32 +3,42 @@ import MarkdownRender from 'markstream-vue';
 import { computed } from 'vue';
 import VueJsonPretty from 'vue-json-pretty';
 
-import { readableText, imageSource } from './content-format.ts';
+import { readableText, imageSource } from '../../utils/content-format.ts';
 import Disclosure from './Disclosure.vue';
 
 const props = withDefaults(defineProps<{ value: unknown; final?: boolean }>(), { final: true });
+
 const text = computed(() => {
   const value = props.value;
   if (typeof value === 'string') return value;
-  if (value && typeof value === 'object' && 'content' in value && typeof value.content === 'string')
+  if (!value || typeof value !== 'object') return undefined;
+
+  if ('content' in value && typeof value.content === 'string') {
     return value.content;
+  }
+
   return undefined;
 });
 
 const blocks = computed(() => {
   const value = props.value;
   if (!value || typeof value !== 'object') return [];
+
   if ('type' in value && value.type === 'image') return [value];
   if ('content' in value && Array.isArray(value.content)) return value.content;
   return [];
 });
 
-const formattedText = computed(() =>
-  text.value === undefined ? undefined : readableText(text.value),
-);
+const formattedText = computed(() => {
+  if (text.value === undefined) return undefined;
+
+  return readableText(text.value);
+});
 
 const json = computed(() => {
+  // 调试快照可能包含 BigInt 或循环引用，转换后交给 JSON 查看器展示。
   const seen = new WeakSet<object>();
+
   return JSON.parse(
     JSON.stringify(props.value ?? null, (_key, value) => {
       if (typeof value === 'bigint') return String(value);
@@ -41,6 +51,7 @@ const json = computed(() => {
   );
 });
 </script>
+
 <template>
   <div class="dt-content">
     <MarkdownRender

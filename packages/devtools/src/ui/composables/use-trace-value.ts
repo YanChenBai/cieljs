@@ -1,7 +1,7 @@
 import { shallowRef, watch } from 'vue';
 
-import type { DevtoolsClient } from '../client/index.ts';
-import type { TraceEntry } from '../protocol/index.ts';
+import type { DevtoolsClient } from '../../client/index.ts';
+import type { TraceEntry } from '../../protocol/index.ts';
 
 export type TraceSection = 'input' | 'output' | 'raw';
 
@@ -17,12 +17,15 @@ export function useTraceValue(
 
   watch(
     () => [client(), entry().id, entry().revision, section()] as const,
-    async (_next, _previous, onCleanup) => {
+    async ([nextClient, nextId, , nextSection], previous, onCleanup) => {
       const controller = new AbortController();
       onCleanup(() => controller.abort());
+
+      // 同一条流式消息更新时保留旧内容；换记录或标签时才清空，避免闪烁。
       const selectionChanged =
-        _next[0] !== _previous?.[0] || _next[1] !== _previous?.[1] || _next[3] !== _previous?.[3];
+        nextClient !== previous?.[0] || nextId !== previous?.[1] || nextSection !== previous?.[3];
       if (selectionChanged) value.value = undefined;
+
       error.value = '';
       loading.value = false;
 
@@ -31,6 +34,7 @@ export function useTraceValue(
       if (!reference) return;
 
       loading.value = true;
+
       try {
         const result = await client().values.get(reference, { signal: controller.signal });
         if (!controller.signal.aborted) value.value = result;

@@ -2,20 +2,26 @@
 import { Button, Tabs } from '@vuetify/v0/components';
 import { computed, shallowRef } from 'vue';
 
-import type { DevtoolsClient } from '../client/index.ts';
-import ContentRenderer from './ContentRenderer.vue';
-import ExecutionView from './ExecutionView.vue';
-import { vFollowScroll } from './follow-scroll.ts';
-import MessageView from './MessageView.vue';
-import { useDevtools } from './useDevtools.ts';
+import type { DevtoolsClient } from '../../client/index.ts';
+import { useDevtools } from '../composables/use-devtools.ts';
+import { vFollowScroll } from '../directives/follow-scroll.ts';
+import ContentRenderer from './content/ContentRenderer.vue';
+import MessageView from './conversation/MessageView.vue';
+import ExecutionView from './execution/ExecutionView.vue';
+
 const props = defineProps<{ client: DevtoolsClient }>();
+
 const { steps, entries, error, hasOlder, loadingOlder, older, connect, clear } = useDevtools(
   props.client,
 );
+
 const query = shallowRef('');
+
 const messages = computed(() => entries.value.filter(entry => entry.kind === 'message').slice(-50));
+
 const tab = shallowRef('conversation');
 </script>
+
 <template>
   <section class="ciel-devtools" aria-label="Ciel DevTools">
     <Tabs.Root v-model="tab">

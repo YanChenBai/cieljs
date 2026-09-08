@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron';
-import type { Static } from 'typebox';
+import { Type, type Static } from 'typebox';
 
 import {
   DanmakuPageResultSchema,
@@ -8,16 +8,25 @@ import {
 } from '../../shared/schemas.ts';
 import type { Account } from '../../shared/types.ts';
 import { executePage, isAllowedPageUrl } from './page-executor.ts';
+import {
+  READ_ACCOUNT_SCRIPT,
+  PREPARE_PLAYER_SCRIPT,
+  READ_READINESS_SCRIPT,
+  READ_LIVE_STATUS_SCRIPT,
+} from './page-scripts.ts';
 import { sendDanmaku } from './send-danmaku.ts';
+import { waitForPage } from './wait-for-page.ts';
 
 export type LivePageReadiness = Static<typeof LivePageReadinessSchema>;
 export type DanmakuPageResult = Static<typeof DanmakuPageResultSchema>;
 
-const LOGIN_URL = 'https://passport.bilibili.com/login';
+// 登录后返回直播站，只有这里会提供 BilibiliLive.UID。
+const LOGIN_URL = 'https://passport.bilibili.com/login?gourl=https%3A%2F%2Flive.bilibili.com%2F';
 
 export class LivePage {
   private contents?: WebContents;
   private generation = 0;
+  private lifetime = new AbortController();
   private roomId?: number;
 
   attach(contents: WebContents): void {
@@ -29,7 +38,7 @@ export class LivePage {
       throw new Error('不能绑定非 Bilibili 页面');
     }
 
-    this.generation += 1;
+    this.invalidate();
     this.contents = contents;
     this.roomId = undefined;
 
@@ -38,7 +47,7 @@ export class LivePage {
         return;
       }
 
-      this.generation += 1;
+      this.invalidate();
       this.contents = undefined;
       this.roomId = undefined;
     });
@@ -47,7 +56,7 @@ export class LivePage {
   async login(): Promise<void> {
     const contents = this.requireContents();
 
-    this.generation += 1;
+    this.invalidate();
     this.roomId = undefined;
     await contents.loadURL(LOGIN_URL);
   }
@@ -55,7 +64,7 @@ export class LivePage {
   async logout(): Promise<void> {
     const contents = this.requireContents();
 
-    this.generation += 1;
+    this.invalidate();
     this.roomId = undefined;
 
     await contents.session.clearStorageData({
@@ -64,14 +73,14 @@ export class LivePage {
     await contents.loadURL(LOGIN_URL);
   }
 
-  async open(roomId: number): Promise<void> {
+  async open(roomId: number, signal?: AbortSignal): Promise<void> {
     if (!Number.isSafeInteger(roomId) || roomId < 1) {
       throw new Error('roomId 必须是正整数');
     }
 
     const contents = this.requireContents();
 
-    this.generation += 1;
+    this.invalidate();
     const generation = this.generation;
     this.roomId = undefined;
 
@@ -81,24 +90,49 @@ export class LivePage {
       throw new Error('打开直播间期间页面已切换');
     }
 
+    await this.prepareRoom(generation, signal);
     this.roomId = roomId;
   }
 
-  async account(): Promise<Account | undefined> {
+  /** UID 就绪前只读页面状态，避免未登录时反复请求账号 API。 */
+  async account(signal?: AbortSignal): Promise<Account | undefined> {
     const contents = this.requireContents();
     const generation = this.generation;
     const account = await executePage(
       contents,
-      `fetch("https://api.bilibili.com/x/web-interface/nav", { credentials: "include" })
-        .then(response => response.json())
-        .then(body => body.code === 0 && body.data?.isLogin
-          ? ({ uid: body.data.mid, name: body.data.uname, face: body.data.face ?? "" })
-          : null)`,
+      READ_ACCOUNT_SCRIPT,
       OptionalAccountSchema,
-      this.executionOptions('读取登录账号', generation),
+      this.executionOptions('读取登录账号', generation, signal),
     );
 
     return account ?? undefined;
+  }
+
+  waitForLogin(signal?: AbortSignal): Promise<Account> {
+    const options = this.executionOptions('等待 Bilibili 登录', this.generation, signal);
+
+    return waitForPage(() => this.account(options.signal), {
+      action: options.action,
+      timeoutMs: 360_000,
+      intervalMs: 1_500,
+      signal: options.signal,
+    });
+  }
+
+  /** 导航完成不代表播放器已经挂载，等待实例可用后再应用网页全屏。 */
+  private prepareRoom(generation: number, signal?: AbortSignal) {
+    const contents = this.requireContents();
+    const options = this.executionOptions('初始化直播播放器', generation, signal);
+
+    return waitForPage(
+      async () => {
+        const ready = await executePage(contents, PREPARE_PLAYER_SCRIPT, Type.Boolean(), options);
+
+        if (ready) return true;
+        return undefined;
+      },
+      { action: options.action, timeoutMs: 15_000, signal: options.signal },
+    );
   }
 
   readiness(): Promise<LivePageReadiness> {
@@ -107,25 +141,22 @@ export class LivePage {
 
     return executePage(
       contents,
-      `(() => {
-        const match = location.pathname.match(/^\\/(\\d+)/u);
-        const pathRoomId = match ? Number(match[1]) : null;
-        const room = window.__NEPTUNE_IS_MY_WAIFU__?.roomInitRes?.data;
-        // B 站会把真实房号重定向为短房号，仅在当前路径匹配时采用页面房间信息。
-        const matchesRoom = room && (pathRoomId === room.room_id || pathRoomId === room.short_id);
-        const roomId = matchesRoom ? room.room_id : pathRoomId;
-        return {
-          roomId,
-          // 感知通过独立媒体流运行，不依赖页面暴露播放器实例或所有资源加载完毕。
-          ready: location.hostname === "live.bilibili.com"
-            && roomId !== null
-            && document.readyState !== "loading"
-            && Boolean(document.body),
-          canSendDanmaku: Boolean(document.querySelector("textarea, [contenteditable=true]")),
-        };
-      })()`,
+      READ_READINESS_SCRIPT,
       LivePageReadinessSchema,
       this.executionOptions('检查直播页面状态', generation),
+    );
+  }
+
+  /** 定期读取播放器当前状态，避免依赖页面没有公开解绑接口的事件监听器。 */
+  liveStatus(signal?: AbortSignal) {
+    const contents = this.requireContents();
+    const generation = this.generation;
+
+    return executePage(
+      contents,
+      READ_LIVE_STATUS_SCRIPT,
+      Type.Union([Type.Literal('live'), Type.Literal('offline'), Type.Null()]),
+      this.executionOptions('检查直播状态', generation, signal),
     );
   }
 
@@ -133,17 +164,26 @@ export class LivePage {
     const contents = this.requireContents();
     const generation = this.generation;
     const roomId = this.roomId;
-    if (!roomId || (await this.readiness()).roomId !== roomId)
+
+    if (!roomId) throw new Error('当前页面不是目标直播间');
+
+    const readiness = await this.readiness();
+    if (readiness.roomId !== roomId) {
       throw new Error('当前页面不是目标直播间');
+    }
+
     if (generation !== this.generation) throw new Error('检查发送目标期间直播间已切换');
+
     const result = await sendDanmaku(contents, content);
-    if (generation !== this.generation)
+    if (generation !== this.generation) {
       throw new Error('发送期间直播间已切换，发送结果不再属于当前访问');
+    }
+
     return result;
   }
 
   close(): void {
-    this.generation += 1;
+    this.invalidate();
     this.roomId = undefined;
   }
 
@@ -155,9 +195,16 @@ export class LivePage {
     return this.contents;
   }
 
-  private executionOptions(action: string, generation: number) {
+  private invalidate() {
+    this.lifetime.abort(new Error('直播页面已切换或关闭'));
+    this.lifetime = new AbortController();
+    this.generation += 1;
+  }
+
+  private executionOptions(action: string, generation: number, signal?: AbortSignal) {
     return {
       action,
+      signal: signal ? AbortSignal.any([signal, this.lifetime.signal]) : this.lifetime.signal,
       generation,
       currentGeneration: () => this.generation,
     };

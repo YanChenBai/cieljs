@@ -1,4 +1,4 @@
-import { join } from 'path';
+import { join } from 'node:path';
 
 import { app, BrowserWindow } from 'electron';
 
@@ -8,7 +8,6 @@ import { loadWatchEnvironment, prepareWatchResources, migrateWatchResources } fr
 import { registerWatchBliveIpc } from './ipc.ts';
 
 function createWindow(): void {
-  // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -58,6 +57,7 @@ function createWindow(): void {
     if (closing) return;
     event.preventDefault();
     closing = true;
+
     void disposeIpc()
       .catch(error => console.error('关闭观看运行时失败', error))
       .finally(() => {
@@ -72,8 +72,7 @@ function createWindow(): void {
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
+  // 开发环境连接热更新服务，打包后使用本地渲染入口。
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
   } else {
@@ -81,34 +80,24 @@ function createWindow(): void {
   }
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 loadWatchEnvironment(app.getAppPath());
 prepareWatchResources();
 
 app.whenReady().then(async () => {
   await migrateWatchResources();
-  // Set app user model id for windows
   app.setAppUserModelId('com.electron');
 
   createWindow();
 
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
+  app.on('activate', () => {
+    // macOS 关闭窗口后保留进程，点击 Dock 图标时重新创建窗口。
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// macOS 由用户显式退出应用，其他平台关闭最后一个窗口即退出。
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.

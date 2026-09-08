@@ -2,11 +2,11 @@
 import { Button } from '@vuetify/v0/components';
 import { computed, shallowRef } from 'vue';
 
-import type { DevtoolsClient } from '../client/index.ts';
-import type { TraceEntry } from '../protocol/index.ts';
-import ContentRenderer from './ContentRenderer.vue';
-import { vFollowScroll } from './follow-scroll.ts';
-import { groupTraceSteps } from './trace-entries.ts';
+import type { DevtoolsClient } from '../../../client/index.ts';
+import type { TraceEntry } from '../../../protocol/index.ts';
+import { vFollowScroll } from '../../directives/follow-scroll.ts';
+import { groupTraceSteps } from '../../utils/trace-entries.ts';
+import ContentRenderer from '../content/ContentRenderer.vue';
 import TraceDetail from './TraceDetail.vue';
 import TraceList from './TraceList.vue';
 
@@ -18,6 +18,7 @@ const props = defineProps<{
   loadingOlder: boolean;
 }>();
 defineEmits<{ older: [] }>();
+
 const selectedId = shallowRef('');
 const grouped = computed(() => groupTraceSteps(props.steps));
 const selected = computed(() => grouped.value.find(entry => entry.id === selectedId.value));
@@ -28,7 +29,9 @@ const filtered = computed(() =>
       .includes(props.query.toLowerCase()),
   ),
 );
+
 const split = shallowRef(36);
+
 function resize(event: PointerEvent) {
   const handle = event.currentTarget as HTMLElement;
   handle.setPointerCapture(event.pointerId);
@@ -36,10 +39,12 @@ function resize(event: PointerEvent) {
 function moveSplit(event: PointerEvent) {
   const handle = event.currentTarget as HTMLElement;
   if (!handle.hasPointerCapture(event.pointerId)) return;
+
   const bounds = handle.parentElement!.getBoundingClientRect();
   split.value = Math.max(20, Math.min(75, ((event.clientX - bounds.left) / bounds.width) * 100));
 }
 </script>
+
 <template>
   <div
     class="dt-network"

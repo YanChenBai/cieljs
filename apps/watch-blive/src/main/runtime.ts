@@ -17,6 +17,8 @@ import { createRoomSessionOptions } from './agent/room-session.ts';
 import { createDanmakuTool, DanmakuRunGate } from './agent/tools.ts';
 import { BilibiliApi } from './bilibili/api.ts';
 import { LivePage } from './bilibili/live-page.ts';
+import { LiveStatusMonitor } from './bilibili/live-status-monitor.ts';
+import { readRoomLiveStatus } from './bilibili/live-status.ts';
 import { LiveMedia } from './media/live-media.ts';
 import { ROOM_REVIEW_AFTER_MS } from './prompts.ts';
 import { RoomScorePolicy } from './room-score-policy.ts';
@@ -58,8 +60,10 @@ class WatchBliveRuntime implements WatchBlive {
   private closePromise?: Promise<void>;
   private operation: Promise<void> = Promise.resolve();
   private runController?: AbortController;
+  private loginController?: AbortController;
   private ciel?: Ciel;
   private visit?: RoomVisit;
+  private liveStatusMonitor?: LiveStatusMonitor;
   private accountValue?: Account;
   private visitGeneration = 0;
   private readonly listeners = new Set<(event: WatchEvent) => void>();
@@ -90,22 +94,28 @@ class WatchBliveRuntime implements WatchBlive {
   }
 
   async login(): Promise<Account> {
-    await this.options.livePage.login();
-    this.setStatus('awaiting-login');
+    if (this.closePromise) throw new Error('Watch Blive 已关闭');
 
-    for (let attempt = 0; attempt < 240; attempt += 1) {
-      const account = await this.options.livePage.account();
+    await this.stop();
+    const controller = new AbortController();
+    this.loginController = controller;
 
-      if (account) {
-        this.accountValue = account;
-        this.setStatus(this.ciel ? 'watching' : 'idle');
-        return account;
+    try {
+      await this.options.livePage.login();
+      controller.signal.throwIfAborted();
+      this.setStatus('awaiting-login');
+
+      const account = await this.options.livePage.waitForLogin(controller.signal);
+      controller.signal.throwIfAborted();
+      this.accountValue = account;
+      return account;
+    } finally {
+      // 超时和取消也必须离开 awaiting-login；关闭后的状态不能被迟到结果覆盖。
+      if (this.loginController === controller) {
+        this.loginController = undefined;
+        if (this.currentStatus === 'awaiting-login') this.setStatus('idle');
       }
-
-      await delay(1_500);
     }
-
-    throw new Error('等待 Bilibili 登录超时');
   }
 
   async logout(): Promise<void> {
@@ -120,6 +130,7 @@ class WatchBliveRuntime implements WatchBlive {
     }
 
     validateStartOptions(options);
+    this.loginController?.abort();
     this.runController?.abort();
 
     const controller = new AbortController();
@@ -167,6 +178,7 @@ class WatchBliveRuntime implements WatchBlive {
   }
 
   stop(): Promise<void> {
+    this.loginController?.abort();
     this.runController?.abort();
 
     return this.enqueue(() => this.stopRuntime());
@@ -249,7 +261,7 @@ class WatchBliveRuntime implements WatchBlive {
     });
 
     try {
-      await this.options.livePage.open(room.roomId);
+      await this.options.livePage.open(room.roomId, signal);
       await this.waitUntilReady(room.roomId, generation, signal);
 
       const startedAt = Date.now();
@@ -258,12 +270,15 @@ class WatchBliveRuntime implements WatchBlive {
       );
       const playUrl = await this.api.playUrl(room.roomId);
       signal.throwIfAborted();
+      const monitor = this.createLiveStatusMonitor(room.roomId, generation, signal);
+      this.liveStatusMonitor = monitor;
       const media = new LiveMedia({
         roomId: room.roomId,
         playUrl,
         perception,
         ffmpegPath: this.options.ffmpegPath,
         onError: error => this.emitError('media', error),
+        onStopped: error => monitor.mediaStopped(error),
       });
       const visit = new RoomVisit({
         devtools: this.options.devtools,
@@ -284,6 +299,7 @@ class WatchBliveRuntime implements WatchBlive {
       visit.start();
       this.setStatus('watching');
       this.emit({ type: 'room_opened', room });
+      monitor.start();
     } catch (error) {
       this.options.livePage.close();
       if (this.visit?.generation === generation) {
@@ -299,7 +315,13 @@ class WatchBliveRuntime implements WatchBlive {
     const visit = this.visit;
     const mode = this.requireStartOptions().mode;
 
-    if (mode.type === 'follow' || !visit || visit.generation !== generation || signal.aborted) {
+    if (
+      this.currentStatus !== 'watching' ||
+      mode.type === 'follow' ||
+      !visit ||
+      visit.generation !== generation ||
+      signal.aborted
+    ) {
       return;
     }
 
@@ -362,9 +384,67 @@ class WatchBliveRuntime implements WatchBlive {
     throw new Error(`直播间 ${roomId} 页面未在预期时间内就绪`);
   }
 
+  private createLiveStatusMonitor(roomId: number, generation: number, signal: AbortSignal) {
+    return new LiveStatusMonitor({
+      readStatus: (checkSignal, reason) =>
+        readRoomLiveStatus({
+          page: this.options.livePage,
+          api: this.api,
+          roomId,
+          signal: checkSignal,
+          reason,
+        }),
+      onOffline: () => this.endVisit(generation, signal, 'offline'),
+      onMediaFailure: error => this.endVisit(generation, signal, 'media_failed', error),
+      onError: error => this.emitError('live_status', error),
+    });
+  }
+
+  private endVisit(
+    generation: number,
+    signal: AbortSignal,
+    reason: 'offline' | 'media_failed',
+    error?: Error,
+  ) {
+    const visit = this.visit;
+    if (
+      !visit ||
+      visit.generation !== generation ||
+      signal.aborted ||
+      this.currentStatus !== 'watching'
+    )
+      return;
+
+    const mode = this.requireStartOptions().mode;
+    // 先禁止新弹幕并中止正在思考的 Agent，再排队关闭资源，避免下播后仍发送。
+    this.setStatus('stopping');
+    visit.session.agent.abort();
+    if (error) this.emitError('media', error);
+    void this.enqueue(async () => {
+      if (signal.aborted || this.visit?.generation !== generation) return;
+      await this.closeVisit(reason);
+      if (reason === 'offline' && mode.type === 'explore') {
+        await this.explore(mode.areaId, signal);
+      } else {
+        await this.stopRuntime();
+      }
+    }).catch(async cause => {
+      if (signal.aborted) return;
+      this.emitError('live_status', cause);
+      // 重新选房失败也必须退出 stopping/exploring，不能留下无媒体的观看状态。
+      try {
+        await this.stop();
+      } catch (cleanupError) {
+        this.emitError('stop', cleanupError);
+      }
+    });
+  }
+
   private async closeVisit(reason: string): Promise<void> {
     const visit = this.visit;
 
+    this.liveStatusMonitor?.close();
+    this.liveStatusMonitor = undefined;
     this.visit = undefined;
     this.visitGeneration += 1;
     this.scorePolicy.reset();

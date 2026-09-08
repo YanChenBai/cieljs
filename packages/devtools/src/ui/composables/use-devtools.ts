@@ -1,8 +1,8 @@
 import { onMounted, onUnmounted, shallowRef } from 'vue';
 
-import type { DevtoolsClient } from '../client/index.ts';
-import type { TraceEntry } from '../protocol/index.ts';
-import { mergeTraceEntries } from './trace-entries.ts';
+import type { DevtoolsClient } from '../../client/index.ts';
+import type { TraceEntry } from '../../protocol/index.ts';
+import { mergeTraceEntries } from '../utils/trace-entries.ts';
 
 const VIEW_CAPACITY = 600;
 const PAGE_SIZE = 100;
@@ -16,20 +16,24 @@ export function useDevtools(client: DevtoolsClient) {
   const loadingOlder = shallowRef(false);
   let controller: AbortController | undefined;
   let historyController: AbortController | undefined;
+
   // Entry 和原始事件各有自己的序号，清空水位不能混用。
   let clearedEntrySequence = 0;
   let clearedStepSequence = 0;
 
   async function connect() {
     controller?.abort();
+
     const current = new AbortController();
     controller = current;
     connected.value = false;
     error.value = '';
+
     try {
       const updates = await client.updates(undefined, { signal: current.signal });
       for await (const incoming of updates) {
         if (current.signal.aborted) break;
+
         connected.value = true;
         steps.value = mergeTraceEntries(
           steps.value,
@@ -59,6 +63,7 @@ export function useDevtools(client: DevtoolsClient) {
         { signal: current.signal },
       );
       if (current.signal.aborted) return;
+
       const visible = incoming.filter(step => step.sequence > clearedStepSequence);
       hasOlder.value = incoming.length === PAGE_SIZE && visible.length === incoming.length;
       steps.value = mergeTraceEntries(steps.value, visible).slice(0, VIEW_CAPACITY);
@@ -77,6 +82,7 @@ export function useDevtools(client: DevtoolsClient) {
       ...entries.value.map(entry => entry.sequence),
     );
     clearedStepSequence = Math.max(clearedStepSequence, ...steps.value.map(step => step.sequence));
+
     entries.value = [];
     steps.value = [];
     hasOlder.value = false;
@@ -87,5 +93,6 @@ export function useDevtools(client: DevtoolsClient) {
     controller?.abort();
     historyController?.abort();
   });
+
   return { steps, entries, error, connected, hasOlder, loadingOlder, older, connect, clear };
 }

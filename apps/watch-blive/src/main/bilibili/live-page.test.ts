@@ -1,7 +1,9 @@
 import { runInNewContext } from 'node:vm';
 
 import type { WebContents } from 'electron';
-import { expect, it } from 'vite-plus/test';
+import { afterEach, expect, it, vi } from 'vite-plus/test';
+
+afterEach(() => vi.useRealTimers());
 
 import { LivePage } from './live-page.ts';
 
@@ -49,4 +51,115 @@ it('短房号跳转仍识别真实房间 ID', async () => {
       ),
   } as unknown as WebContents);
   await expect(page.readiness()).resolves.toMatchObject({ ready: true, roomId: 21696950 });
+});
+
+it.each([
+  [0, 'offline'],
+  [1, 'live'],
+  [2, 'offline'],
+  [99, null],
+  [undefined, null],
+])('读取播放器 liveStatus=%s', async (status, expected) => {
+  const page = new LivePage();
+  page.attach({
+    isDestroyed: () => false,
+    getURL: () => 'https://live.bilibili.com/123',
+    once: () => undefined,
+    executeJavaScript: (code: string) =>
+      Promise.resolve(
+        runInNewContext(code, {
+          window: { livePlayer: { getPlayerInfo: () => ({ liveStatus: status }) } },
+        }),
+      ),
+  } as unknown as WebContents);
+  await expect(page.liveStatus()).resolves.toBe(expected);
+});
+
+function createPageFixture() {
+  const globals = {
+    BilibiliLive: { UID: 0 },
+    livePlayer: undefined as { setFullscreenStatus: (status: number) => void } | undefined,
+  };
+  const fetch = vi.fn().mockResolvedValue({
+    json: async () => ({
+      code: 0,
+      data: { isLogin: true, mid: 42, uname: '测试账号', face: '' },
+    }),
+  });
+  const addClass = vi.fn();
+  const page = new LivePage();
+  page.attach({
+    isDestroyed: () => false,
+    getURL: () => 'https://live.bilibili.com/123',
+    once: () => undefined,
+    loadURL: async () => undefined,
+    executeJavaScript: (code: string) =>
+      Promise.resolve(
+        runInNewContext(code, {
+          window: globals,
+          fetch,
+          document: { body: { classList: { add: addClass } } },
+        }),
+      ),
+  } as unknown as WebContents);
+
+  return { page, globals, fetch, addClass };
+}
+
+it('UID 为 0 时不读取账号 API，登录后才返回账号', async () => {
+  const { page, globals, fetch } = createPageFixture();
+  await expect(page.account()).resolves.toBeUndefined();
+  expect(fetch).not.toHaveBeenCalled();
+
+  globals.BilibiliLive.UID = 42;
+  await expect(page.account()).resolves.toMatchObject({ uid: 42, name: '测试账号' });
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it('登录轮询等待 UID 变化，只在成功后请求 API', async () => {
+  vi.useFakeTimers();
+  const { page, globals, fetch } = createPageFixture();
+  const account = page.waitForLogin();
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(fetch).not.toHaveBeenCalled();
+
+  globals.BilibiliLive.UID = 42;
+  await vi.advanceTimersByTimeAsync(1_500);
+  await expect(account).resolves.toMatchObject({ uid: 42 });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('登录超过六分钟后超时，并停止轮询', async () => {
+  vi.useFakeTimers();
+  const { page, fetch } = createPageFixture();
+  const rejected = expect(page.waitForLogin()).rejects.toThrow('等待 Bilibili 登录超时');
+
+  await vi.advanceTimersByTimeAsync(360_000);
+  await rejected;
+  expect(fetch).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('进房等待播放器挂载后设置网页全屏并隐藏侧栏', async () => {
+  vi.useFakeTimers();
+  const { page, globals, addClass } = createPageFixture();
+  const opening = page.open(123);
+  await vi.advanceTimersByTimeAsync(500);
+  expect(addClass).not.toHaveBeenCalled();
+
+  const setFullscreenStatus = vi.fn();
+  globals.livePlayer = { setFullscreenStatus };
+  await vi.advanceTimersByTimeAsync(500);
+  await opening;
+  expect(setFullscreenStatus).toHaveBeenCalledExactlyOnceWith(1);
+  expect(addClass).toHaveBeenCalledExactlyOnceWith('hide-aside-area');
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('关闭页面取消登录等待，避免迟到的登录更新账号', async () => {
+  const { page } = createPageFixture();
+  const rejected = expect(page.waitForLogin()).rejects.toThrow('直播页面已切换或关闭');
+  page.close();
+  await rejected;
 });

@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { Button } from '@vuetify/v0/components';
 
-import type { TraceEntry } from '../protocol/index.ts';
+import type { TraceEntry } from '../../../protocol/index.ts';
+
 defineProps<{ entries: TraceEntry[]; selectedId: string }>();
 defineEmits<{ select: [entry: TraceEntry] }>();
+
+const kindIcons = { tool: '{}', message: '≡', event: '◇' } as const;
+
 function duration(entry: TraceEntry) {
   const elapsed = Math.max(0, (entry.endedAt ?? Date.now()) - entry.startedAt);
   const value = elapsed < 1000 ? `${Math.round(elapsed)} ms` : `${(elapsed / 1000).toFixed(1)} s`;
   return entry.status === 'running' ? `${value}…` : value;
 }
 </script>
+
 <template>
   <div class="dt-list">
     <div class="dt-list-heading"><span>Name</span><span>耗时</span></div>
@@ -22,7 +27,7 @@ function duration(entry: TraceEntry) {
       @click="$emit('select', entry)"
     >
       <span class="dt-step-icon" :data-kind="entry.kind">
-        {{ entry.kind === 'tool' ? '{}' : entry.kind === 'message' ? '≡' : '◇' }}
+        {{ kindIcons[entry.kind] }}
       </span>
       <span class="dt-step-name">{{ entry.label ? `${entry.label} · ` : '' }}{{ entry.name }}</span>
       <span class="dt-duration" :title="entry.status === 'running' ? '执行中' : '执行耗时'">

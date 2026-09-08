@@ -2,20 +2,24 @@
 import { Button, Tabs } from '@vuetify/v0/components';
 import { shallowRef } from 'vue';
 
-import type { DevtoolsClient } from '../client/index.ts';
-import type { TraceEntry } from '../protocol/index.ts';
-import ContentRenderer from './ContentRenderer.vue';
-import Disclosure from './Disclosure.vue';
-import { useTraceValue, type TraceSection } from './useTraceValue.ts';
+import type { DevtoolsClient } from '../../../client/index.ts';
+import type { TraceEntry } from '../../../protocol/index.ts';
+import { useTraceValue, type TraceSection } from '../../composables/use-trace-value.ts';
+import ContentRenderer from '../content/ContentRenderer.vue';
+import Disclosure from '../content/Disclosure.vue';
+
 const props = defineProps<{ client: DevtoolsClient; entry: TraceEntry }>();
 defineEmits<{ close: [] }>();
+
 const tab = shallowRef<TraceSection | 'overview'>('overview');
+
 const sections = ['input', 'output', 'raw'] as const;
 const { value, error, loading } = useTraceValue(
   () => props.client,
   () => props.entry,
   () => (tab.value === 'overview' ? undefined : tab.value),
 );
+
 const tabs = [
   { value: 'overview', label: '概览' },
   { value: 'input', label: '输入' },
@@ -23,6 +27,7 @@ const tabs = [
   { value: 'raw', label: '原始事件' },
 ];
 </script>
+
 <template>
   <div class="dt-detail">
     <Tabs.Root v-model="tab">

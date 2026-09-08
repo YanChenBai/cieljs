@@ -11,17 +11,21 @@ const props = defineProps<{
   pending: string;
   ready: boolean;
 }>();
+
 const emit = defineEmits<{
   start: [options: StartWatchOptions];
   stop: [];
 }>();
+
 const mode = shallowRef<WatchMode['type']>('follow');
 const roomId = shallowRef<number>();
 const areaId = shallowRef<number>();
 const live = shallowRef(false);
 const areaSearch = shallowRef('');
+
 const filteredAreas = computed(() => {
   const query = areaSearch.value.trim().toLocaleLowerCase();
+
   return props.areas
     .map(group => ({
       ...group,
@@ -31,25 +35,34 @@ const filteredAreas = computed(() => {
     }))
     .filter(group => group.children.length > 0 || group.name.toLocaleLowerCase().includes(query));
 });
-const valid = computed(
-  () =>
-    Number.isSafeInteger(mode.value === 'follow' ? roomId.value : areaId.value) &&
-    (mode.value === 'follow' ? roomId.value! : areaId.value!) > 0,
-);
+
+// 模式和目标 ID 一起推导，校验与提交始终使用同一份选择。
+const selectedMode = computed<WatchMode>(() => {
+  if (mode.value === 'follow') return { type: 'follow', roomId: roomId.value ?? 0 };
+
+  return { type: 'explore', areaId: areaId.value ?? 0 };
+});
+
+const valid = computed(() => {
+  const selected = selectedMode.value;
+  const id = selected.type === 'follow' ? selected.roomId : selected.areaId;
+
+  return Number.isSafeInteger(id) && id > 0;
+});
+
 function start() {
-  if (!valid.value || !props.ready || props.pending || props.active) return;
+  const canStart = valid.value && props.ready && !props.pending && !props.active;
+  if (!canStart) return;
+
   emit('start', {
-    mode:
-      mode.value === 'follow'
-        ? { type: 'follow', roomId: roomId.value! }
-        : { type: 'explore', areaId: areaId.value! },
+    mode: selectedMode.value,
     danmakuDelivery: live.value ? 'live' : 'simulate',
   });
 }
 </script>
 
 <template>
-  <section class="controls">
+  <section class="px-[18px] py-4">
     <div class="section-heading">观看设置</div>
     <form @submit.prevent="start">
       <fieldset :disabled="active || !!pending">
@@ -105,11 +118,11 @@ function start() {
         @click="start"
         :disabled="!ready || !!pending || !valid"
         :aria-busy="pending === 'start'"
-        ><LoaderCircle v-if="pending === 'start'" class="spinning" :size="16" /><Play
-          v-else
-          :size="16"
-        />{{ pending === 'start' ? '正在启动…' : '开始观看' }}</Button.Root
       >
+        <LoaderCircle v-if="pending === 'start'" class="spinning" :size="16" />
+        <Play v-else :size="16" />
+        {{ pending === 'start' ? '正在启动…' : '开始观看' }}
+      </Button.Root>
       <Button.Root
         v-else
         class="action stop-action"
@@ -117,11 +130,11 @@ function start() {
         :disabled="pending === 'stop'"
         :aria-busy="pending === 'stop'"
         @click="emit('stop')"
-        ><LoaderCircle v-if="pending === 'stop'" class="spinning" :size="16" /><Square
-          v-else
-          :size="16"
-        />{{ pending === 'stop' ? '正在停止…' : '停止观看' }}</Button.Root
       >
+        <LoaderCircle v-if="pending === 'stop'" class="spinning" :size="16" />
+        <Square v-else :size="16" />
+        {{ pending === 'stop' ? '正在停止…' : '停止观看' }}
+      </Button.Root>
     </form>
   </section>
 </template>

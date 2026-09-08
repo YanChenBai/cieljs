@@ -18,23 +18,28 @@ export function useWatchBlive() {
 
   function receive(event: WatchBridgeEvent) {
     const text = describeWatchEvent(event);
-    if (text)
+    if (text) {
       events.value = [
         ...events.value,
         { id: ++eventId, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text },
       ].slice(-60);
+    }
+
     if (event.type === 'status') state.value = { ...state.value, status: event.status };
     if (event.type === 'room_opened') state.value = { ...state.value, room: event.room };
     if (event.type === 'room_closed') state.value = { ...state.value, room: undefined };
     if (event.type === 'error') error.value = event.message;
   }
+
   const unsubscribe = watchBridge.onEvent(receive);
   onUnmounted(unsubscribe);
 
   async function run(name: string, action: () => Promise<unknown>) {
     if (pending.value && name !== 'stop') return;
+
     pending.value = name;
     error.value = '';
+
     try {
       await action();
     } catch (cause) {
@@ -47,10 +52,12 @@ export function useWatchBlive() {
   async function refreshAccount() {
     account.value = await watchBridge.account();
   }
+
   async function attached() {
     ready.value = true;
     await run('refresh', refreshAccount);
   }
+
   onMounted(() =>
     run('initialize', async () => {
       areas.value = await watchBridge.areas();
@@ -70,7 +77,10 @@ export function useWatchBlive() {
     attached,
     start: (options: StartWatchOptions) => run('start', () => watchBridge.start(options)),
     stop: () => run('stop', () => watchBridge.stop()),
-    login: () => run('login', () => watchBridge.login()),
+    login: () =>
+      run('login', async () => {
+        account.value = await watchBridge.login();
+      }),
     logout: () =>
       run('logout', async () => {
         await watchBridge.logout();

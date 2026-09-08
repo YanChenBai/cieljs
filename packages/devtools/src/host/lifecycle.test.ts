@@ -119,7 +119,7 @@ it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {
   const stream = await client.updates(undefined, { signal: controller.signal });
   expect((await stream.next()).value?.entries).toHaveLength(1);
   controller.abort();
-  await stream.return?.();
+  await stream.return?.(undefined);
   await handler.close(channel.port1);
 });
 
@@ -132,4 +132,40 @@ it('宿主关闭会结束等待中的更新订阅', async () => {
   const pending = updates.next();
   host.close();
   expect((await pending).done).toBe(true);
+});
+
+it('缺少工具 start 的 update 仍保存原始事件', () => {
+  const host = new DevtoolsHost();
+  cleanup.push(() => host.close());
+  host.agentListener('late')({
+    type: 'tool_execution_update',
+    toolCallId: 'unknown',
+    toolName: 'search',
+    args: {},
+    partialResult: { text: '部分结果' },
+  });
+  const events = host.store.list<TraceEvent>('event');
+  expect(events).toHaveLength(1);
+  expect(events[0]?.toolCallId).toBe('unknown');
+});
+
+it('两个观察器交错执行时保持独立的消息和 run 关联', () => {
+  const host = new DevtoolsHost();
+  cleanup.push(() => host.close());
+  const first = host.agentListener('first');
+  const second = host.agentListener('second');
+  const message = { role: 'user' as const, content: 'hello', timestamp: 0 };
+  first({ type: 'agent_start' });
+  second({ type: 'agent_start' });
+  first({ type: 'message_start', message });
+  second({ type: 'message_start', message });
+  first({ type: 'message_end', message });
+  second({ type: 'message_end', message });
+  const events = host.store.list<TraceEvent>('event');
+  const a = events.filter(event => event.sessionId === 'first');
+  const b = events.filter(event => event.sessionId === 'second');
+  expect(a[1]?.messageId).toBe(a[2]?.messageId);
+  expect(b[1]?.messageId).toBe(b[2]?.messageId);
+  expect(a[1]?.messageId).not.toBe(b[1]?.messageId);
+  expect(a[0]?.runId).not.toBe(b[0]?.runId);
 });
