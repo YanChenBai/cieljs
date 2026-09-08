@@ -10,7 +10,7 @@ const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('node:child_process', () => ({ spawn }));
 beforeEach(() => vi.resetAllMocks());
 
-function setup() {
+function setup(live = true) {
   const child = Object.assign(new EventEmitter(), {
     stdout: new PassThrough(),
     stderr: new PassThrough(),
@@ -25,17 +25,37 @@ function setup() {
   spawn.mockReturnValue(child);
   const onStopped = vi.fn();
   const onError = vi.fn();
+  const onProgress = vi.fn();
+  const imageWrite = vi.fn().mockResolvedValue(undefined);
+  const audioWrite = vi.fn();
   const media = new LiveMedia({
     roomId: 123,
     input: 'https://example.com/live',
-    live: true,
-    perception: {} as Perception,
+    live,
+    perception: {
+      asr: { write: audioWrite },
+      image: { write: imageWrite },
+    } as unknown as Perception,
     onStopped,
     onError,
+    onProgress,
   });
   media.start();
-  return { media, child, onStopped, onError };
+  return { media, child, onStopped, onError, onProgress, imageWrite, audioWrite };
 }
+
+it('加速解码的帧按媒体时间分布，进度支持分块输出', async () => {
+  const { media, child, imageWrite, onProgress } = setup(false);
+  child.stdio[3]!.write(Buffer.from([255, 216, 255, 217, 255, 216, 255, 217]));
+  expect(
+    imageWrite.mock.calls[1]![0].at.getTime() - imageWrite.mock.calls[0]![0].at.getTime(),
+  ).toBe(6666);
+  child.stderr.write('Duration: 00:02:00.00, start: 0\nout_time_');
+  child.stderr.write('us=60000000\n');
+  expect(onProgress).toHaveBeenCalledWith(60, 120);
+  expect(media.endAt.getTime()).toBe(imageWrite.mock.calls[1]![0].at.getTime());
+  await media.close();
+});
 
 it('自然 EOF 也通知宿主，不遗留失去媒体的 watching 状态', async () => {
   const { media, child, onStopped } = setup();
@@ -61,15 +81,12 @@ it('主动停止会等待 close，但不当作下播或异常退出', async () =
   expect(onStopped).not.toHaveBeenCalled();
 });
 
-it('录播按实时速度读取，直播保留断线重连参数', () => {
+it('视频加速预处理并报告进度，直播保留断线重连参数', () => {
   const recording = ffmpegArguments(123, 'C:\\Videos\\recording.mp4', false);
   const live = ffmpegArguments(123, 'https://example.com/live.flv', true);
 
-  expect(recording.slice(recording.indexOf('-re'), recording.indexOf('-i') + 2)).toEqual([
-    '-re',
-    '-i',
-    'C:\\Videos\\recording.mp4',
-  ]);
+  expect(recording).not.toContain('-re');
+  expect(recording).toContain('-progress');
   expect(live).toContain('-reconnect');
   expect(live).not.toContain('-re');
 });

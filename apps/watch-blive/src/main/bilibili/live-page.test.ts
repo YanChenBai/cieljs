@@ -87,24 +87,39 @@ function createPageFixture() {
     }),
   });
   const addClass = vi.fn();
+  const openLogin = vi.fn();
+  const loadURL = vi.fn().mockResolvedValue(undefined);
   const page = new LivePage();
   page.attach({
     isDestroyed: () => false,
     getURL: () => 'https://live.bilibili.com/123',
     once: () => undefined,
-    loadURL: async () => undefined,
+    loadURL,
     executeJavaScript: (code: string) =>
       Promise.resolve(
         runInNewContext(code, {
           window: globals,
           fetch,
-          document: { body: { classList: { add: addClass } } },
+          document: {
+            body: { classList: { add: addClass } },
+            querySelector: (selector: string) =>
+              selector === '.header-login-entry' ? { click: openLogin } : null,
+          },
         }),
       ),
   } as unknown as WebContents);
 
-  return { page, globals, fetch, addClass };
+  return { page, globals, fetch, addClass, openLogin, loadURL };
 }
+
+it('登录打开站内弹窗，不导航当前页面', async () => {
+  const { page, openLogin, loadURL } = createPageFixture();
+
+  await page.login();
+
+  expect(openLogin).toHaveBeenCalledOnce();
+  expect(loadURL).not.toHaveBeenCalled();
+});
 
 it('UID 为 0 时不读取账号 API，登录后才返回账号', async () => {
   const { page, globals, fetch } = createPageFixture();

@@ -38,7 +38,7 @@ export function useDevtools(client: DevtoolsClient) {
         steps.value = mergeTraceEntries(
           steps.value,
           incoming.steps.filter(step => step.sequence > clearedStepSequence),
-        ).slice(-VIEW_CAPACITY);
+        );
         entries.value = mergeTraceEntries(
           entries.value,
           incoming.entries.filter(entry => entry.sequence > clearedEntrySequence),
@@ -66,7 +66,7 @@ export function useDevtools(client: DevtoolsClient) {
 
       const visible = incoming.filter(step => step.sequence > clearedStepSequence);
       hasOlder.value = incoming.length === PAGE_SIZE && visible.length === incoming.length;
-      steps.value = mergeTraceEntries(steps.value, visible).slice(0, VIEW_CAPACITY);
+      steps.value = mergeTraceEntries(steps.value, visible);
     } catch (cause) {
       if (!current.signal.aborted) error.value = String(cause);
     } finally {

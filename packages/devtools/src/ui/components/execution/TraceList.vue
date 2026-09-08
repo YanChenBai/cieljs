@@ -17,7 +17,10 @@ function duration(entry: TraceEntry) {
 
 <template>
   <div class="dt-list">
-    <div class="dt-list-heading"><span>Name</span><span>耗时</span></div>
+    <div class="dt-list-heading">
+      <span class="dt-step-name">名称</span><span class="dt-start-time">开始时间</span
+      ><span>耗时</span>
+    </div>
     <Button.Root
       v-for="entry in entries"
       :key="entry.id"
@@ -30,6 +33,13 @@ function duration(entry: TraceEntry) {
         {{ kindIcons[entry.kind] }}
       </span>
       <span class="dt-step-name">{{ entry.label ? `${entry.label} · ` : '' }}{{ entry.name }}</span>
+      <time
+        class="dt-start-time"
+        :datetime="new Date(entry.startedAt).toISOString()"
+        :title="new Date(entry.startedAt).toLocaleString()"
+      >
+        {{ new Date(entry.startedAt).toLocaleTimeString('zh-CN', { hour12: false }) }}
+      </time>
       <span class="dt-duration" :title="entry.status === 'running' ? '执行中' : '执行耗时'">
         {{ duration(entry) }}
       </span>

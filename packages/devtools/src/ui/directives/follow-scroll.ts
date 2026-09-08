@@ -1,13 +1,15 @@
 import type { ObjectDirective } from 'vue';
 
 const cleanups = new WeakMap<HTMLElement, () => void>();
+const enabled = new WeakMap<HTMLElement, boolean>();
 
 /** 内容流式更新时跟随底部，鼠标移入后保留用户阅读位置。 */
 export const vFollowScroll: ObjectDirective<HTMLElement> = {
-  mounted(element) {
+  mounted(element, binding) {
+    enabled.set(element, binding.value !== false);
     let hovering = false;
     const follow = () => {
-      if (!hovering) element.scrollTop = element.scrollHeight;
+      if (!hovering && enabled.get(element)) element.scrollTop = element.scrollHeight;
     };
     const enter = () => {
       hovering = true;
@@ -34,7 +36,11 @@ export const vFollowScroll: ObjectDirective<HTMLElement> = {
     });
     follow();
   },
+  updated(element, binding) {
+    enabled.set(element, binding.value !== false);
+  },
   unmounted(element) {
+    enabled.delete(element);
     cleanups.get(element)?.();
     cleanups.delete(element);
   },

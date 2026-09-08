@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from 'vite-plus/test';
 import { BilibiliApi } from './api.ts';
 
 describe('直播分区查询', () => {
+  it('主播动态使用指定参数并经由页面请求', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const readInPage = vi.fn().mockResolvedValue({ code: 0, data: { items: [] } });
+    await new BilibiliApi({ fetch }).streamerHistory(194484313, readInPage);
+    const url = new URL(readInPage.mock.calls[0]![0]);
+    expect(url.pathname).toBe('/x/polymer/web-dynamic/v1/feed/space');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      host_mid: '194484313',
+      offset: '',
+      timezone_offset: '-480',
+      platform: 'web',
+      features: 'itemOpusStyle',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it.each([
     [1, '1', '0'],
     [21, '1', '21'],

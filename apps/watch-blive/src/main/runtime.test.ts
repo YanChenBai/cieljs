@@ -23,6 +23,9 @@ vi.mock('./bilibili/api.ts', () => ({ BilibiliApi: class {} }));
 vi.mock('./bilibili/live-page.ts', () => ({ LivePage: class {} }));
 vi.mock('./media/live-media.ts', () => ({
   LiveMedia: class {
+    get endAt() {
+      return new Date(Date.now() + 120_000);
+    }
     constructor(options: LiveMediaOptions) {
       mocks.mediaOptions.push(options);
     }
@@ -93,6 +96,79 @@ afterEach(async () => {
 });
 
 describe('观看生命周期', () => {
+  it('中途停止视频先等待识别、只生成一次部分总结，再关闭会话', async () => {
+    const { perceptionClose, sessionClose } = setup();
+    const recognition = Promise.withResolvers<void>();
+    perceptionClose.mockReturnValue(recognition.promise);
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    const abort = vi.fn();
+    mocks.session.mockResolvedValue({
+      id: 'video',
+      agent: { abort, prompt, state: { messages: [] } },
+      close: sessionClose,
+    });
+    await runtime.start({
+      mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
+    });
+    const stopping = runtime.stop();
+    const repeated = runtime.stop();
+    expect(repeated).toBe(stopping);
+    expect(runtime.status).toBe('stopping');
+    await vi.waitFor(() => expect(perceptionClose).toHaveBeenCalled());
+    expect(mocks.mediaClose).toHaveBeenCalled();
+    expect(prompt).not.toHaveBeenCalled();
+    expect(sessionClose).not.toHaveBeenCalled();
+    recognition.resolve();
+    await stopping;
+    expect(abort).not.toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(prompt.mock.calls[0]![0].at(-1).content).toContain('部分总结');
+    expect(prompt.mock.calls[0]![0].at(-1).content).toContain('不推测后续内容');
+    expect(sessionClose).toHaveBeenCalledOnce();
+    expect(runtime.status).toBe('idle');
+  });
+
+  it('关闭应用取消视频处理，不触发部分总结', async () => {
+    setup();
+    const prompt = vi.fn();
+    mocks.session.mockResolvedValue({
+      id: 'video',
+      agent: { abort: vi.fn(), prompt, state: { messages: [] } },
+      close: vi.fn(),
+    });
+    await runtime.start({
+      mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
+    });
+    await runtime.close();
+    expect(prompt).not.toHaveBeenCalled();
+    expect(runtime.status).toBe('closed');
+  });
+  it('视频先完成感知预处理，结束后只提交一次完整输入', async () => {
+    vi.useFakeTimers();
+    const { perceptionClose } = setup();
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    mocks.session.mockResolvedValue({
+      id: 'video',
+      agent: { abort: vi.fn(), prompt, state: { messages: [] } },
+      close: vi.fn(),
+    });
+    const events: unknown[] = [];
+    runtime.onEvent(event => events.push(event));
+    await runtime.start({
+      mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
+    });
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(prompt).not.toHaveBeenCalled();
+    mocks.mediaOptions[0]!.onStopped?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(perceptionClose.mock.invocationCallOrder[0]).toBeLessThan(
+      prompt.mock.invocationCallOrder[0]!,
+    );
+    expect(events).toContainEqual({ type: 'video_progress', stage: 'recognizing' });
+    expect(events).toContainEqual({ type: 'video_progress', stage: 'analyzing' });
+    expect(runtime.status).toBe('idle');
+  });
   it('停止期间返回的房间查询不能重新导航或打开 Session', async () => {
     const { api, page } = setup();
     const query = Promise.withResolvers<typeof room>();
@@ -213,6 +289,31 @@ describe('观看生命周期', () => {
     expect(session.agent.prompt.mock.invocationCallOrder[0]).toBeLessThan(
       sessionClose.mock.invocationCallOrder[0],
     );
+  });
+  it('录播异常退出只报告错误并释放资源，不生成最终总结', async () => {
+    const { sessionClose, perceptionClose } = setup();
+    const events: unknown[] = [];
+    runtime.onEvent(event => events.push(event));
+    await runtime.start({
+      mode: {
+        type: 'recording',
+        roomId: 123,
+        source: { type: 'url', url: 'https://example.com/recording.mp4' },
+      },
+    });
+    const session = await mocks.session.mock.results[0]!.value;
+    const error = new Error('FFmpeg 解码失败');
+
+    mocks.mediaOptions[0]!.onStopped?.(error);
+
+    await vi.waitFor(() => expect(runtime.status).toBe('idle'));
+    expect(events).toContainEqual({ type: 'error', stage: 'media', error });
+    expect(events).not.toContainEqual(expect.objectContaining({ type: 'recording_finished' }));
+    expect(session.agent.prompt).not.toHaveBeenCalled();
+    expect(sessionClose).toHaveBeenCalledOnce();
+    expect(perceptionClose).toHaveBeenCalledOnce();
+    expect(mocks.mediaClose).toHaveBeenCalledOnce();
+    expect(runtime.room).toBeUndefined();
   });
   it('连续低分会真正重新探索和开房，不在思考结束回调中死锁', async () => {
     vi.useFakeTimers();

@@ -9,7 +9,9 @@ import ContentRenderer from './content/ContentRenderer.vue';
 import MessageView from './conversation/MessageView.vue';
 import ExecutionView from './execution/ExecutionView.vue';
 
-const props = defineProps<{ client: DevtoolsClient }>();
+const props = withDefaults(defineProps<{ client: DevtoolsClient; autoScroll?: boolean }>(), {
+  autoScroll: true,
+});
 
 const { steps, entries, error, hasOlder, loadingOlder, older, connect, clear } = useDevtools(
   props.client,
@@ -76,7 +78,7 @@ const tab = shallowRef('conversation');
           </template>
         </ExecutionView>
       </Tabs.Panel>
-      <Tabs.Panel v-follow-scroll value="conversation" class="dt-conversation">
+      <Tabs.Panel v-follow-scroll="autoScroll" value="conversation" class="dt-conversation">
         <p v-if="!messages.length" class="dt-empty">开始观看后，对话会出现在这里。</p>
         <MessageView v-for="entry in messages" :key="entry.id" :client="client" :entry="entry">
           <template #content="scope">

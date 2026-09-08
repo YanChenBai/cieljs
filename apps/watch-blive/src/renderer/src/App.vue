@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { CielDevtools } from '@cieljs/devtools';
 import { Button } from '@vuetify/v0/components';
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-vue-next';
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X } from 'lucide-vue-next';
 import { computed } from 'vue';
 
-import AccountControls from './components/AccountControls.vue';
+import type { StartWatchOptions } from '../../shared/types.ts';
 
 import '@cieljs/devtools/style.css';
+import AccountControls from './components/AccountControls.vue';
 import EventTimeline from './components/EventTimeline.vue';
+import FollowRoomDialog from './components/FollowRoomDialog.vue';
 import LiveRoomWebview from './components/LiveRoomWebview.vue';
 import RuntimeSetup from './components/RuntimeSetup.vue';
 import WatchControls from './components/WatchControls.vue';
@@ -25,6 +27,8 @@ const {
   error,
   pending,
   ready,
+  requestedRoomId,
+  videoProgress,
   active,
   attached,
   start,
@@ -44,6 +48,19 @@ const roomTitle = computed(() => {
   if (!room) return '一起看看，今天有什么有趣的直播';
 
   return room.streamerName + ' · ' + room.title;
+});
+
+async function startRequestedRoom(options: StartWatchOptions) {
+  await start(options);
+  if (!error.value) requestedRoomId.value = undefined;
+}
+
+const videoProgressLabel = computed(() => {
+  if (videoProgress.value?.stage === 'analyzing' && state.value.status === 'stopping')
+    return '正在总结已读取的视频内容…';
+  if (videoProgress.value?.stage === 'recognizing') return '正在完成语音识别…';
+  if (videoProgress.value?.stage === 'analyzing') return '预处理完成，正在分析视频…';
+  return '正在提取音频与画面…';
 });
 </script>
 
@@ -66,7 +83,23 @@ const roomTitle = computed(() => {
         >Ciel <span class="text-muted text-[11px] font-normal">· Watch Blive</span></strong
       >
       <span class="text-muted truncate text-[11px]">{{ roomTitle }}</span>
-      <span class="text-muted ml-auto shrink-0 text-[11px]">{{ state.status }}</span>
+      <span
+        class="text-muted ml-auto flex shrink-0 items-center gap-2 text-[11px] uppercase"
+        role="status"
+      >
+        <span
+          class="relative flex size-1.5"
+          :class="state.status === 'watching' ? 'text-emerald-400' : 'text-muted'"
+          aria-hidden="true"
+        >
+          <span
+            v-if="state.status === 'watching'"
+            class="absolute inline-flex size-full animate-ping rounded-full bg-current opacity-75 motion-reduce:animate-none"
+          />
+          <span class="relative inline-flex size-full rounded-full bg-current" />
+        </span>
+        {{ state.status }}
+      </span>
       <Button.Root
         class="action icon-button"
         :aria-expanded="!right.collapsed.value"
@@ -83,7 +116,7 @@ const roomTitle = computed(() => {
       :class="{
         resizing: dragging || right.dragging.value,
         'grid-cols-[var(--sidebar-width)_5px_minmax(0,1fr)]': !collapsed,
-        'grid-cols-[minmax(0,1fr)] pl-2!': collapsed,
+        'grid-cols-[minmax(0,1fr)]': collapsed,
       }"
       :style="{ '--sidebar-width': `${width}px`, '--devtools-width': `${right.width.value}px` }"
     >
@@ -140,16 +173,41 @@ const roomTitle = computed(() => {
         :class="{
           'grid-cols-[minmax(240px,1fr)_3px_var(--devtools-width)]': !right.collapsed.value,
           'grid-cols-[minmax(0,1fr)]': right.collapsed.value,
+          'rounded-tr-xl': right.collapsed.value,
         }"
       >
         <section class="bg-surface flex min-h-0 min-w-0 flex-col overflow-hidden">
-          <p
+          <div
             v-if="error"
-            class="m-0 bg-[#442936] px-4 py-2.5 text-[12px] [overflow-wrap:anywhere] text-[#ffc1d2]"
+            class="m-0 flex items-start gap-3 bg-[#442936] px-4 py-2.5 text-[12px] [overflow-wrap:anywhere] text-[#ffc1d2]"
             role="alert"
           >
-            {{ error }}
-          </p>
+            <span class="min-w-0 flex-1">{{ error }}</span>
+            <Button.Root class="action icon-button" aria-label="关闭错误提示" @click="error = ''"
+              ><X :size="14"
+            /></Button.Root>
+          </div>
+          <div v-if="videoProgress" class="border-b border-[#ffffff16] px-4 py-3 text-[12px]">
+            <div class="mb-2 flex justify-between gap-3">
+              <span>{{ videoProgressLabel }}</span>
+              <span v-if="videoProgress.processedSeconds !== undefined" class="text-muted">
+                {{ Math.floor(videoProgress.processedSeconds) }} 秒
+                <template v-if="videoProgress.totalSeconds">
+                  / {{ Math.ceil(videoProgress.totalSeconds) }} 秒</template
+                >
+              </span>
+            </div>
+            <progress
+              class="accent-accent h-1.5 w-full"
+              :aria-label="videoProgressLabel"
+              :max="videoProgress.totalSeconds || 1"
+              :value="
+                videoProgress.totalSeconds
+                  ? Math.min(videoProgress.processedSeconds ?? 0, videoProgress.totalSeconds)
+                  : undefined
+              "
+            />
+          </div>
           <LiveRoomWebview @ready="attached" @error="error = $event" />
         </section>
         <div
@@ -175,9 +233,17 @@ const roomTitle = computed(() => {
           id="watch-devtools"
           class="min-h-0 min-w-0 overflow-hidden"
         >
-          <CielDevtools :client="rpc.devtools" />
+          <CielDevtools :client="rpc.devtools" :auto-scroll="active" />
         </aside>
       </div>
     </main>
+    <FollowRoomDialog
+      v-model="requestedRoomId"
+      :active="active"
+      :pending="pending"
+      :ready="ready && !!configuration?.valid && !!hearingModels?.valid"
+      :error="error"
+      @start="startRequestedRoom"
+    />
   </div>
 </template>

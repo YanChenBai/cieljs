@@ -32,8 +32,9 @@ onUnmounted(() => guest.value?.removeEventListener('dom-ready', attach));
 <template>
   <webview
     ref="guest"
-    class="flex h-full min-h-[420px] w-full"
+    class="flex h-full min-h-105 w-full"
     partition="persist:watch-blive"
+    allowpopups
     src="https://live.bilibili.com/"
   />
 </template>

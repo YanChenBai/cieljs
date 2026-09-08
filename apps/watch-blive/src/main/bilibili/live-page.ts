@@ -10,6 +10,7 @@ import type { Account } from '../../shared/types.ts';
 import { executePage, isAllowedPageUrl } from './page-executor.ts';
 import {
   READ_ACCOUNT_SCRIPT,
+  OPEN_LOGIN_SCRIPT,
   PREPARE_PLAYER_SCRIPT,
   READ_READINESS_SCRIPT,
   READ_LIVE_STATUS_SCRIPT,
@@ -19,9 +20,6 @@ import { waitForPage } from './wait-for-page.ts';
 
 export type LivePageReadiness = Static<typeof LivePageReadinessSchema>;
 export type DanmakuPageResult = Static<typeof DanmakuPageResultSchema>;
-
-// 登录后返回直播站，只有这里会提供 BilibiliLive.UID。
-const LOGIN_URL = 'https://passport.bilibili.com/login?gourl=https%3A%2F%2Flive.bilibili.com%2F';
 
 export class LivePage {
   private contents?: WebContents;
@@ -57,8 +55,28 @@ export class LivePage {
     const contents = this.requireContents();
 
     this.invalidate();
-    this.roomId = undefined;
-    await contents.loadURL(LOGIN_URL);
+    await executePage(
+      contents,
+      OPEN_LOGIN_SCRIPT,
+      Type.Boolean(),
+      this.executionOptions('打开 Bilibili 登录弹窗', this.generation),
+    );
+  }
+
+  /** 公开动态请求沿用当前页面会话，保留 B 站 Cookie 与浏览器请求环境。 */
+  readPublicApi(url: string): Promise<unknown> {
+    const target = new URL(url);
+    if (target.origin !== 'https://api.bilibili.com') throw new Error('不支持的公开 API 地址');
+    return executePage(
+      this.requireContents(),
+      `(async () => {
+        const response = await fetch(${JSON.stringify(url)}, { credentials: 'include', signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error('Bilibili API HTTP ' + response.status);
+        return response.json();
+      })()`,
+      Type.Unknown(),
+      this.executionOptions('读取主播公开信息', this.generation),
+    );
   }
 
   async logout(): Promise<void> {
@@ -70,7 +88,7 @@ export class LivePage {
     await contents.session.clearStorageData({
       storages: ['cookies', 'localstorage'],
     });
-    await contents.loadURL(LOGIN_URL);
+    await contents.loadURL('https://live.bilibili.com/');
   }
 
   async open(roomId: number, signal?: AbortSignal): Promise<void> {

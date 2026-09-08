@@ -53,7 +53,6 @@ catalog:
   lucide-vue-next: ^1.0.0
   markstream-vue: ^2.0.7
   '@vitejs/plugin-vue': ^6.0.8
-  '@viyuni/rolldown-plugin-tailwindcss': ^0.0.1
   veldorajs: ^0.0.1
 
 catalogs:

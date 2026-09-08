@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button } from '@vuetify/v0/components';
+import { Button, Progress } from '@vuetify/v0/components';
 import { Download, LoaderCircle } from 'lucide-vue-next';
 import { computed } from 'vue';
 
@@ -37,21 +37,41 @@ const emit = defineEmits<{ installModels: [] }>();
       <p class="hint">
         {{ models ? `缺少 ${models.missingFiles.length} 个模型文件` : '正在检查听觉模型…' }}
       </p>
-      <div v-if="models?.progress" class="hint break-all" role="status">
-        <div>{{ models.progress.file }} · 第 {{ models.progress.attempt || 1 }} 次尝试</div>
-        <div>
-          {{ (models.progress.receivedBytes / 1048576).toFixed(1) }} MB
-          <template v-if="models.progress.totalBytes">
-            / {{ (models.progress.totalBytes / 1048576).toFixed(1) }} MB</template
+      <div v-if="models?.progress" class="my-3 rounded-lg bg-[#ffffff05] p-3 text-[11px]">
+        <Progress.Root
+          :model-value="models.progress.totalBytes ? models.progress.receivedBytes : undefined"
+          :max="models.progress.totalBytes || 100"
+          aria-label="当前模型下载进度"
+        >
+          <div class="mb-2 flex items-center justify-between gap-3">
+            <Progress.Label class="min-w-0 truncate text-[#d6cbd3]" :title="models.progress.file">
+              {{ models.progress.file }}
+            </Progress.Label>
+            <Progress.Value
+              v-if="models.progress.totalBytes"
+              class="shrink-0 text-[#ffc1d2] tabular-nums"
+            />
+          </div>
+          <Progress.Track class="h-1.5 w-full overflow-hidden rounded-full bg-[#ffffff0b]">
+            <Progress.Fill
+              class="h-full rounded-full bg-[#fb7299] transition-[width] duration-300 data-[state=indeterminate]:w-full data-[state=indeterminate]:animate-pulse motion-reduce:animate-none motion-reduce:transition-none"
+            />
+          </Progress.Track>
+        </Progress.Root>
+        <div class="mt-2 flex justify-between gap-2 text-[#9c929c] tabular-nums">
+          <span>
+            {{ (models.progress.receivedBytes / 1048576).toFixed(1) }} MB
+            <template v-if="models.progress.totalBytes">
+              / {{ (models.progress.totalBytes / 1048576).toFixed(1) }} MB</template
+            >
+          </span>
+          <span v-if="(models.progress.attempt || 1) > 1"
+            >第 {{ models.progress.attempt }} 次尝试</span
           >
         </div>
-        <progress
-          class="w-full"
-          :value="models.progress.totalBytes ? models.progress.receivedBytes : undefined"
-          :max="models.progress.totalBytes"
-          aria-label="当前模型下载进度"
-        />
-        <p v-if="models.progress.message">{{ models.progress.message }}，正在重试…</p>
+        <p v-if="models.progress.message" class="mb-0 break-all text-[#ffc1d2]" role="status">
+          {{ models.progress.message }}{{ models.installing ? '，正在重试…' : '' }}
+        </p>
       </div>
       <p v-if="models?.error" class="text-[11px] break-all text-[#ffc1d2]" role="alert">
         {{ models.error }}

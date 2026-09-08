@@ -33,6 +33,7 @@ export class RoomVisit {
   private periodicTimer?: ReturnType<typeof setInterval>;
   private closePromise?: Promise<void>;
   private unsubscribeAgent?: () => void;
+  private unsubscribePerceptionError?: () => void;
 
   constructor(private readonly options: RoomVisitOptions) {
     this.scheduler = new ThoughtScheduler({
@@ -75,7 +76,11 @@ export class RoomVisit {
 
   start() {
     this.unsubscribeAgent = this.options.devtools?.observe(this.session.agent, this.session.id);
+    this.unsubscribePerceptionError = this.options.perception.on('error', error =>
+      this.options.emit({ type: 'error', stage: 'perception', error }),
+    );
     this.options.media.start();
+    if (this.options.mode.type === 'recording') return;
     this.unsubscribeSpeechEnd = this.options.perception.on('speechend', ({ at }) =>
       this.scheduler.trigger(at),
     );
@@ -90,15 +95,19 @@ export class RoomVisit {
     return this.closePromise;
   }
 
-  async finishRecording(): Promise<void> {
+  async finishRecording(signal?: AbortSignal, partial = false): Promise<void> {
     clearInterval(this.periodicTimer);
     this.unsubscribeSpeechEnd?.();
     await this.options.media.close();
+    this.options.emit({ type: 'video_progress', stage: 'recognizing' });
     // close 会 flush ASR 并等待尾部识别发布；快照在关闭后仍可读取。
     await this.options.perception.close();
-    await this.scheduler.finish(
-      '录播已经播放结束。请基于本次 Session 中的全部亲历内容给出最终总结：覆盖主题、关键内容、分析结论、值得记住的信息与仍不确定之处；继续遵守录播模式的记忆规则。',
-    );
+    if (this.closePromise || signal?.aborted) return;
+    this.options.emit({ type: 'video_progress', stage: 'analyzing' });
+    const summary = partial
+      ? '用户中途停止了视频，视频尚未完整看完。请只总结本次已经读取的画面和语音，明确标注这是一份部分总结，不推测后续内容，不声称看完全部视频。覆盖已观察到的主题、关键内容、分析结论、值得记住的信息与仍不确定之处；继续遵守视频模式的记忆规则。'
+      : '录播已经播放结束。请基于本次 Session 中的全部亲历内容给出最终总结：覆盖主题、关键内容、分析结论、值得记住的信息与仍不确定之处；继续遵守录播模式的记忆规则。';
+    await this.scheduler.finish(summary, this.options.media.endAt, signal);
   }
 
   private async closeResources() {
@@ -108,6 +117,7 @@ export class RoomVisit {
     // 先停止触发并等当前思考结束，再关闭可能产生最后一次 speechend 的感知资源。
     await this.scheduler.close();
     this.unsubscribeAgent?.();
+    this.unsubscribePerceptionError?.();
     const media = await Promise.allSettled([this.options.media.close()]);
     const remaining = await Promise.allSettled([
       this.options.perception.close(),

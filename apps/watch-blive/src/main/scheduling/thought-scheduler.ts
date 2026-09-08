@@ -38,6 +38,9 @@ export class ThoughtScheduler {
       return;
     }
 
+    // 迟到或同一毫秒的触发不能倒退已消费的快照边界。
+    if (at.getTime() <= this.capturedThrough) return;
+
     const startAt = this.pending?.startAt ?? new Date(this.capturedThrough + 1);
     const triggerCount = (this.pending?.triggerCount ?? 0) + 1;
 
@@ -60,7 +63,7 @@ export class ThoughtScheduler {
   }
 
   /** 录播结束后把尚未消费的感知附在总结请求前，避免关闭时丢掉尾段。 */
-  async finish(summary: string): Promise<void> {
+  async finish(summary: string, mediaEndAt?: Date, signal?: AbortSignal): Promise<void> {
     this.finishing = true;
     if (this.timer) {
       clearTimeout(this.timer);
@@ -69,9 +72,10 @@ export class ThoughtScheduler {
     await this.active;
     const startAt = this.pending?.startAt ?? new Date(this.capturedThrough + 1);
     await this.close();
-    const endAt = new Date(Math.max(Date.now(), startAt.getTime()));
+    const endAt = new Date(Math.max(mediaEndAt?.getTime() ?? Date.now(), startAt.getTime()));
     const snapshot = await this.options.perception.snapshot({ startAt, endAt });
     const messages = await snapshot.compose();
+    if (signal?.aborted) return;
     await this.options.agent.prompt([
       ...messages,
       this.options.context(),
@@ -132,6 +136,10 @@ export class ThoughtScheduler {
       await this.options.afterRun?.();
       this.options.onRunFinished?.(Date.now() - startedAt);
     } catch (error) {
+      if (toError(error).message.includes('content_filter')) {
+        this.closed = true;
+        this.pending = undefined;
+      }
       this.options.onError?.(toError(error));
     }
   }

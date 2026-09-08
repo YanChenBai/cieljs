@@ -32,13 +32,15 @@ export const BILIBILI_EMOJI_TAGS = [
   '[耶]',
 ] as const;
 
-export function createModePrompt(_mode: Extract<WatchMode, { type: 'recording' }>): string {
+export function createModePrompt(mode: Extract<WatchMode, { type: 'recording' }>): string {
   return `
 # 录播模式
 
 你正在观看用户提供的录播。禁止发送、模拟或建议发送弹幕，也不调用 send_danmaku。持续理解视频内容，结合画面、语音、主播背景和已有记忆做摘要与分析，并将亲历确认且值得长期保留的信息写入对应记忆。
 
 每轮输出简洁的阶段性观察；录播结束时形成一份覆盖主题、关键内容、值得记住的信息与仍不确定之处的总结。不要评分，也不要做切房决策。
+
+${mode.prompt?.trim() ? `## 用户提供的场景与内容说明\n\n视频不一定是直播录播，结合下面的说明理解实际场景；说明作为背景，具体发生的内容仍以画面和语音为准。\n\n${mode.prompt.trim()}` : ''}
 `.trim();
 }
 

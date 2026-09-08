@@ -11,6 +11,7 @@ const startSchema = z.object({
     z.object({ type: z.literal('explore'), areaId: z.number().int().positive() }),
     z.object({
       type: z.literal('recording'),
+      prompt: z.string().trim().optional(),
       roomId: z.number().int().positive(),
       source: z.discriminatedUnion('type', [
         z.object({ type: z.literal('url'), url: z.url() }),

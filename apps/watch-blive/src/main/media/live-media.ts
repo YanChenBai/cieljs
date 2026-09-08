@@ -15,6 +15,7 @@ export interface LiveMediaOptions {
   ffmpegPath?: string;
   onError?: (error: Error) => void;
   onStopped?: (error?: Error) => void;
+  onProgress?: (processedSeconds: number, totalSeconds?: number) => void;
 }
 
 export class LiveMedia {
@@ -23,9 +24,17 @@ export class LiveMedia {
   private jpegBuffer = Buffer.alloc(0);
   private sampleCount = 0;
   private startedAt = 0;
+  private imageCount = 0;
+  private progressBuffer = '';
+  private totalSeconds?: number;
   private readonly writes = new Set<Promise<void>>();
 
   constructor(private readonly options: LiveMediaOptions) {}
+
+  get endAt() {
+    const imageTime = Math.max(0, this.imageCount - 1) * (60_000 / 9);
+    return new Date(this.startedAt + Math.max(this.sampleCount / 16, imageTime));
+  }
 
   start(): void {
     if (this.child) {
@@ -49,7 +58,7 @@ export class LiveMedia {
 
     child.stdout?.on('data', (chunk: Buffer) => this.writeAudio(child, Buffer.from(chunk)));
     // 必须消费 stderr，否则 FFmpeg 错误输出积压会阻塞媒体进程。
-    child.stderr?.resume();
+    child.stderr?.on('data', (chunk: Buffer) => this.readProgress(String(chunk)));
     (child.stdio[3] as Readable | null)?.on('data', (chunk: Buffer) => {
       this.writeImages(child, Buffer.from(chunk));
     });
@@ -122,11 +131,16 @@ export class LiveMedia {
       const image = this.jpegBuffer.subarray(start, end + 2);
 
       this.jpegBuffer = this.jpegBuffer.subarray(end + 2);
+      // 加速解码时使用媒体时间，不能让所有帧挤在同一个墙上时间窗口。
+      const at = this.options.live
+        ? new Date()
+        : new Date(this.startedAt + this.imageCount * (60_000 / 9));
+      this.imageCount += 1;
       this.trackWrite(
         this.options.perception.image?.write({
           source: `bilibili:room:${this.options.roomId}`,
           data: image,
-          at: new Date(),
+          at,
         }),
       );
     }
@@ -141,6 +155,23 @@ export class LiveMedia {
 
     this.writes.add(guarded);
     void guarded.finally(() => this.writes.delete(guarded));
+  }
+
+  private readProgress(chunk: string) {
+    this.progressBuffer += chunk;
+    const lines = this.progressBuffer.split(/\r?\n/u);
+    this.progressBuffer = lines.pop() ?? '';
+    for (const line of lines) {
+      const duration = line.match(/Duration: (\d+):(\d+):([\d.]+)/u);
+      if (duration)
+        this.totalSeconds =
+          Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
+      if (line.startsWith('out_time_us=')) {
+        const seconds = Number(line.slice('out_time_us='.length)) / 1_000_000;
+        if (Number.isFinite(seconds))
+          this.options.onProgress?.(Math.max(0, seconds), this.totalSeconds);
+      }
+    }
   }
 }
 
@@ -166,12 +197,13 @@ export function ffmpegArguments(roomId: number, input: string, live: boolean): s
         '-headers',
         'Origin: https://live.bilibili.com\r\n',
       ]
-    : ['-re'];
+    : [];
 
   return [
     '-hide_banner',
     '-loglevel',
-    'error',
+    live ? 'error' : 'info',
+    ...(!live ? ['-progress', 'pipe:2', '-nostats'] : []),
     ...inputArguments,
     '-i',
     input,

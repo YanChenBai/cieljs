@@ -5,6 +5,43 @@ import { describe, expect, it, vi } from 'vite-plus/test';
 import { ThoughtScheduler } from './thought-scheduler.ts';
 
 describe('ThoughtScheduler', () => {
+  it('忽略迟到和重复时间，后续快照边界保持递增', async () => {
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    const snapshot = vi.fn().mockResolvedValue({ compose: async () => [] });
+    const scheduler = new ThoughtScheduler({
+      perception: { snapshot },
+      agent: { prompt },
+      minimumIntervalMs: 0,
+      startedAt: new Date(100),
+      context: () => ({ role: 'user', content: '观察', timestamp: 0 }),
+    });
+    scheduler.trigger(new Date(110));
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
+    scheduler.trigger(new Date(105));
+    scheduler.trigger(new Date(110));
+    scheduler.trigger(new Date(120));
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledTimes(2));
+    expect(snapshot).toHaveBeenLastCalledWith({ startAt: new Date(111), endAt: new Date(120) });
+    await scheduler.close();
+  });
+  it('内容过滤后暂停自动提交，保留原始错误', async () => {
+    const error = new Error('Provider finish_reason: content_filter');
+    const prompt = vi.fn().mockRejectedValue(error);
+    const onError = vi.fn();
+    const scheduler = new ThoughtScheduler({
+      perception: { snapshot: vi.fn().mockResolvedValue({ compose: async () => [] }) },
+      agent: { prompt },
+      minimumIntervalMs: 0,
+      startedAt: new Date(0),
+      context: () => ({ role: 'user', content: '观察', timestamp: 0 }),
+      onError,
+    });
+    scheduler.trigger(new Date(1));
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(error));
+    scheduler.trigger(new Date(2));
+    await scheduler.close();
+    expect(prompt).toHaveBeenCalledOnce();
+  });
   it('思考期间的新触发会合并到下一轮', async () => {
     let releaseFirst: (() => void) | undefined;
     const firstRun = new Promise<void>(resolve => {

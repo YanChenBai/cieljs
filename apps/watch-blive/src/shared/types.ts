@@ -5,7 +5,7 @@ export type RecordingSource = { type: 'url'; url: string } | { type: 'file'; pat
 export type WatchMode =
   | { type: 'explore'; areaId: number }
   | { type: 'follow'; roomId: number }
-  | { type: 'recording'; roomId: number; source: RecordingSource; date?: string };
+  | { type: 'recording'; roomId: number; source: RecordingSource; date?: string; prompt?: string };
 
 export interface StartWatchOptions {
   mode: WatchMode;
@@ -88,6 +88,12 @@ export type WatchStatus =
   | 'closed';
 
 export type WatchEvent =
+  | {
+      type: 'video_progress';
+      stage: 'extracting' | 'recognizing' | 'analyzing';
+      processedSeconds?: number;
+      totalSeconds?: number;
+    }
   | { type: 'status'; status: WatchStatus }
   | { type: 'room_opened'; room: RoomInfo }
   | { type: 'room_closed'; roomId: number; reason: string }

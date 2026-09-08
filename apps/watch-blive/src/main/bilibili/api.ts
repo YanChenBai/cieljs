@@ -161,16 +161,23 @@ export class BilibiliApi {
     return `${url.host}${codec.base_url}${url.extra ?? ''}`;
   }
 
-  async streamerHistory(streamerUid: number): Promise<StreamerHistory> {
+  async streamerHistory(
+    streamerUid: number,
+    readInPage?: (url: string) => Promise<unknown>,
+  ): Promise<StreamerHistory> {
     assertPositiveInteger(streamerUid, 'streamerUid');
 
     const query = new URLSearchParams({
       host_mid: String(streamerUid),
-      features: 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote',
+      offset: '',
+      timezone_offset: '-480',
+      platform: 'web',
+      features: 'itemOpusStyle',
     });
     const dynamicRequest = this.request<DynamicFeedPayload>(
       `https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space?${query}`,
       `https://space.bilibili.com/${streamerUid}/dynamic`,
+      readInPage,
     );
     const archiveQuery = new URLSearchParams({
       mid: String(streamerUid),
@@ -181,6 +188,7 @@ export class BilibiliApi {
     const archiveRequest = this.request<ArchiveListPayload>(
       `https://api.bilibili.com/x/space/arc/search?${archiveQuery}`,
       `https://space.bilibili.com/${streamerUid}/video`,
+      readInPage,
     );
     const [dynamicResult, archiveResult] = await Promise.allSettled([
       dynamicRequest,
@@ -223,7 +231,17 @@ export class BilibiliApi {
     return data[String(streamerUid)];
   }
 
-  private async request<T>(url: string, referer = 'https://live.bilibili.com/'): Promise<T> {
+  private async request<T>(
+    url: string,
+    referer = 'https://live.bilibili.com/',
+    readInPage?: (url: string) => Promise<unknown>,
+  ): Promise<T> {
+    if (readInPage) {
+      const body = (await readInPage(url)) as ApiResponse<T>;
+      if (body.code !== 0 || body.data === undefined)
+        throw new Error(`Bilibili API ${body.code}: ${body.message}`);
+      return body.data;
+    }
     const response = await this.fetch(url, {
       headers: {
         Accept: 'application/json, text/plain, */*',

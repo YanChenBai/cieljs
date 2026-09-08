@@ -28,6 +28,7 @@ const recordingSource = shallowRef<'url' | 'file'>('url');
 const recordingUrl = shallowRef('');
 const recordingFile = shallowRef('');
 const recordingDate = shallowRef('');
+const recordingPrompt = shallowRef('');
 const pickingFile = shallowRef(false);
 
 const filteredAreas = computed(() => {
@@ -58,6 +59,7 @@ const selectedMode = computed<WatchMode>(() => {
       roomId: roomId.value ?? 0,
       source,
       ...(date ? { date } : {}),
+      ...(recordingPrompt.value.trim() ? { prompt: recordingPrompt.value.trim() } : {}),
     };
   }
 
@@ -111,19 +113,19 @@ function start() {
 </script>
 
 <template>
-  <section class="px-[18px] py-4">
+  <section class="px-4.5 py-4">
     <div class="section-heading">观看设置</div>
     <form @submit.prevent="start">
       <fieldset :disabled="active || !!pending">
         <label
           >观看模式<select v-model="mode">
             <option value="follow">单推 · 只看这位主播</option>
-            <option value="explore">探索 · 发现感兴趣的直播</option>
-            <option value="recording">录播 · 总结、分析和记忆</option>
+            <option value="explore">DD 模式 · 发现感兴趣的直播</option>
+            <option value="recording">视频模式 · 总结、分析和记忆</option>
           </select></label
         >
         <label v-if="mode !== 'explore'"
-          >直播间 roomId<input
+          >直播间 ID<input
             v-model.number="roomId"
             type="number"
             min="1"
@@ -190,9 +192,14 @@ function start() {
               {{ recordingFile }}
             </p>
           </div>
-          <label
-            >录播日期（可选）<input v-model="recordingDate" type="date" />
-            <span class="hint block">留空时使用今天；录播使用独立 Session。</span>
+          <label>视频日期（可选）<input v-model="recordingDate" type="date" /> </label>
+          <label>
+            场景与内容说明（可选）
+            <textarea
+              v-model="recordingPrompt"
+              rows="4"
+              placeholder="例如：这是一段游戏实况，主要在讨论新版本角色，请关注角色评价和有趣的互动。"
+            />
           </label>
         </template>
         <label v-if="mode !== 'recording'" class="check"
@@ -203,7 +210,7 @@ function start() {
             live ? '弹幕将发送到当前直播间，需要先登录。' : '默认模拟互动，不会向直播间发送弹幕。'
           }}
         </p>
-        <p v-else class="hint">录播模式不会发送或模拟弹幕，只进行总结、分析和记忆。</p>
+        <p v-else class="hint">视频模式不会发送或模拟弹幕，只进行总结、分析和记忆。</p>
       </fieldset>
       <Button.Root
         v-if="!active || pending === 'start'"
@@ -226,7 +233,10 @@ function start() {
       >
         <LoaderCircle v-if="pending === 'stop'" class="spinning" :size="16" />
         <Square v-else :size="16" />
-        {{ pending === 'stop' ? '正在停止…' : '停止观看' }}
+        <template v-if="mode === 'recording'">{{
+          pending === 'stop' ? '正在整理总结…' : '停止并总结'
+        }}</template>
+        <template v-else>{{ pending === 'stop' ? '正在停止…' : '停止观看' }}</template>
       </Button.Root>
     </form>
   </section>

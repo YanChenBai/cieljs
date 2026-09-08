@@ -22,6 +22,7 @@ export const WATCH_BLIVE_IPC = {
 } as const;
 
 export type WatchBridgeEvent =
+  | { type: 'room_requested'; roomId: number }
   | Exclude<WatchEvent, { type: 'error' }>
   | { type: 'error'; stage: string; message: string };
 export interface WatchSnapshot {

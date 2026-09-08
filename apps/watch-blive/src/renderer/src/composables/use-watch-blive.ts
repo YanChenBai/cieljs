@@ -8,9 +8,17 @@ import type {
   LiveArea,
   StartWatchOptions,
   WatchConfigurationStatus,
+  WatchEvent,
 } from '../../../shared/types.ts';
 import { watchBridge } from '../rpc.ts';
 import { describeWatchEvent } from './watch-event.ts';
+
+function describeError(message: string) {
+  if (message.includes('content_filter')) {
+    return '模型服务因内容过滤拒绝了本次请求（content_filter），本轮未完成。已暂停自动分析，请停止观看后检查输入内容或模型配置。';
+  }
+  return message;
+}
 
 export function useWatchBlive() {
   const events = shallowRef<{ id: number; time: string; text: string }[]>([]);
@@ -23,6 +31,8 @@ export function useWatchBlive() {
   const error = shallowRef('');
   const pending = shallowRef('');
   const ready = shallowRef(false);
+  const requestedRoomId = shallowRef<number>();
+  const videoProgress = shallowRef<Extract<WatchEvent, { type: 'video_progress' }>>();
   const active = computed(() => !['idle', 'closed'].includes(state.value.status));
 
   let disposed = false;
@@ -57,6 +67,10 @@ export function useWatchBlive() {
   });
 
   function receive(event: WatchBridgeEvent) {
+    if (event.type === 'video_progress') videoProgress.value = event;
+    if (event.type === 'status' && ['idle', 'closed'].includes(event.status))
+      videoProgress.value = undefined;
+    if (event.type === 'room_requested') requestedRoomId.value = event.roomId;
     const text = describeWatchEvent(event);
     if (text) {
       events.value = [
@@ -68,7 +82,7 @@ export function useWatchBlive() {
     if (event.type === 'status') state.value = { ...state.value, status: event.status };
     if (event.type === 'room_opened') state.value = { ...state.value, room: event.room };
     if (event.type === 'room_closed') state.value = { ...state.value, room: undefined };
-    if (event.type === 'error') error.value = event.message;
+    if (event.type === 'error') error.value = describeError(event.message);
   }
 
   const unsubscribe = watchBridge.onEvent(receive);
@@ -83,7 +97,7 @@ export function useWatchBlive() {
     try {
       await action();
     } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : String(cause);
+      error.value = describeError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       if (pending.value === name) pending.value = '';
     }
@@ -121,6 +135,8 @@ export function useWatchBlive() {
     error,
     pending,
     ready,
+    requestedRoomId,
+    videoProgress,
     active,
     attached,
     start: (options: StartWatchOptions) => run('start', () => watchBridge.start(options)),

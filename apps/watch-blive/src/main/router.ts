@@ -72,7 +72,9 @@ export function createWatchRouter(
     watch: createWatchRoutes(api, () => runtime, requireRuntime, listeners),
     setup: createSetupRoutes(),
     recording: createRecordingRoutes(mainWindow),
-    window: createWindowRoutes(mainWindow, livePage),
+    window: createWindowRoutes(mainWindow, livePage, roomId => {
+      for (const listener of listeners) listener({ type: 'room_requested', roomId });
+    }),
   };
 
   return {

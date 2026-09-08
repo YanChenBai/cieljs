@@ -1,6 +1,6 @@
 /** UID 就绪前不查账号 API，页面未初始化与未登录都返回空值。 */
 export const READ_ACCOUNT_SCRIPT = `(async () => {
-  const uid = window.BilibiliLive?.UID || __LIVE_USER_LOGIN_STATUS__.uid;
+  const uid = window.BilibiliLive?.UID || window.__LIVE_USER_LOGIN_STATUS__?.uid;
   if (typeof uid !== 'number' || uid === 0) return null;
 
   const response = await fetch('https://api.bilibili.com/x/web-interface/nav', {
@@ -10,6 +10,14 @@ export const READ_ACCOUNT_SCRIPT = `(async () => {
   if (body.code !== 0 || !body.data?.isLogin) return null;
 
   return { uid: body.data.mid, name: body.data.uname, face: body.data.face ?? '' };
+})()`;
+
+/** 使用直播站自己的登录弹窗，保留当前页面及其登录状态检测。 */
+export const OPEN_LOGIN_SCRIPT = `(() => {
+  const entry = document.querySelector('.header-login-entry');
+  if (!entry) throw new Error('当前页面的登录入口尚未就绪');
+  entry.click();
+  return true;
 })()`;
 
 /** 等待播放器挂载后应用网页全屏，隐藏站内侧栏。 */

@@ -40,6 +40,17 @@ describe('直播来源', () => {
 });
 
 describe('观看模式提示词', () => {
+  it('视频场景说明进入模型提示词，直播提示词不受影响', () => {
+    const prompt = createSystemPrompt({
+      type: 'recording',
+      roomId: 1,
+      source: { type: 'file', path: '/video.mp4' },
+      prompt: '这是游戏评测，请关注角色评价。',
+    });
+    expect(prompt).toContain('这是游戏评测，请关注角色评价。');
+    expect(prompt).toContain('视频不一定是直播录播');
+    expect(prompt).not.toContain('每轮必须调用且只调用一次 send_danmaku');
+  });
   it('单推持续互动，不要求评分 JSON', () => {
     const prompt = createSystemPrompt({ type: 'follow', roomId: 1 });
     expect(prompt).toContain('不需要评分');

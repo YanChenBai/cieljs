@@ -59,6 +59,7 @@ class WatchBliveRuntime implements WatchBlive {
   private currentStatus: WatchStatus = 'idle';
   private startOptions?: Required<Pick<StartWatchOptions, 'danmakuDelivery'>> & StartWatchOptions;
   private closePromise?: Promise<void>;
+  private videoStop?: Promise<void>;
   private operation: Promise<void> = Promise.resolve();
   private runController?: AbortController;
   private loginController?: AbortController;
@@ -133,6 +134,7 @@ class WatchBliveRuntime implements WatchBlive {
     validateStartOptions(options);
     this.loginController?.abort();
     this.runController?.abort();
+    this.visit?.session.agent.abort();
 
     const controller = new AbortController();
     this.runController = controller;
@@ -188,8 +190,32 @@ class WatchBliveRuntime implements WatchBlive {
   }
 
   stop(): Promise<void> {
+    if (this.videoStop) return this.videoStop;
+
+    const visit = this.visit;
+    if (
+      visit &&
+      this.startOptions?.mode.type === 'recording' &&
+      this.currentStatus === 'watching'
+    ) {
+      const signal = this.runController?.signal;
+      this.setStatus('stopping');
+      // 用户停止视频保留已读取内容；先完成部分总结，再释放 Session。
+      this.videoStop = this.enqueue(async () => {
+        try {
+          if (this.visit === visit) await visit.finishRecording(signal, true);
+        } finally {
+          await this.stopRuntime();
+        }
+      }).finally(() => {
+        this.videoStop = undefined;
+      });
+      return this.videoStop;
+    }
+
     this.loginController?.abort();
     this.runController?.abort();
+    this.visit?.session.agent.abort();
 
     return this.enqueue(() => this.stopRuntime());
   }
@@ -345,8 +371,9 @@ class WatchBliveRuntime implements WatchBlive {
     let session: CielSession | undefined;
     const perception = (this.options.createPerception ?? createPerception)({
       vision: { sampleIntervalMs: 6_666, differenceThreshold: 0.03, maxFrames: 9 },
-      retentionMs: 60_000,
       ...this.options.perception,
+      // 视频在预处理完成后统一读取，保留整段感知；上限使用 Date 的有效毫秒范围。
+      retentionMs: 8_640_000_000_000_000,
     });
 
     try {
@@ -365,6 +392,13 @@ class WatchBliveRuntime implements WatchBlive {
         ffmpegPath: this.options.ffmpegPath,
         onError: error => this.emitError('media', error),
         onStopped: error => this.endRecording(generation, signal, error),
+        onProgress: (processedSeconds, totalSeconds) =>
+          this.emit({
+            type: 'video_progress',
+            stage: 'extracting',
+            processedSeconds,
+            totalSeconds,
+          }),
       });
       const visit = new RoomVisit({
         devtools: this.options.devtools,
@@ -385,6 +419,7 @@ class WatchBliveRuntime implements WatchBlive {
       });
 
       this.visit = visit;
+      this.emit({ type: 'video_progress', stage: 'extracting' });
       visit.start();
       this.setStatus('watching');
       this.emit({ type: 'room_opened', room });
@@ -412,8 +447,10 @@ class WatchBliveRuntime implements WatchBlive {
     }
 
     void this.enqueue(async () => {
+      if (this.visit !== visit || signal.aborted) return;
       try {
-        await visit.finishRecording();
+        // 异常中断只清理资源，不能把未读完的录播当作完整内容总结。
+        if (!error && !signal.aborted) await visit.finishRecording(signal);
       } catch (cause) {
         this.emitError('recording_summary', cause);
       } finally {
@@ -424,7 +461,9 @@ class WatchBliveRuntime implements WatchBlive {
 
   private async loadStreamerHistory(streamerUid: number) {
     try {
-      return await this.api.streamerHistory(streamerUid);
+      return await this.api.streamerHistory(streamerUid, url =>
+        this.options.livePage.readPublicApi(url),
+      );
     } catch (error) {
       this.emitError('streamer_history', error);
       return undefined;
@@ -599,7 +638,11 @@ class WatchBliveRuntime implements WatchBlive {
   }
 
   private async closeRuntime(): Promise<void> {
-    await this.stop();
+    // 退出应用直接取消，不能因视频的“停止并总结”延迟关闭。
+    this.loginController?.abort();
+    this.runController?.abort();
+    this.visit?.session.agent.abort();
+    await this.enqueue(() => this.stopRuntime());
     this.currentStatus = 'closed';
     this.listeners.clear();
   }
