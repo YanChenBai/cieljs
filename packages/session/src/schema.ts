@@ -1,4 +1,5 @@
-import { sql } from "drizzle-orm";
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   check,
@@ -11,16 +12,15 @@ import {
   text,
   timestamp,
   uniqueIndex,
-} from "drizzle-orm/pg-core";
+} from 'drizzle-orm/pg-core';
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { SessionSource } from "./types.ts";
+import type { SessionSource } from './types.ts';
 
 // 不在列类型中固定维数，允许多个模型的派生索引共存。
 const embeddingVector = customType<{ data: number[]; driverData: string }>({
-  dataType: () => "vector",
-  toDriver: (value) => JSON.stringify(value),
-  fromDriver: (value) => JSON.parse(value) as number[],
+  dataType: () => 'vector',
+  toDriver: value => JSON.stringify(value),
+  fromDriver: value => JSON.parse(value) as number[],
 });
 
 /**
@@ -30,48 +30,48 @@ const embeddingVector = customType<{ data: number[]; driverData: string }>({
  * Compaction 不参与 Message seq。
  */
 export const sessions = pgTable(
-  "sessions",
+  'sessions',
   {
-    id: text("id").primaryKey(),
+    id: text('id').primaryKey(),
 
-    spaceId: text("space_id").notNull(),
+    spaceId: text('space_id').notNull(),
 
-    nextMessageSeq: bigint("next_message_seq", {
-      mode: "number",
+    nextMessageSeq: bigint('next_message_seq', {
+      mode: 'number',
     })
       .notNull()
       .default(1),
 
-    sources: text("sources")
+    sources: text('sources')
       .array()
       .$type<SessionSource>()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
 
-    sourceSearchText: text("source_search_text").notNull().default(""),
-    sourceTokenText: text("source_token_text").notNull().default(""),
+    sourceSearchText: text('source_search_text').notNull().default(''),
+    sourceTokenText: text('source_token_text').notNull().default(''),
 
-    createdAt: timestamp("created_at", {
+    createdAt: timestamp('created_at', {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
 
-    updatedAt: timestamp("updated_at", {
+    updatedAt: timestamp('updated_at', {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
   },
-  (table) => [
-    check("sessions_space_id_check", sql`length(trim(${table.spaceId})) > 0`),
-    index("sessions_space_updated_idx").on(table.spaceId, table.updatedAt),
-    index("sessions_sources_idx").using("gin", table.sources),
-    index("sessions_source_fts_idx").using(
-      "gin",
+  table => [
+    check('sessions_space_id_check', sql`length(trim(${table.spaceId})) > 0`),
+    index('sessions_space_updated_idx').on(table.spaceId, table.updatedAt),
+    index('sessions_sources_idx').using('gin', table.sources),
+    index('sessions_source_fts_idx').using(
+      'gin',
       sql`to_tsvector('simple', ${table.sourceTokenText})`,
     ),
-    index("sessions_source_trgm_idx").using("gin", sql`${table.sourceSearchText} gin_trgm_ops`),
+    index('sessions_source_trgm_idx').using('gin', sql`${table.sourceSearchText} gin_trgm_ops`),
   ],
 );
 
@@ -79,29 +79,29 @@ export const sessions = pgTable(
  * Agent Message 是 Session 唯一真实时间线。
  */
 export const sessionMessages = pgTable(
-  "session_messages",
+  'session_messages',
   {
-    id: text("id").primaryKey(),
+    id: text('id').primaryKey(),
 
-    sessionId: text("session_id")
+    sessionId: text('session_id')
       .notNull()
       .references(() => sessions.id, {
-        onDelete: "cascade",
+        onDelete: 'cascade',
       }),
 
-    seq: bigint("seq", {
-      mode: "number",
+    seq: bigint('seq', {
+      mode: 'number',
     }).notNull(),
 
-    message: jsonb("message").$type<AgentMessage>().notNull(),
+    message: jsonb('message').$type<AgentMessage>().notNull(),
 
-    createdAt: timestamp("created_at", {
+    createdAt: timestamp('created_at', {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
   },
-  (table) => [uniqueIndex("session_messages_session_seq_unique").on(table.sessionId, table.seq)],
+  table => [uniqueIndex('session_messages_session_seq_unique').on(table.sessionId, table.seq)],
 );
 
 /**
@@ -112,30 +112,30 @@ export const sessionMessages = pgTable(
  * 表示 summary 已经包含 message 1 ~ 10。
  */
 export const sessionCompactions = pgTable(
-  "session_compactions",
+  'session_compactions',
   {
-    id: text("id").primaryKey(),
+    id: text('id').primaryKey(),
 
-    sessionId: text("session_id")
+    sessionId: text('session_id')
       .notNull()
       .references(() => sessions.id, {
-        onDelete: "cascade",
+        onDelete: 'cascade',
       }),
 
-    throughSeq: bigint("through_seq", {
-      mode: "number",
+    throughSeq: bigint('through_seq', {
+      mode: 'number',
     }).notNull(),
 
-    summary: text("summary").notNull(),
+    summary: text('summary').notNull(),
 
-    createdAt: timestamp("created_at", {
+    createdAt: timestamp('created_at', {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
   },
-  (table) => [
-    uniqueIndex("session_compactions_session_through_unique").on(table.sessionId, table.throughSeq),
+  table => [
+    uniqueIndex('session_compactions_session_through_unique').on(table.sessionId, table.throughSeq),
   ],
 );
 
@@ -146,32 +146,32 @@ export const sessionCompactions = pgTable(
  * 以后 ASR / Percept / Memory 可以继续扩。
  */
 export const retrievalChunks = pgTable(
-  "retrieval_chunks",
+  'retrieval_chunks',
   {
-    id: text("id").primaryKey(),
+    id: text('id').primaryKey(),
 
-    sessionId: text("session_id")
+    sessionId: text('session_id')
       .notNull()
       .references(() => sessions.id, {
-        onDelete: "cascade",
+        onDelete: 'cascade',
       }),
 
-    messageId: text("message_id")
+    messageId: text('message_id')
       .notNull()
       .references(() => sessionMessages.id, {
-        onDelete: "cascade",
+        onDelete: 'cascade',
       }),
 
-    messageSeq: bigint("message_seq", {
-      mode: "number",
+    messageSeq: bigint('message_seq', {
+      mode: 'number',
     }).notNull(),
 
-    chunkIndex: integer("chunk_index").notNull().default(0),
+    chunkIndex: integer('chunk_index').notNull().default(0),
 
     /**
      * 原始文本。
      */
-    content: text("content").notNull(),
+    content: text('content').notNull(),
 
     /**
      * 给 FTS / trigram 使用的文本。
@@ -179,26 +179,26 @@ export const retrievalChunks = pgTable(
      * 以后你想接中文 tokenizer，
      * 改生成这个字段的 normalizer 即可。
      */
-    searchText: text("search_text").notNull(),
+    searchText: text('search_text').notNull(),
 
     /** 分词后的全文检索文本。 */
-    tokenText: text("token_text").notNull().default(""),
+    tokenText: text('token_text').notNull().default(''),
 
-    createdAt: timestamp("created_at", {
+    createdAt: timestamp('created_at', {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
   },
-  (table) => [
-    uniqueIndex("retrieval_chunks_message_chunk_unique").on(table.messageId, table.chunkIndex),
+  table => [
+    uniqueIndex('retrieval_chunks_message_chunk_unique').on(table.messageId, table.chunkIndex),
 
-    index("retrieval_chunks_session_seq_idx").on(table.sessionId, table.messageSeq),
+    index('retrieval_chunks_session_seq_idx').on(table.sessionId, table.messageSeq),
 
     /**
      * PostgreSQL FTS。
      */
-    index("retrieval_chunks_fts_idx").using("gin", sql`to_tsvector('simple', ${table.tokenText})`),
+    index('retrieval_chunks_fts_idx').using('gin', sql`to_tsvector('simple', ${table.tokenText})`),
 
     /**
      * pg_trgm。
@@ -209,7 +209,7 @@ export const retrievalChunks = pgTable(
      * - typo
      * - 中文 substring
      */
-    index("retrieval_chunks_trgm_idx").using("gin", sql`${table.searchText} gin_trgm_ops`),
+    index('retrieval_chunks_trgm_idx').using('gin', sql`${table.searchText} gin_trgm_ops`),
   ],
 );
 
@@ -219,39 +219,39 @@ export const retrievalChunks = pgTable(
  * Vector 是派生数据，可以随时重新生成。
  */
 export const retrievalEmbeddings = pgTable(
-  "retrieval_embeddings",
+  'retrieval_embeddings',
   {
-    chunkId: text("chunk_id")
+    chunkId: text('chunk_id')
       .notNull()
       .references(() => retrievalChunks.id, {
-        onDelete: "cascade",
+        onDelete: 'cascade',
       }),
 
-    model: text("model").notNull(),
+    model: text('model').notNull(),
 
-    dimensions: integer("dimensions").notNull(),
+    dimensions: integer('dimensions').notNull(),
 
-    embedding: embeddingVector("embedding"),
+    embedding: embeddingVector('embedding'),
 
-    status: text("status").$type<"pending" | "ready" | "failed">().notNull().default("pending"),
+    status: text('status').$type<'pending' | 'ready' | 'failed'>().notNull().default('pending'),
 
-    error: text("error"),
+    error: text('error'),
 
-    createdAt: timestamp("created_at", {
+    createdAt: timestamp('created_at', {
       withTimezone: true,
     })
       .notNull()
       .defaultNow(),
   },
-  (table) => [
+  table => [
     primaryKey({
       columns: [table.chunkId, table.model, table.dimensions],
     }),
 
-    index("retrieval_embeddings_model_dimensions_idx").on(table.model, table.dimensions),
-    index("retrieval_embeddings_jobs_idx").on(table.model, table.dimensions, table.status),
+    index('retrieval_embeddings_model_dimensions_idx').on(table.model, table.dimensions),
+    index('retrieval_embeddings_jobs_idx').on(table.model, table.dimensions, table.status),
     check(
-      "retrieval_embeddings_status_check",
+      'retrieval_embeddings_status_check',
       sql`(${table.status} = 'ready' AND ${table.embedding} IS NOT NULL) OR (${table.status} IN ('pending', 'failed') AND ${table.embedding} IS NULL)`,
     ),
   ],

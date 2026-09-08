@@ -28,7 +28,7 @@
 主入口只包含运行时 API 和配置检查：
 
 ```ts
-import { ASR, checkConfiguration, createModelConfig } from "@cieljs/hearing";
+import { ASR, checkConfiguration, createModelConfig } from '@cieljs/hearing';
 ```
 
 `./ciel` 是 CLI 入口，`./worker` 是 Electron 后端启动的独立进程，两者都不作为公共子路径导出类型。
@@ -126,10 +126,10 @@ export interface SpeakerProfile {
 
 ```ts
 export type ASRWorkerCommand =
-  | { type: "init"; options: ASROptions }
-  | { type: "write"; data: string; startAt: string }
-  | { type: "flush" }
-  | { type: "close" };
+  | { type: 'init'; options: ASROptions }
+  | { type: 'write'; data: string; startAt: string }
+  | { type: 'flush' }
+  | { type: 'close' };
 ```
 
 PCM 以 base64 传输，时间戳用 ISO 字符串。`init` 完成后 worker 回 `ready`，之前排队的 `write`/`flush` 会暂存并在就绪后重放。worker 在 `init` 失败时标记 fatal 并退出，普通错误只回传 `error`。

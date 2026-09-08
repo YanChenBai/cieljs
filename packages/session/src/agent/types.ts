@@ -1,8 +1,8 @@
-import type { SessionManager } from "../session-manager.ts";
-import type { Session } from "../session.ts";
-import type { SessionSpace } from "../session-space.ts";
+import type { SessionManager } from '../session-manager.ts';
+import type { SessionSpace } from '../session-space.ts';
+import type { Session } from '../session.ts';
 
-export type CrossSpaceAccess = "related" | "all";
+export type CrossSpaceAccess = 'related' | 'all';
 
 export interface CrossSpaceOptions {
   manager: SessionManager;

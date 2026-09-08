@@ -22,29 +22,29 @@ Space API 不会隐式合并全局记忆。跨空间访问只在管理端或显�
 ## 基本使用
 
 ```ts
-import { MemoryManager } from "@cieljs/memory";
+import { MemoryManager } from '@cieljs/memory';
 
 await using memories = await MemoryManager.open({
-  dataDir: ".ciel/memory",
-  timeZone: "Asia/Shanghai",
+  dataDir: '.ciel/memory',
+  timeZone: 'Asia/Shanghai',
   embedding,
 });
 
-const space = memories.space("blive:room:21452505");
+const space = memories.space('blive:room:21452505');
 
 await memories.global.remember({
-  content: "用户偏好简洁且自然的表达",
-  sources: ["session:conversation-1"],
+  content: '用户偏好简洁且自然的表达',
+  sources: ['session:conversation-1'],
 });
 
 await space.longTerm.remember({
-  content: "这个直播间经常讨论独立游戏",
-  sources: ["bilibili:room:21452505", "主播昵称"],
+  content: '这个直播间经常讨论独立游戏',
+  sources: ['bilibili:room:21452505', '主播昵称'],
 });
 
 await space.daily.remember({
-  content: "今天主播开始体验新的独立游戏",
-  sources: ["bilibili:room:21452505", "今晚第一次挑战新模式"],
+  content: '今天主播开始体验新的独立游戏',
+  sources: ['bilibili:room:21452505', '今晚第一次挑战新模式'],
 });
 ```
 
@@ -58,7 +58,7 @@ const current = await space.get(memoryId);
 if (current) {
   await space.update(current.id, {
     expectedRevision: current.revision,
-    content: "修正后的完整内容",
+    content: '修正后的完整内容',
   });
 
   const history = await space.history(current.id);
@@ -71,11 +71,11 @@ if (current) {
 ## 沿来源查找
 
 ```ts
-const memoriesFromTitle = await memories.searchBySource("今晚第一次挑战新模式");
-const relatedSpaces = await memories.findSpacesBySource("主播昵称");
+const memoriesFromTitle = await memories.searchBySource('今晚第一次挑战新模式');
+const relatedSpaces = await memories.findSpacesBySource('主播昵称');
 
 for (const related of relatedSpaces) {
-  const hits = await memories.space(related.spaceId).search("之前对这个游戏有什么看法");
+  const hits = await memories.space(related.spaceId).search('之前对这个游戏有什么看法');
 }
 ```
 
@@ -84,14 +84,14 @@ for (const related of relatedSpaces) {
 ## Agent Tools
 
 ```ts
-import { globalMemoryTools, loadMemoryContext, memoryTools } from "@cieljs/memory/agent";
+import { globalMemoryTools, loadMemoryContext, memoryTools } from '@cieljs/memory/agent';
 
 const tools = memoryTools({
   space,
-  sources: ["session:conversation-1", "bilibili:room:21452505"],
+  sources: ['session:conversation-1', 'bilibili:room:21452505'],
   crossSpace: {
     manager: memories,
-    access: "related",
+    access: 'related',
   },
 });
 ```

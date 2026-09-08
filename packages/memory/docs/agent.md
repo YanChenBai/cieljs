@@ -52,7 +52,7 @@ const tools = memoryTools({
 下面三组工具是不同授权方式，按需要选择一组。`manager` 是已打开的 `MemoryManager`，`space` 是当前绑定的 `SpaceMemory`：
 
 ```ts
-import { memoryTools } from "@cieljs/memory/agent";
+import { memoryTools } from '@cieljs/memory/agent';
 
 // 默认：正文和来源都只搜索当前空间。
 const localTools = memoryTools({ space });
@@ -60,13 +60,13 @@ const localTools = memoryTools({ space });
 // 跨空间：先根据来源发现相关空间。
 const relatedTools = memoryTools({
   space,
-  crossSpace: { manager, access: "related" },
+  crossSpace: { manager, access: 'related' },
 });
 
 // 跨空间：也允许直接搜索全部空间及全局层。
 const allTools = memoryTools({
   space,
-  crossSpace: { manager, access: "all" },
+  crossSpace: { manager, access: 'all' },
 });
 ```
 
@@ -99,7 +99,7 @@ const allTools = memoryTools({
 ```ts
 const tools = globalMemoryTools({
   memory: manager.global,
-  sources: ["session:conversation-1"],
+  sources: ['session:conversation-1'],
 });
 ```
 

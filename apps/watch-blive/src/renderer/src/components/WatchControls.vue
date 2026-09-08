@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, shallowRef } from "vue";
-import { LoaderCircle, Play, Square } from "lucide-vue-next";
-import { Button } from "@vuetify/v0/components";
-import type { LiveArea, StartWatchOptions, WatchMode } from "../../../shared/types.ts";
+import { Button } from '@vuetify/v0/components';
+import { LoaderCircle, Play, Square } from 'lucide-vue-next';
+import { computed, shallowRef } from 'vue';
+
+import type { LiveArea, StartWatchOptions, WatchMode } from '../../../shared/types.ts';
 
 const props = defineProps<{
   areas: readonly LiveArea[];
@@ -14,35 +15,35 @@ const emit = defineEmits<{
   start: [options: StartWatchOptions];
   stop: [];
 }>();
-const mode = shallowRef<WatchMode["type"]>("follow");
+const mode = shallowRef<WatchMode['type']>('follow');
 const roomId = shallowRef<number>();
 const areaId = shallowRef<number>();
 const live = shallowRef(false);
-const areaSearch = shallowRef("");
+const areaSearch = shallowRef('');
 const filteredAreas = computed(() => {
   const query = areaSearch.value.trim().toLocaleLowerCase();
   return props.areas
-    .map((group) => ({
+    .map(group => ({
       ...group,
-      children: group.children.filter((area) =>
+      children: group.children.filter(area =>
         `${group.name} ${area.name} ${area.id}`.toLocaleLowerCase().includes(query),
       ),
     }))
-    .filter((group) => group.children.length > 0 || group.name.toLocaleLowerCase().includes(query));
+    .filter(group => group.children.length > 0 || group.name.toLocaleLowerCase().includes(query));
 });
 const valid = computed(
   () =>
-    Number.isSafeInteger(mode.value === "follow" ? roomId.value : areaId.value) &&
-    (mode.value === "follow" ? roomId.value! : areaId.value!) > 0,
+    Number.isSafeInteger(mode.value === 'follow' ? roomId.value : areaId.value) &&
+    (mode.value === 'follow' ? roomId.value! : areaId.value!) > 0,
 );
 function start() {
   if (!valid.value || !props.ready || props.pending || props.active) return;
-  emit("start", {
+  emit('start', {
     mode:
-      mode.value === "follow"
-        ? { type: "follow", roomId: roomId.value! }
-        : { type: "explore", areaId: areaId.value! },
-    danmakuDelivery: live.value ? "live" : "simulate",
+      mode.value === 'follow'
+        ? { type: 'follow', roomId: roomId.value! }
+        : { type: 'explore', areaId: areaId.value! },
+    danmakuDelivery: live.value ? 'live' : 'simulate',
   });
 }
 </script>
@@ -94,7 +95,7 @@ function start() {
         <label class="check"><input v-model="live" type="checkbox" />真实发送弹幕</label>
         <p class="hint">
           {{
-            live ? "弹幕将发送到当前直播间，需要先登录。" : "默认模拟互动，不会向直播间发送弹幕。"
+            live ? '弹幕将发送到当前直播间，需要先登录。' : '默认模拟互动，不会向直播间发送弹幕。'
           }}
         </p>
       </fieldset>
@@ -107,7 +108,7 @@ function start() {
         ><LoaderCircle v-if="pending === 'start'" class="spinning" :size="16" /><Play
           v-else
           :size="16"
-        />{{ pending === "start" ? "正在启动…" : "开始观看" }}</Button.Root
+        />{{ pending === 'start' ? '正在启动…' : '开始观看' }}</Button.Root
       >
       <Button.Root
         v-else
@@ -119,7 +120,7 @@ function start() {
         ><LoaderCircle v-if="pending === 'stop'" class="spinning" :size="16" /><Square
           v-else
           :size="16"
-        />{{ pending === "stop" ? "正在停止…" : "停止观看" }}</Button.Root
+        />{{ pending === 'stop' ? '正在停止…' : '停止观看' }}</Button.Root
       >
     </form>
   </section>

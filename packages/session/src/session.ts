@@ -1,10 +1,10 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import { findCompactionBoundary } from "./compaction.ts";
-import type { EmbeddingIndex } from "./embedding-index.ts";
-import { SessionNotFoundError } from "./errors.ts";
-import type { SessionRepository } from "./repository.ts";
-import type { SessionRetrieval } from "./retrieval.ts";
+import { findCompactionBoundary } from './compaction.ts';
+import type { EmbeddingIndex } from './embedding-index.ts';
+import { SessionNotFoundError } from './errors.ts';
+import type { SessionRepository } from './repository.ts';
+import type { SessionRetrieval } from './retrieval.ts';
 import type {
   AppendCompactionInput,
   CompactionOptions,
@@ -12,7 +12,7 @@ import type {
   SessionMessageListOptions,
   SessionSearchOptions,
   UpdateSessionInput,
-} from "./types.ts";
+} from './types.ts';
 
 export interface SessionServices {
   repository: SessionRepository;
@@ -100,7 +100,7 @@ export class Session {
       const rows = await this.services.repository.getMessages(this.selector, {
         afterSeq: compaction?.throughSeq ?? 0,
       });
-      const messages = rows.map((row) => row.message);
+      const messages = rows.map(row => row.message);
 
       return compaction
         ? [createSummaryMessage(compaction.summary, compaction.createdAt.getTime()), ...messages]
@@ -149,10 +149,10 @@ export class Session {
         afterSeq: latest?.throughSeq ?? 0,
       });
       const usageStartIndex = latest
-        ? rows.findIndex((row) => row.createdAt.getTime() > latest.createdAt.getTime())
+        ? rows.findIndex(row => row.createdAt.getTime() > latest.createdAt.getTime())
         : 0;
       const boundary = findCompactionBoundary(
-        { summary: latest?.summary ?? null, messages: rows.map((row) => row.message) },
+        { summary: latest?.summary ?? null, messages: rows.map(row => row.message) },
         options,
         usageStartIndex < 0 ? rows.length : usageStartIndex,
       );
@@ -162,7 +162,7 @@ export class Session {
       const summary = await options.summarize({
         sessionId: this.id,
         summary: latest?.summary ?? null,
-        messages: rows.slice(0, boundary).map((row) => row.message),
+        messages: rows.slice(0, boundary).map(row => row.message),
         signal: options.signal,
       });
       options.signal?.throwIfAborted();
@@ -190,18 +190,18 @@ export class Session {
 
 function createSummaryMessage(summary: string, timestamp: number): AgentMessage {
   return {
-    role: "user",
+    role: 'user',
     content: [
       {
-        type: "text",
+        type: 'text',
         text: [
-          "<session_summary>",
-          "以下内容是此前会话历史的压缩摘要。",
-          "它代表更早的对话历史，应作为已有上下文使用，而不是新的用户请求。",
-          "",
+          '<session_summary>',
+          '以下内容是此前会话历史的压缩摘要。',
+          '它代表更早的对话历史，应作为已有上下文使用，而不是新的用户请求。',
+          '',
           summary,
-          "</session_summary>",
-        ].join("\n"),
+          '</session_summary>',
+        ].join('\n'),
       },
     ],
     timestamp,

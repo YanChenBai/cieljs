@@ -1,25 +1,25 @@
-import { createProvider, envApiKeyAuth, type Model } from "@earendil-works/pi-ai";
-import { openAICompletionsApi } from "@earendil-works/pi-ai/compat";
-import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { createProvider, envApiKeyAuth, type Model } from '@earendil-works/pi-ai';
+import { openAICompletionsApi } from '@earendil-works/pi-ai/compat';
+import { builtinProviders } from '@earendil-works/pi-ai/providers/all';
 
-const mimo: Model<"openai-completions"> = {
-  id: "mimo-v2.5",
-  name: "MiMo-V2.5",
+const mimo: Model<'openai-completions'> = {
+  id: 'mimo-v2.5',
+  name: 'MiMo-V2.5',
 
-  provider: "xiaomi",
-  api: "openai-completions",
-  baseUrl: "https://api.xiaomimimo.com/v1",
+  provider: 'xiaomi',
+  api: 'openai-completions',
+  baseUrl: 'https://api.xiaomimimo.com/v1',
 
   reasoning: true,
-  input: ["text", "image"],
+  input: ['text', 'image'],
 
   thinkingLevelMap: {
-    off: "none",
+    off: 'none',
     minimal: null,
-    low: "low",
-    medium: "medium",
-    high: "high",
-    xhigh: "xhigh",
+    low: 'low',
+    medium: 'medium',
+    high: 'high',
+    xhigh: 'xhigh',
     max: null,
   },
 
@@ -39,11 +39,11 @@ const mimo: Model<"openai-completions"> = {
 };
 
 export const xiaomi = createProvider({
-  id: "xiaomi",
-  name: "Xiaomi",
-  baseUrl: "https://api.xiaomimimo.com/v1",
+  id: 'xiaomi',
+  name: 'Xiaomi',
+  baseUrl: 'https://api.xiaomimimo.com/v1',
   auth: {
-    apiKey: envApiKeyAuth("Xiaomi API key", ["XIAOMI_API_KEY"]),
+    apiKey: envApiKeyAuth('Xiaomi API key', ['XIAOMI_API_KEY']),
   },
   models: [mimo],
   api: openAICompletionsApi(),

@@ -30,7 +30,7 @@
 使用 `@cieljs/core` 时，在配置中开启 MCP：
 
 ```ts
-import { defineCiel } from "@cieljs/core";
+import { defineCiel } from '@cieljs/core';
 
 const ciel = defineCiel({
   // ...
@@ -46,7 +46,7 @@ await ciel.close();
 脱离 Core 使用时，也可以直接打开 MCP，把 `mcp.tools` 与本地工具一起交给 Agent：
 
 ```ts
-import { createMcp } from "@cieljs/mcp";
+import { createMcp } from '@cieljs/mcp';
 
 const mcp = await createMcp();
 
@@ -77,7 +77,7 @@ Server 暴露的工具会在启动时自动发现，不需要提前声明 `webSe
 所有 Server 的工具会合并到同一个 `mcp.tools`：
 
 ```ts
-console.log(mcp.tools.map((tool) => tool.name));
+console.log(mcp.tools.map(tool => tool.name));
 // ["web_search", "web_fetch", "search_video", "get_video_info", "get_dynamic"]
 ```
 
@@ -163,8 +163,8 @@ MCP Server 默认继承 Ciel 项目的 cwd，可用 `cwd` 指定相对路径；`
 
 ```ts
 const mcp = await createMcp({
-  cwd: "/path/to/project",
-  configFile: "./config/mcp.json",
+  cwd: '/path/to/project',
+  configFile: './config/mcp.json',
 });
 ```
 

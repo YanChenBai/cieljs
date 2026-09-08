@@ -1,12 +1,11 @@
-import { Type } from "typebox";
+import { defineTool } from '@cieljs/agent-kit';
+import { Type } from 'typebox';
 
-import { defineTool } from "@cieljs/agent-kit";
-
-import type { Session } from "../session.ts";
-import { sessionResult } from "./helpers.ts";
+import type { Session } from '../session.ts';
+import { sessionResult } from './helpers.ts';
 
 interface CreateCurrentReadToolOptions {
-  name: "read_current_session_messages";
+  name: 'read_current_session_messages';
   label: string;
   description: string;
   maxReadMessages: number;
@@ -14,7 +13,7 @@ interface CreateCurrentReadToolOptions {
 }
 
 interface CreateScopedReadToolOptions {
-  name: "read_discovered_session_messages" | "read_any_session_messages";
+  name: 'read_discovered_session_messages' | 'read_any_session_messages';
   label: string;
   description: string;
   maxReadMessages: number;
@@ -25,20 +24,20 @@ interface CreateScopedReadToolOptions {
 const rangeSchema = {
   messageId: Type.String({
     minLength: 1,
-    description: "目标消息的 ID，使用正文搜索结果中的 message.id，不是消息序号。",
+    description: '目标消息的 ID，使用正文搜索结果中的 message.id，不是消息序号。',
   }),
   before: Type.Optional(
     Type.Integer({
       minimum: 0,
       maximum: 20,
-      description: "目标消息之前的消息条数，默认 2，实际不超过宿主设置的上限。",
+      description: '目标消息之前的消息条数，默认 2，实际不超过宿主设置的上限。',
     }),
   ),
   after: Type.Optional(
     Type.Integer({
       minimum: 0,
       maximum: 20,
-      description: "目标消息之后的消息条数，默认 2，实际不超过宿主设置的上限。",
+      description: '目标消息之后的消息条数，默认 2，实际不超过宿主设置的上限。',
     }),
   ),
 };
@@ -66,7 +65,7 @@ export const createScopedReadTool = defineTool(
     sessionId: Type.String({
       minLength: 1,
       description:
-        "目标会话 ID，使用发现结果中的 session.id 或正文搜索结果中的 message.sessionId。",
+        '目标会话 ID，使用发现结果中的 session.id 或正文搜索结果中的 message.sessionId。',
     }),
     ...rangeSchema,
   }),

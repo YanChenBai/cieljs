@@ -19,11 +19,11 @@ const DATA = 0x61746164;
 
 export function parseWav(buffer: Buffer): ParsedWav {
   if (buffer.length < 44 || buffer.readUInt32LE(0) !== RIFF || buffer.readUInt32LE(8) !== WAVE) {
-    throw new Error("不是有效的 WAV 文件：缺少 RIFF/WAVE 标识");
+    throw new Error('不是有效的 WAV 文件：缺少 RIFF/WAVE 标识');
   }
 
   let offset = 12;
-  let fmt: Omit<ParsedWav, "data"> | undefined;
+  let fmt: Omit<ParsedWav, 'data'> | undefined;
   let data: Buffer | undefined;
 
   while (offset + 8 <= buffer.length) {
@@ -38,7 +38,7 @@ export function parseWav(buffer: Buffer): ParsedWav {
 
     if (chunkId === FMT) {
       if (chunkSize < 16) {
-        throw new Error("WAV fmt 块不完整");
+        throw new Error('WAV fmt 块不完整');
       }
 
       fmt = {
@@ -55,11 +55,11 @@ export function parseWav(buffer: Buffer): ParsedWav {
   }
 
   if (!fmt) {
-    throw new Error("WAV 缺少 fmt 块");
+    throw new Error('WAV 缺少 fmt 块');
   }
 
   if (!data) {
-    throw new Error("WAV 缺少 data 块");
+    throw new Error('WAV 缺少 data 块');
   }
 
   return { ...fmt, data };
@@ -69,7 +69,7 @@ export function decodeWavToPcm16(buffer: Buffer): DecodedPcm {
   const wav = parseWav(buffer);
 
   if (wav.channels < 1) {
-    throw new Error("WAV 声道数必须大于 0");
+    throw new Error('WAV 声道数必须大于 0');
   }
 
   const pcm = decodeSamples(wav.data, wav);
@@ -85,7 +85,7 @@ function decodeSamples(data: Buffer, wav: ParsedWav): Buffer {
   const frameBytes = wav.channels * bytesPerSample(wav);
 
   if (data.length % frameBytes !== 0) {
-    throw new Error("WAV data 块字节数与声道、位深不一致");
+    throw new Error('WAV data 块字节数与声道、位深不一致');
   }
 
   const frameCount = data.length / frameBytes;

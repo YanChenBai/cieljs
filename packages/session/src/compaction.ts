@@ -1,14 +1,14 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { prompt } from '@cieljs/agent-kit';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import { messageToSearchText } from "./search.ts";
+import { messageToSearchText } from './search.ts';
+import { estimateContextTokens } from './tokens.ts';
 import type {
   CompactionOptions,
   SessionContext,
   SessionSummarizer,
   SessionSummarizerOptions,
-} from "./types.ts";
-import { estimateContextTokens } from "./tokens.ts";
-import { prompt } from "@cieljs/agent-kit";
+} from './types.ts';
 
 const DEFAULT_KEEP_RECENT_MESSAGES = 10;
 const DEFAULT_RESERVE_TOKENS = 16_384;
@@ -38,7 +38,7 @@ export function createSummarizer(options: SessionSummarizerOptions): SessionSumm
       systemPrompt,
       prompt: JSON.stringify({
         summary,
-        messages: messages.map((message) => ({
+        messages: messages.map(message => ({
           role: message.role,
           content: messageToSearchText(message),
         })),
@@ -65,22 +65,22 @@ function resolveCompactionOptions(options: CompactionOptions): ResolvedCompactio
     force: options.force ?? false,
   };
 
-  assertSafeInteger(resolved.keepRecentMessages, "keepRecentMessages 必须是正整数");
+  assertSafeInteger(resolved.keepRecentMessages, 'keepRecentMessages 必须是正整数');
 
   if (resolved.keepRecentMessages < 1) {
-    throw new TypeError("keepRecentMessages 必须是正整数");
+    throw new TypeError('keepRecentMessages 必须是正整数');
   }
 
-  assertSafeInteger(resolved.contextWindow, "contextWindow 必须是正整数");
+  assertSafeInteger(resolved.contextWindow, 'contextWindow 必须是正整数');
 
   if (resolved.contextWindow < 1) {
-    throw new TypeError("contextWindow 必须是正整数");
+    throw new TypeError('contextWindow 必须是正整数');
   }
 
-  assertSafeInteger(resolved.reserveTokens, "reserveTokens 必须是小于 contextWindow 的非负整数");
+  assertSafeInteger(resolved.reserveTokens, 'reserveTokens 必须是小于 contextWindow 的非负整数');
 
   if (resolved.reserveTokens < 0 || resolved.reserveTokens >= resolved.contextWindow) {
-    throw new TypeError("reserveTokens 必须是小于 contextWindow 的非负整数");
+    throw new TypeError('reserveTokens 必须是小于 contextWindow 的非负整数');
   }
 
   return resolved;
@@ -99,7 +99,7 @@ function shouldSkipCompaction(
 }
 
 function isUserMessage(message: AgentMessage | undefined) {
-  return message?.role === "user";
+  return message?.role === 'user';
 }
 
 export function findCompactionBoundary(

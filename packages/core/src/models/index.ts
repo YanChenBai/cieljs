@@ -1,6 +1,6 @@
-import { createModels } from "@earendil-works/pi-ai";
+import { createModels } from '@earendil-works/pi-ai';
 
-import providers from "./providers.ts";
+import providers from './providers.ts';
 
 const models = createModels();
 

@@ -1,18 +1,18 @@
 // @env node
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import path from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 
-import { resolveVoiceprintsPath } from "./constants.ts";
+import { resolveVoiceprintsPath } from './constants.ts';
 
-const VOICEPRINT_MAGIC = "CIELVP01";
+const VOICEPRINT_MAGIC = 'CIELVP01';
 const HEADER_SIZE = VOICEPRINT_MAGIC.length + Uint32Array.BYTES_PER_ELEMENT;
 
 export function resolveVoiceprintPath(file: string): string {
   const root = path.resolve(resolveVoiceprintsPath());
   const target = path.resolve(root, file);
   const relative = path.relative(root, target);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error(`Voiceprint must be inside ${root}: ${file}`);
   }
   return target;
@@ -42,7 +42,7 @@ export function readVoiceprint(file: string): Float32Array {
 export function writeVoiceprint(file: string, embedding: Float32Array): string {
   const normalized = normalizeEmbedding(embedding);
   const data = Buffer.allocUnsafe(HEADER_SIZE + normalized.length * Float32Array.BYTES_PER_ELEMENT);
-  data.write(VOICEPRINT_MAGIC, 0, "ascii");
+  data.write(VOICEPRINT_MAGIC, 0, 'ascii');
   data.writeUInt32LE(normalized.length, VOICEPRINT_MAGIC.length);
   normalized.forEach((value, index) => {
     data.writeFloatLE(value, HEADER_SIZE + index * Float32Array.BYTES_PER_ELEMENT);
@@ -56,12 +56,12 @@ export function writeVoiceprint(file: string, embedding: Float32Array): string {
 
 export function averageEmbeddings(embeddings: readonly Float32Array[]): Float32Array {
   const first = embeddings[0];
-  if (!first) throw new Error("At least one embedding is required");
+  if (!first) throw new Error('At least one embedding is required');
 
   const average = new Float32Array(first.length);
   for (const embedding of embeddings) {
     if (embedding.length !== average.length) {
-      throw new Error("Voiceprint dimensions do not match");
+      throw new Error('Voiceprint dimensions do not match');
     }
     embedding.forEach((value, index) => {
       average[index] += value / embeddings.length;
@@ -75,7 +75,7 @@ export function normalizeEmbedding(embedding: Float32Array): Float32Array {
   for (const value of embedding) squaredNorm += value * value;
   const norm = Math.sqrt(squaredNorm);
   if (!Number.isFinite(norm) || norm === 0) {
-    throw new Error("Invalid speaker embedding");
+    throw new Error('Invalid speaker embedding');
   }
-  return Float32Array.from(embedding, (value) => value / norm);
+  return Float32Array.from(embedding, value => value / norm);
 }

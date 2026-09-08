@@ -1,9 +1,9 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from "@cieljs/agent-kit";
+import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from '@cieljs/agent-kit';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
-import type { Database, Transaction } from "./database.ts";
-import { retrievalChunks, retrievalEmbeddings } from "./schema.ts";
-import type { SessionIndexStatus } from "./types.ts";
+import type { Database, Transaction } from './database.ts';
+import { retrievalChunks, retrievalEmbeddings } from './schema.ts';
+import type { SessionIndexStatus } from './types.ts';
 
 export class EmbeddingIndex {
   private indexing: Promise<void> = Promise.resolve();
@@ -19,24 +19,24 @@ export class EmbeddingIndex {
       return;
     }
 
-    await this.db.transaction(async (transaction) => {
+    await this.db.transaction(async transaction => {
       const rows = await transaction
         .select({ id: retrievalChunks.id })
         .from(retrievalChunks)
         .where(sessionId ? eq(retrievalChunks.sessionId, sessionId) : undefined);
 
       for (let start = 0; start < rows.length; start += 500) {
-        const ids = rows.slice(start, start + 500).map((row) => row.id);
+        const ids = rows.slice(start, start + 500).map(row => row.id);
 
         await this.addPending(transaction, ids);
         await transaction
           .update(retrievalEmbeddings)
-          .set({ status: "pending", embedding: null, error: null })
+          .set({ status: 'pending', embedding: null, error: null })
           .where(
             and(
               this.modelCondition(),
               inArray(retrievalEmbeddings.chunkId, ids),
-              reset ? undefined : eq(retrievalEmbeddings.status, "failed"),
+              reset ? undefined : eq(retrievalEmbeddings.status, 'failed'),
             ),
           );
       }
@@ -53,7 +53,7 @@ export class EmbeddingIndex {
     await transaction
       .insert(retrievalEmbeddings)
       .values(
-        chunkIds.map((chunkId) => ({
+        chunkIds.map(chunkId => ({
           chunkId,
           model: provider.model,
           dimensions: provider.dimensions,
@@ -107,7 +107,7 @@ export class EmbeddingIndex {
       return null;
     }
 
-    const vector = await this.provider.embed(query, { purpose: "query", signal });
+    const vector = await this.provider.embed(query, { purpose: 'query', signal });
     signal?.throwIfAborted();
 
     return vector;
@@ -133,10 +133,10 @@ export class EmbeddingIndex {
       if (this.onIndexError) {
         this.onIndexError(error);
       } else {
-        console.warn("[session] 向量索引或检索失败", error);
+        console.warn('[session] 向量索引或检索失败', error);
       }
     } catch (callbackError) {
-      console.warn("[session] 索引错误回调失败", callbackError);
+      console.warn('[session] 索引错误回调失败', callbackError);
     }
   }
 
@@ -157,7 +157,7 @@ export class EmbeddingIndex {
         .select({ id: retrievalChunks.id, content: retrievalChunks.content })
         .from(retrievalEmbeddings)
         .innerJoin(retrievalChunks, eq(retrievalChunks.id, retrievalEmbeddings.chunkId))
-        .where(and(this.modelCondition(), eq(retrievalEmbeddings.status, "pending")))
+        .where(and(this.modelCondition(), eq(retrievalEmbeddings.status, 'pending')))
         .orderBy(asc(retrievalChunks.id))
         .limit(provider.batchSize);
 
@@ -167,21 +167,21 @@ export class EmbeddingIndex {
 
       try {
         const vectors = await provider.embedBatch(
-          rows.map((row) => row.content),
-          { purpose: "document" },
+          rows.map(row => row.content),
+          { purpose: 'document' },
         );
         assertEmbeddingVectors(vectors, rows.length, provider.dimensions);
 
-        await this.db.transaction(async (transaction) => {
+        await this.db.transaction(async transaction => {
           for (const [index, row] of rows.entries()) {
             await transaction
               .update(retrievalEmbeddings)
-              .set({ embedding: vectors[index]!, status: "ready", error: null })
+              .set({ embedding: vectors[index]!, status: 'ready', error: null })
               .where(
                 and(
                   this.modelCondition(),
                   eq(retrievalEmbeddings.chunkId, row.id),
-                  eq(retrievalEmbeddings.status, "pending"),
+                  eq(retrievalEmbeddings.status, 'pending'),
                 ),
               );
           }
@@ -190,7 +190,7 @@ export class EmbeddingIndex {
         await this.db
           .update(retrievalEmbeddings)
           .set({
-            status: "failed",
+            status: 'failed',
             embedding: null,
             error: error instanceof Error ? error.message : String(error),
           })
@@ -199,9 +199,9 @@ export class EmbeddingIndex {
               this.modelCondition(),
               inArray(
                 retrievalEmbeddings.chunkId,
-                rows.map((row) => row.id),
+                rows.map(row => row.id),
               ),
-              eq(retrievalEmbeddings.status, "pending"),
+              eq(retrievalEmbeddings.status, 'pending'),
             ),
           );
         this.reportError(error);

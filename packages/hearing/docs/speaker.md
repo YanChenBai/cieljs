@@ -16,7 +16,7 @@ magic "CIELVP01" + uint32 维度 + float32[] embedding
 
 ```ts
 const asr = new ASR({
-  speaker: [{ name: "alice", file: "alice.voiceprint" }],
+  speaker: [{ name: 'alice', file: 'alice.voiceprint' }],
 });
 ```
 

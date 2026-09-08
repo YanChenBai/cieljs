@@ -1,25 +1,26 @@
 <script setup lang="ts">
-import { computed, shallowRef } from "vue";
-import { Button, Tabs } from "@vuetify/v0/components";
-import type { DevtoolsClient } from "../client/index.ts";
-import TraceList from "./TraceList.vue";
-import MessageView from "./MessageView.vue";
-import TraceDetail from "./TraceDetail.vue";
-import ContentRenderer from "./ContentRenderer.vue";
-import { vFollowScroll } from "./follow-scroll.ts";
-import type { TraceEntry } from "../protocol/index.ts";
-import { useDevtools } from "./useDevtools.ts";
+import { Button, Tabs } from '@vuetify/v0/components';
+import { computed, shallowRef } from 'vue';
+
+import type { DevtoolsClient } from '../client/index.ts';
+import type { TraceEntry } from '../protocol/index.ts';
+import ContentRenderer from './ContentRenderer.vue';
+import { vFollowScroll } from './follow-scroll.ts';
+import MessageView from './MessageView.vue';
+import TraceDetail from './TraceDetail.vue';
+import TraceList from './TraceList.vue';
+import { useDevtools } from './useDevtools.ts';
 const props = defineProps<{ client: DevtoolsClient }>();
 const { steps, entries, error, hasOlder, older, connect, clear } = useDevtools(props.client);
-const query = shallowRef("");
-const selectedId = shallowRef("");
+const query = shallowRef('');
+const selectedId = shallowRef('');
 const grouped = computed(() => {
   const records = new Map<string, TraceEntry>();
   for (const step of steps.value) {
     const key =
-      step.kind === "message" && step.messageId
+      step.kind === 'message' && step.messageId
         ? `${step.runId}:message:${step.messageId}`
-        : step.kind === "tool" && step.toolCallId
+        : step.kind === 'tool' && step.toolCallId
           ? `${step.runId}:tool:${step.toolCallId}`
           : step.id;
     const previous = records.get(key);
@@ -31,23 +32,21 @@ const grouped = computed(() => {
       input: step.input ?? previous?.input,
       output: step.output ?? previous?.output,
       name:
-        step.kind === "message" ? "message" : step.kind === "tool" ? "tool_execution" : step.name,
+        step.kind === 'message' ? 'message' : step.kind === 'tool' ? 'tool_execution' : step.name,
     });
   }
   return [...records.values()];
 });
-const selected = computed(() => grouped.value.find((entry) => entry.id === selectedId.value));
+const selected = computed(() => grouped.value.find(entry => entry.id === selectedId.value));
 const filtered = computed(() =>
-  grouped.value.filter((entry) =>
-    `${entry.label ?? ""} ${entry.name} ${entry.id} ${entry.sessionId} ${entry.toolCallId ?? ""}`
+  grouped.value.filter(entry =>
+    `${entry.label ?? ''} ${entry.name} ${entry.id} ${entry.sessionId} ${entry.toolCallId ?? ''}`
       .toLowerCase()
       .includes(query.value.toLowerCase()),
   ),
 );
-const messages = computed(() =>
-  entries.value.filter((entry) => entry.kind === "message").slice(-50),
-);
-const tab = shallowRef("conversation");
+const messages = computed(() => entries.value.filter(entry => entry.kind === 'message').slice(-50));
+const tab = shallowRef('conversation');
 const split = shallowRef(36);
 function resize(event: PointerEvent) {
   const handle = event.currentTarget as HTMLElement;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { vFollowScroll } from "@cieljs/devtools";
+import { vFollowScroll } from '@cieljs/devtools';
 defineProps<{ events: readonly { id: number; time: string; text: string }[] }>();
 </script>
 <template>

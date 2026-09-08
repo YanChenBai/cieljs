@@ -1,15 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 const recognizerResult = vi.hoisted(() => ({
   calls: 0,
   degenerateTokenCount: 256,
   splitRetry: false,
-  text: "language Chinese<asr_text>你好",
+  text: 'language Chinese<asr_text>你好',
   tokens: [] as string[],
   vadSamples: 16_000,
 }));
 
-vi.mock("sherpa-onnx-node", () => {
+vi.mock('sherpa-onnx-node', () => {
   class FakeStream {
     decoded = false;
     sampleCount = 0;
@@ -96,13 +96,13 @@ vi.mock("sherpa-onnx-node", () => {
         recognizerResult.splitRetry && stream.sampleCount === recognizerResult.vadSamples;
       return {
         text: retryingLongSegment
-          ? `language Chinese<asr_text>${"这啊，".repeat(80)}`
+          ? `language Chinese<asr_text>${'这啊，'.repeat(80)}`
           : recognizerResult.text,
-        lang: "<|zh|>",
-        emotion: "<|NEUTRAL|>",
-        event: "<|Speech|>",
+        lang: '<|zh|>',
+        emotion: '<|NEUTRAL|>',
+        event: '<|Speech|>',
         tokens: retryingLongSegment
-          ? Array.from({ length: recognizerResult.degenerateTokenCount }, () => "token")
+          ? Array.from({ length: recognizerResult.degenerateTokenCount }, () => 'token')
           : recognizerResult.tokens,
         timestamps: [],
         durations: [],
@@ -138,24 +138,24 @@ vi.mock("sherpa-onnx-node", () => {
   };
 });
 
-const { ASR } = await import("../src/asr.ts");
+const { ASR } = await import('../src/asr.ts');
 
-describe("ASR", () => {
+describe('ASR', () => {
   beforeEach(() => {
     recognizerResult.calls = 0;
     recognizerResult.degenerateTokenCount = 256;
     recognizerResult.splitRetry = false;
-    recognizerResult.text = "language Chinese<asr_text>你好";
+    recognizerResult.text = 'language Chinese<asr_text>你好';
     recognizerResult.tokens = [];
     recognizerResult.vadSamples = 16_000;
   });
 
-  it("emits timestamped final results with a stable speaker", () => {
+  it('emits timestamped final results with a stable speaker', () => {
     const asr = new ASR();
-    const results: import("../src/types.ts").ASRResult[] = [];
-    asr.on("result", (result) => results.push(result));
+    const results: import('../src/types.ts').ASRResult[] = [];
+    asr.on('result', result => results.push(result));
 
-    const startAt = new Date("2026-08-09T00:00:00.000Z");
+    const startAt = new Date('2026-08-09T00:00:00.000Z');
     asr.write({
       data: Buffer.alloc(1_024),
       startAt,
@@ -164,34 +164,34 @@ describe("ASR", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
-      content: "你好",
-      speaker: "speaker_0",
-      startAt: new Date("2026-08-09T00:00:00.100Z"),
-      endAt: new Date("2026-08-09T00:00:01.100Z"),
+      content: '你好',
+      speaker: 'speaker_0',
+      startAt: new Date('2026-08-09T00:00:00.100Z'),
+      endAt: new Date('2026-08-09T00:00:01.100Z'),
     });
     expect(results[0]!.confidence).toBeUndefined();
     expect(results[0]!.tokens).toBeUndefined();
   });
 
-  it("emits input errors without throwing from write", () => {
+  it('emits input errors without throwing from write', () => {
     const asr = new ASR();
     const errors: Error[] = [];
-    asr.on("error", (error) => errors.push(error));
+    asr.on('error', error => errors.push(error));
 
     asr.write({
       data: Buffer.alloc(1),
       startAt: new Date(0),
     });
 
-    expect(errors[0]?.message).toContain("aligned s16le");
+    expect(errors[0]?.message).toContain('aligned s16le');
   });
 
-  it("drops transcripts that still hit the token limit after shorter retries", () => {
-    recognizerResult.text = "language Chinese<asr_text>未完成";
-    recognizerResult.tokens = Array.from({ length: 256 }, () => "token");
+  it('drops transcripts that still hit the token limit after shorter retries', () => {
+    recognizerResult.text = 'language Chinese<asr_text>未完成';
+    recognizerResult.tokens = Array.from({ length: 256 }, () => 'token');
     const asr = new ASR();
-    const results: import("../src/types.ts").ASRResult[] = [];
-    asr.on("result", (result) => results.push(result));
+    const results: import('../src/types.ts').ASRResult[] = [];
+    asr.on('result', result => results.push(result));
 
     asr.write({ data: Buffer.alloc(1_024), startAt: new Date(0) });
     asr.flush();
@@ -199,12 +199,12 @@ describe("ASR", () => {
     expect(results).toEqual([]);
   });
 
-  it("drops excessively repetitive transcripts", () => {
-    recognizerResult.text = `language Chinese<asr_text>啊，这个点都是广东人。${"这啊，".repeat(80)}`;
+  it('drops excessively repetitive transcripts', () => {
+    recognizerResult.text = `language Chinese<asr_text>啊，这个点都是广东人。${'这啊，'.repeat(80)}`;
     recognizerResult.tokens = [];
     const asr = new ASR();
-    const results: import("../src/types.ts").ASRResult[] = [];
-    asr.on("result", (result) => results.push(result));
+    const results: import('../src/types.ts').ASRResult[] = [];
+    asr.on('result', result => results.push(result));
 
     asr.write({ data: Buffer.alloc(1_024), startAt: new Date(0) });
     asr.flush();
@@ -212,34 +212,34 @@ describe("ASR", () => {
     expect(results).toEqual([]);
   });
 
-  it("retries a degenerate long segment as two shorter transcriptions", () => {
+  it('retries a degenerate long segment as two shorter transcriptions', () => {
     recognizerResult.splitRetry = true;
-    recognizerResult.text = "language Chinese<asr_text>恢复";
+    recognizerResult.text = 'language Chinese<asr_text>恢复';
     recognizerResult.vadSamples = 160_000;
     const asr = new ASR();
-    const results: import("../src/types.ts").ASRResult[] = [];
-    asr.on("result", (result) => results.push(result));
+    const results: import('../src/types.ts').ASRResult[] = [];
+    asr.on('result', result => results.push(result));
 
     asr.write({ data: Buffer.alloc(1_024), startAt: new Date(0) });
     asr.flush();
 
     expect(recognizerResult.calls).toBe(3);
-    expect(results.map((result) => result.content)).toEqual(["恢复恢复"]);
+    expect(results.map(result => result.content)).toEqual(['恢复恢复']);
   });
 
-  it("retries before sherpa enters its 65-token repetition guard", () => {
+  it('retries before sherpa enters its 65-token repetition guard', () => {
     recognizerResult.degenerateTokenCount = 65;
     recognizerResult.splitRetry = true;
-    recognizerResult.text = "language Chinese<asr_text>恢复";
+    recognizerResult.text = 'language Chinese<asr_text>恢复';
     recognizerResult.vadSamples = 160_000;
     const asr = new ASR();
-    const results: import("../src/types.ts").ASRResult[] = [];
-    asr.on("result", (result) => results.push(result));
+    const results: import('../src/types.ts').ASRResult[] = [];
+    asr.on('result', result => results.push(result));
 
     asr.write({ data: Buffer.alloc(1_024), startAt: new Date(0) });
     asr.flush();
 
     expect(recognizerResult.calls).toBe(3);
-    expect(results.map((result) => result.content)).toEqual(["恢复恢复"]);
+    expect(results.map(result => result.content)).toEqual(['恢复恢复']);
   });
 });

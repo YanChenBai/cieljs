@@ -2,7 +2,7 @@ import type {
   OfflineRecognizerConfig,
   SpeakerEmbeddingExtractorConfig,
   VadConfig,
-} from "sherpa-onnx-node";
+} from 'sherpa-onnx-node';
 
 export type Unsubscribe = () => void;
 

@@ -1,10 +1,10 @@
-import { homedir } from "node:os";
-import { readFile } from "node:fs/promises";
-import { isAbsolute, resolve, join } from "node:path";
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { isAbsolute, resolve, join } from 'node:path';
 
-import type { McpConfig, McpOptions, McpServerConfig } from "./types.ts";
+import type { McpConfig, McpOptions, McpServerConfig } from './types.ts';
 
-export const DEFAULT_MCP_CONFIG_FILE = join(homedir(), ".ciel", "mcp.json");
+export const DEFAULT_MCP_CONFIG_FILE = join(homedir(), '.ciel', 'mcp.json');
 
 export interface LoadedMcpConfig {
   config: McpConfig;
@@ -20,9 +20,9 @@ export async function loadMcpConfig(options: McpOptions = {}): Promise<LoadedMcp
   let text: string;
 
   try {
-    text = await readFile(configFile, "utf8");
+    text = await readFile(configFile, 'utf8');
   } catch (error) {
-    const isMissing = error instanceof Error && "code" in error && error.code === "ENOENT";
+    const isMissing = error instanceof Error && 'code' in error && error.code === 'ENOENT';
 
     if (isMissing && !options.required) {
       return {
@@ -57,7 +57,7 @@ function resolveConfigFile(cwd: string, configFile: string): string {
 
 function parseMcpConfig(value: unknown): McpConfig {
   if (!isRecord(value)) {
-    throw new Error("MCP 配置必须是 JSON object");
+    throw new Error('MCP 配置必须是 JSON object');
   }
 
   const rawServers = value.mcpServers;
@@ -69,7 +69,7 @@ function parseMcpConfig(value: unknown): McpConfig {
   }
 
   if (!isRecord(rawServers)) {
-    throw new Error("mcpServers 必须是 JSON object");
+    throw new Error('mcpServers 必须是 JSON object');
   }
 
   const mcpServers: Record<string, McpServerConfig> = {};
@@ -88,16 +88,16 @@ function parseServerConfig(name: string, value: unknown): McpServerConfig {
     throw new Error(`MCP Server "${name}" 配置必须是 object`);
   }
 
-  if (typeof value.command !== "string" || !value.command.trim()) {
+  if (typeof value.command !== 'string' || !value.command.trim()) {
     throw new Error(`MCP Server "${name}" 缺少 command`);
   }
 
-  if (value.type !== undefined && value.type !== "stdio") {
+  if (value.type !== undefined && value.type !== 'stdio') {
     throw new Error(`MCP Server "${name}" 暂不支持 transport "${value.type}"`);
   }
 
   return {
-    type: "stdio",
+    type: 'stdio',
     enabled: readBoolean(value.enabled, true),
     command: value.command,
     args: readStringArray(value.args, `${name}.args`),
@@ -122,7 +122,7 @@ function readEnv(value: unknown, serverName: string): Record<string, string> | u
   const env: Record<string, string> = {};
 
   for (const [key, rawValue] of Object.entries(value)) {
-    if (typeof rawValue !== "string") {
+    if (typeof rawValue !== 'string') {
       throw new Error(`${serverName}.env.${key} 必须是 string`);
     }
 
@@ -149,7 +149,7 @@ function readStringArray(value: unknown, name: string): string[] | undefined {
     return undefined;
   }
 
-  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+  if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) {
     throw new Error(`${name} 必须是 string[]`);
   }
 
@@ -161,7 +161,7 @@ function readOptionalString(value: unknown, name: string): string | undefined {
     return undefined;
   }
 
-  if (typeof value !== "string") {
+  if (typeof value !== 'string') {
     throw new Error(`${name} 必须是 string`);
   }
 
@@ -173,7 +173,7 @@ function readOptionalNumber(value: unknown, name: string): number | undefined {
     return undefined;
   }
 
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`${name} 必须是 number`);
   }
 
@@ -185,8 +185,8 @@ function readBoolean(value: unknown, defaultValue: boolean): boolean {
     return defaultValue;
   }
 
-  if (typeof value !== "boolean") {
-    throw new Error("enabled 必须是 boolean");
+  if (typeof value !== 'boolean') {
+    throw new Error('enabled 必须是 boolean');
   }
 
   return value;
@@ -197,7 +197,7 @@ function readPrefix(value: unknown, serverName: string): boolean | string | unde
     return undefined;
   }
 
-  const valid = typeof value === "boolean" || (typeof value === "string" && value.length > 0);
+  const valid = typeof value === 'boolean' || (typeof value === 'string' && value.length > 0);
 
   if (!valid) {
     throw new Error(`${serverName}.prefix 必须是 boolean 或非空 string`);
@@ -207,5 +207,5 @@ function readPrefix(value: unknown, serverName: string): boolean | string | unde
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

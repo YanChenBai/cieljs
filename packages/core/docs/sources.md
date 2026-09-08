@@ -11,20 +11,20 @@
 ```ts
 // 静态
 const session = await ciel.session({
-  spaceId: "livestream",
-  sources: ["room:1000", "streamer:42"],
+  spaceId: 'livestream',
+  sources: ['room:1000', 'streamer:42'],
 });
 
 // 动态：每次使用时读取最新值
-let roomId = "room:1000";
+let roomId = 'room:1000';
 
 const session = await ciel.session({
-  spaceId: "livestream",
+  spaceId: 'livestream',
   sources: () => [roomId],
 });
 
-roomId = "room:2000";
-await session.agent.prompt("当前直播间怎么样？");
+roomId = 'room:2000';
+await session.agent.prompt('当前直播间怎么样？');
 ```
 
 Core 不在打开时永久缓存动态来源，而是在以下边界重新调用 `sources()`：

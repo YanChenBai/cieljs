@@ -4,9 +4,9 @@ Embedding 配置与 `@cieljs/agent-kit` 共用：
 
 ```ts
 const manager = await MemoryManager.open({
-  dataDir: ".ciel/memory",
+  dataDir: '.ciel/memory',
   embedding: {
-    model: "text-embedding-model",
+    model: 'text-embedding-model',
     dimensions: 1024,
     embedBatch,
   },
@@ -17,7 +17,7 @@ const manager = await MemoryManager.open({
 
 ```ts
 await manager.flushIndexes();
-const hits = await space.search("相关含义", { mode: "vector" });
+const hits = await space.search('相关含义', { mode: 'vector' });
 ```
 
 - `getIndexStatus()` 查看 pending、ready 和 failed 数量

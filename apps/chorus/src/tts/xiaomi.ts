@@ -1,21 +1,21 @@
-import { parseWav, type ParsedWav } from "../audio/wav.ts";
-import type { SpeechAudio, SpeechSynthesisRequest, TextToSpeech } from "./types.ts";
+import { parseWav, type ParsedWav } from '../audio/wav.ts';
+import type { SpeechAudio, SpeechSynthesisRequest, TextToSpeech } from './types.ts';
 
 export interface XiaomiTextToSpeechOptions {
   apiKey: string;
   baseUrl?: string;
-  model?: "mimo-v2.5-tts";
+  model?: 'mimo-v2.5-tts';
 }
 
-const DEFAULT_BASE_URL = "https://api.xiaomimimo.com/v1";
-const DEFAULT_MODEL = "mimo-v2.5-tts";
+const DEFAULT_BASE_URL = 'https://api.xiaomimimo.com/v1';
+const DEFAULT_MODEL = 'mimo-v2.5-tts';
 
 export function createXiaomiTextToSpeech(options: XiaomiTextToSpeechOptions): TextToSpeech {
   return new XiaomiTextToSpeech(options);
 }
 
 class XiaomiTextToSpeech implements TextToSpeech {
-  readonly id = "xiaomi";
+  readonly id = 'xiaomi';
 
   private closed = false;
 
@@ -23,25 +23,25 @@ class XiaomiTextToSpeech implements TextToSpeech {
 
   async synthesize(request: SpeechSynthesisRequest): Promise<SpeechAudio> {
     if (this.closed) {
-      throw new Error("TTS 已关闭");
+      throw new Error('TTS 已关闭');
     }
 
     const baseUrl = this.options.baseUrl ?? DEFAULT_BASE_URL;
     const model = this.options.model ?? DEFAULT_MODEL;
 
-    const messages: { role: "user" | "assistant"; content: string }[] = [];
+    const messages: { role: 'user' | 'assistant'; content: string }[] = [];
 
     if (request.instructions?.trim()) {
-      messages.push({ role: "user", content: request.instructions });
+      messages.push({ role: 'user', content: request.instructions });
     }
 
-    messages.push({ role: "assistant", content: request.text });
+    messages.push({ role: 'assistant', content: request.text });
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${this.options.apiKey}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model,
@@ -60,18 +60,18 @@ class XiaomiTextToSpeech implements TextToSpeech {
     };
     const base64 = payload.choices?.[0]?.message?.audio?.data;
 
-    if (typeof base64 !== "string" || base64.length === 0) {
-      throw new Error("MiMo TTS 响应缺少音频数据");
+    if (typeof base64 !== 'string' || base64.length === 0) {
+      throw new Error('MiMo TTS 响应缺少音频数据');
     }
 
-    const data = Buffer.from(base64, "base64");
+    const data = Buffer.from(base64, 'base64');
 
     const wav = parseWav(data);
 
     return {
       data,
-      format: "wav",
-      mimeType: "audio/wav",
+      format: 'wav',
+      mimeType: 'audio/wav',
       sampleRate: wav.sampleRate,
       channels: wav.channels,
       durationMs: computeDurationMs(wav),

@@ -1,13 +1,13 @@
-import type { Agent, AgentEvent, AgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
-import type { EmbeddingProvider } from "@cieljs/agent-kit";
-import type { McpOptions } from "@cieljs/mcp";
-import type { MemoryManagerOptions } from "@cieljs/memory";
-import type { SessionManagerOptions } from "@cieljs/session";
+import type { EmbeddingProvider } from '@cieljs/agent-kit';
+import type { McpOptions } from '@cieljs/mcp';
+import type { MemoryManagerOptions } from '@cieljs/memory';
+import type { SessionManagerOptions } from '@cieljs/session';
+import type { Agent, AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
 
-import type { SessionSources } from "./sources.ts";
+import type { SessionSources } from './sources.ts';
 
-export type CielStatus = "idle" | "starting" | "running" | "closing" | "closed";
+export type CielStatus = 'idle' | 'starting' | 'running' | 'closing' | 'closed';
 
 export type SessionStorageOptions = SessionManagerOptions;
 export type MemoryStorageOptions = MemoryManagerOptions;
@@ -21,15 +21,15 @@ export interface CielMcpOptions extends McpOptions {
 export interface DefineCielOptions {
   model: Model<Api>;
   systemPrompt: string;
-  session: Omit<SessionStorageOptions, "embedding">;
-  memory: Omit<MemoryStorageOptions, "embedding">;
+  session: Omit<SessionStorageOptions, 'embedding'>;
+  memory: Omit<MemoryStorageOptions, 'embedding'>;
   embedding?: CielEmbeddingOptions;
   tools?: AgentTool[];
   mcp?: CielMcpOptions;
   investigation?: {
     systemPrompt?: string;
     tools?: AgentTool[];
-  } & Omit<SessionManagerOptions, "embedding">;
+  } & Omit<SessionManagerOptions, 'embedding'>;
 }
 
 export interface OpenSessionOptions {
@@ -67,4 +67,4 @@ export interface Ciel {
   close(): Promise<void>;
 }
 
-export type { SessionSources } from "./sources.ts";
+export type { SessionSources } from './sources.ts';

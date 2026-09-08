@@ -1,4 +1,4 @@
-import type { ObjectDirective } from "vue";
+import type { ObjectDirective } from 'vue';
 
 const cleanups = new WeakMap<HTMLElement, () => void>();
 
@@ -23,14 +23,14 @@ export const vFollowScroll: ObjectDirective<HTMLElement> = {
       characterData: true,
       attributes: true,
     });
-    element.addEventListener("mouseenter", enter);
-    element.addEventListener("mouseleave", leave);
-    element.addEventListener("load", follow, true);
+    element.addEventListener('mouseenter', enter);
+    element.addEventListener('mouseleave', leave);
+    element.addEventListener('load', follow, true);
     cleanups.set(element, () => {
       observer.disconnect();
-      element.removeEventListener("mouseenter", enter);
-      element.removeEventListener("mouseleave", leave);
-      element.removeEventListener("load", follow, true);
+      element.removeEventListener('mouseenter', enter);
+      element.removeEventListener('mouseleave', leave);
+      element.removeEventListener('load', follow, true);
     });
     follow();
   },

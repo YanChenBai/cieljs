@@ -1,5 +1,5 @@
-export { default as models } from "./models/index.ts";
-export { defineCiel } from "./ciel.ts";
+export { default as models } from './models/index.ts';
+export { defineCiel } from './ciel.ts';
 export type {
   Ciel,
   CielEmbeddingOptions,
@@ -14,4 +14,4 @@ export type {
   OpenSessionOptions,
   SessionSources,
   SessionStorageOptions,
-} from "./types.ts";
+} from './types.ts';

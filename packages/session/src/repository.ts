@@ -1,20 +1,20 @@
-import { and, asc, between, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, between, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 
-import type { Database } from "./database.ts";
-import type { EmbeddingIndex } from "./embedding-index.ts";
+import type { Database } from './database.ts';
+import type { EmbeddingIndex } from './embedding-index.ts';
 import {
   SessionCompactionConflictError,
   SessionNotFoundError,
   SessionValidationError,
-} from "./errors.ts";
+} from './errors.ts';
 import {
   chunkCondition,
   messageCondition,
   sessionCondition,
   type SessionSelector,
-} from "./query.ts";
-import { retrievalChunks, sessionCompactions, sessionMessages, sessions } from "./schema.ts";
-import { chunkSearchText, messageToSearchText, normalizeSearchText } from "./search.ts";
+} from './query.ts';
+import { retrievalChunks, sessionCompactions, sessionMessages, sessions } from './schema.ts';
+import { chunkSearchText, messageToSearchText, normalizeSearchText } from './search.ts';
 import type {
   AppendCompactionInput,
   SessionCompaction,
@@ -24,8 +24,8 @@ import type {
   SessionMessageListOptions,
   SessionOptions,
   UpdateSessionInput,
-} from "./types.ts";
-import { integerOption, normalizeSources } from "./validation.ts";
+} from './types.ts';
+import { integerOption, normalizeSources } from './validation.ts';
 
 type SessionRow = typeof sessions.$inferSelect;
 type MessageRow = typeof sessionMessages.$inferSelect;
@@ -43,11 +43,11 @@ export class SessionRepository {
     const spaceId = selector.spaceId;
 
     if (!id.trim()) {
-      throw new SessionValidationError("Session id 不能为空");
+      throw new SessionValidationError('Session id 不能为空');
     }
 
     if (!spaceId) {
-      throw new SessionValidationError("spaceId 不能为空");
+      throw new SessionValidationError('spaceId 不能为空');
     }
 
     const providedSources =
@@ -59,8 +59,8 @@ export class SessionRepository {
         id,
         spaceId,
         sources: providedSources ?? [],
-        sourceSearchText: normalizeSearchText((providedSources ?? []).join("\n")),
-        sourceTokenText: this.toTokenText((providedSources ?? []).join("\n")),
+        sourceSearchText: normalizeSearchText((providedSources ?? []).join('\n')),
+        sourceTokenText: this.toTokenText((providedSources ?? []).join('\n')),
         createdAt,
         updatedAt: createdAt,
       })
@@ -76,8 +76,8 @@ export class SessionRepository {
         .update(sessions)
         .set({
           sources: providedSources,
-          sourceSearchText: normalizeSearchText(providedSources.join("\n")),
-          sourceTokenText: this.toTokenText(providedSources.join("\n")),
+          sourceSearchText: normalizeSearchText(providedSources.join('\n')),
+          sourceTokenText: this.toTokenText(providedSources.join('\n')),
           updatedAt: new Date(),
         })
         .where(sessionCondition({ spaceId, sessionId: id }))
@@ -107,8 +107,8 @@ export class SessionRepository {
     selector: SessionSelector = {},
     options: SessionListOptions = {},
   ): Promise<SessionInfo[]> {
-    const limit = integerOption(options.limit ?? 50, "limit");
-    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 50, 'limit');
+    const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
     const rows = await this.db
       .select()
       .from(sessions)
@@ -122,7 +122,7 @@ export class SessionRepository {
 
   async update(selector: SessionSelector, input: UpdateSessionInput): Promise<SessionInfo> {
     if (input.sources === undefined) {
-      throw new SessionValidationError("至少提供一个要更新的字段");
+      throw new SessionValidationError('至少提供一个要更新的字段');
     }
 
     const sources = normalizeSources(input.sources);
@@ -130,8 +130,8 @@ export class SessionRepository {
       .update(sessions)
       .set({
         sources,
-        sourceSearchText: normalizeSearchText(sources.join("\n")),
-        sourceTokenText: this.toTokenText(sources.join("\n")),
+        sourceSearchText: normalizeSearchText(sources.join('\n')),
+        sourceTokenText: this.toTokenText(sources.join('\n')),
         updatedAt: new Date(),
       })
       .where(sessionCondition(selector))
@@ -157,13 +157,13 @@ export class SessionRepository {
 
   async appendMessage(
     selector: SessionSelector,
-    message: MessageRow["message"],
+    message: MessageRow['message'],
   ): Promise<SessionMessage> {
     const messageId = crypto.randomUUID();
     const projectedChunks = chunkSearchText(messageToSearchText(message));
     const updatedAt = new Date();
 
-    const row = await this.db.transaction(async (transaction) => {
+    const row = await this.db.transaction(async transaction => {
       const [counter] = await transaction
         .update(sessions)
         .set({ nextMessageSeq: sql`${sessions.nextMessageSeq} + 1`, updatedAt })
@@ -187,7 +187,7 @@ export class SessionRepository {
         .returning();
 
       if (!messageRow) {
-        throw new SessionNotFoundError("消息写入失败");
+        throw new SessionNotFoundError('消息写入失败');
       }
 
       if (!projectedChunks.length) {
@@ -213,7 +213,7 @@ export class SessionRepository {
 
       await this.embeddingIndex.addPending(
         transaction,
-        chunks.map((chunk) => chunk.id),
+        chunks.map(chunk => chunk.id),
       );
 
       return messageRow;
@@ -238,10 +238,10 @@ export class SessionRepository {
     selector: SessionSelector,
     options: SessionMessageListOptions = {},
   ): Promise<SessionMessage[]> {
-    const afterSeq = integerOption(options.afterSeq ?? 0, "afterSeq", 0, Number.MAX_SAFE_INTEGER);
+    const afterSeq = integerOption(options.afterSeq ?? 0, 'afterSeq', 0, Number.MAX_SAFE_INTEGER);
 
     if (options.limit !== undefined) {
-      integerOption(options.limit, "limit");
+      integerOption(options.limit, 'limit');
     }
 
     let query = this.db
@@ -263,8 +263,8 @@ export class SessionRepository {
     fromSeq: number,
     toSeq: number,
   ): Promise<SessionMessage[]> {
-    integerOption(fromSeq, "fromSeq", 1, Number.MAX_SAFE_INTEGER);
-    integerOption(toSeq, "toSeq", fromSeq, Number.MAX_SAFE_INTEGER);
+    integerOption(fromSeq, 'fromSeq', 1, Number.MAX_SAFE_INTEGER);
+    integerOption(toSeq, 'toSeq', fromSeq, Number.MAX_SAFE_INTEGER);
 
     const rows = await this.db
       .select()
@@ -280,12 +280,12 @@ export class SessionRepository {
     input: AppendCompactionInput,
   ): Promise<SessionCompaction> {
     if (!input.summary.trim()) {
-      throw new SessionValidationError("压缩摘要不能为空");
+      throw new SessionValidationError('压缩摘要不能为空');
     }
 
-    integerOption(input.throughSeq, "throughSeq", 1, Number.MAX_SAFE_INTEGER);
+    integerOption(input.throughSeq, 'throughSeq', 1, Number.MAX_SAFE_INTEGER);
 
-    return this.db.transaction(async (transaction) => {
+    return this.db.transaction(async transaction => {
       const [session] = await transaction
         .update(sessions)
         .set({ nextMessageSeq: sql`${sessions.nextMessageSeq}` })
@@ -297,7 +297,7 @@ export class SessionRepository {
       }
 
       if (session.nextMessageSeq === 1) {
-        throw new SessionValidationError("空 Session 不能压缩");
+        throw new SessionValidationError('空 Session 不能压缩');
       }
 
       if (input.throughSeq >= session.nextMessageSeq) {
@@ -337,7 +337,7 @@ export class SessionRepository {
         .returning();
 
       if (!row) {
-        throw new SessionNotFoundError("压缩摘要写入失败");
+        throw new SessionNotFoundError('压缩摘要写入失败');
       }
 
       return materializeCompaction(row);
@@ -372,7 +372,7 @@ export class SessionRepository {
   }
 
   async rebuildChunks(selector: SessionSelector = {}): Promise<void> {
-    await this.db.transaction(async (transaction) => {
+    await this.db.transaction(async transaction => {
       await transaction.delete(retrievalChunks).where(chunkCondition(selector));
 
       const sourceRows = await transaction
@@ -382,7 +382,7 @@ export class SessionRepository {
       for (const row of sourceRows) {
         await transaction
           .update(sessions)
-          .set({ sourceTokenText: this.toTokenText(row.sources.join("\n")) })
+          .set({ sourceTokenText: this.toTokenText(row.sources.join('\n')) })
           .where(eq(sessions.id, row.id));
       }
 
@@ -418,7 +418,7 @@ export class SessionRepository {
 
         await this.embeddingIndex.addPending(
           transaction,
-          chunks.map((chunk) => chunk.id),
+          chunks.map(chunk => chunk.id),
         );
       }
     });
@@ -430,7 +430,7 @@ export class SessionRepository {
     return this.tokenize(normalizeSearchText(text))
       .map(normalizeSearchText)
       .filter(Boolean)
-      .join(" ");
+      .join(' ');
   }
 }
 

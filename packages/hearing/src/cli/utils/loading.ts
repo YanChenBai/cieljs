@@ -1,11 +1,11 @@
-import { styleText } from "node:util";
+import { styleText } from 'node:util';
 
-export function loading(text = "Loading", interval = 80): () => void {
-  const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+export function loading(text = 'Loading', interval = 80): () => void {
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   let index = 0;
 
   const render = () => {
-    const frame = styleText("cyan", frames[index++ % frames.length]);
+    const frame = styleText('cyan', frames[index++ % frames.length]);
     process.stdout.write(`\r${frame} ${text}`);
   };
 
@@ -14,6 +14,6 @@ export function loading(text = "Loading", interval = 80): () => void {
 
   return () => {
     clearInterval(timer);
-    process.stdout.write("\r\x1b[2K");
+    process.stdout.write('\r\x1b[2K');
   };
 }

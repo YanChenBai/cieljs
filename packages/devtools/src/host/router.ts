@@ -1,7 +1,8 @@
-import { os, ORPCError } from "@orpc/server";
-import * as z from "zod";
-import type { TraceEntry } from "../protocol/index.ts";
-import type { DevtoolsHost } from "./host.ts";
+import { os, ORPCError } from '@orpc/server';
+import * as z from 'zod';
+
+import type { TraceEntry } from '../protocol/index.ts';
+import type { DevtoolsHost } from './host.ts';
 
 const page = z.object({
   cursor: z.number().int().nonnegative().optional(),
@@ -15,19 +16,19 @@ export function createDevtoolsRouter(host: DevtoolsHost) {
       list: os
         .input(page)
         .handler(({ input }) =>
-          host.store.list<TraceEntry>("run", { before: input.cursor, limit: input.limit }),
+          host.store.list<TraceEntry>('run', { before: input.cursor, limit: input.limit }),
         ),
     },
     steps: {
       list: os
         .input(page)
         .handler(({ input }) =>
-          host.store.list<TraceEntry>("step", { before: input.cursor, limit: input.limit }),
+          host.store.list<TraceEntry>('step', { before: input.cursor, limit: input.limit }),
         ),
     },
     entries: {
       list: os.input(page.extend({ runId: z.string().optional() })).handler(({ input }) =>
-        host.store.list<TraceEntry>("entry", {
+        host.store.list<TraceEntry>('entry', {
           before: input.cursor,
           limit: input.limit,
           runId: input.runId,
@@ -35,7 +36,7 @@ export function createDevtoolsRouter(host: DevtoolsHost) {
       ),
       get: os.input(id).handler(({ input }) => {
         const entry = host.store.get<TraceEntry>(input.id);
-        if (!entry) throw new ORPCError("NOT_FOUND");
+        if (!entry) throw new ORPCError('NOT_FOUND');
         return entry;
       }),
     },
@@ -50,9 +51,7 @@ export function createDevtoolsRouter(host: DevtoolsHost) {
           id.extend({
             path: z
               .array(
-                z
-                  .string()
-                  .refine((key) => !["__proto__", "constructor", "prototype"].includes(key)),
+                z.string().refine(key => !['__proto__', 'constructor', 'prototype'].includes(key)),
               )
               .max(32)
               .optional(),
@@ -61,9 +60,9 @@ export function createDevtoolsRouter(host: DevtoolsHost) {
         .handler(({ input }) => {
           let value = host.store.get<unknown>(input.id);
           for (const key of input.path ?? []) {
-            if (!value || typeof value !== "object") throw new ORPCError("NOT_FOUND");
+            if (!value || typeof value !== 'object') throw new ORPCError('NOT_FOUND');
             const descriptor = Object.getOwnPropertyDescriptor(value, key);
-            if (!descriptor || !("value" in descriptor)) throw new ORPCError("NOT_FOUND");
+            if (!descriptor || !('value' in descriptor)) throw new ORPCError('NOT_FOUND');
             value = descriptor.value;
           }
           return value;
@@ -87,14 +86,14 @@ export function createDevtoolsRouter(host: DevtoolsHost) {
       };
       const unsubscribe = host.subscribe(notify);
       const abort = () => wake?.();
-      signal?.addEventListener("abort", abort);
+      signal?.addEventListener('abort', abort);
       try {
         yield {
-          entries: host.store.list<TraceEntry>("entry", { limit: 300 }),
-          steps: host.store.list<TraceEntry>("step", { limit: 300 }),
+          entries: host.store.list<TraceEntry>('entry', { limit: 300 }),
+          steps: host.store.list<TraceEntry>('step', { limit: 300 }),
         };
         while (!signal?.aborted) {
-          const pending = new Promise<void>((resolve) => {
+          const pending = new Promise<void>(resolve => {
             wake = resolve;
           });
           if (dirty) {
@@ -108,7 +107,7 @@ export function createDevtoolsRouter(host: DevtoolsHost) {
         }
       } finally {
         unsubscribe();
-        signal?.removeEventListener("abort", abort);
+        signal?.removeEventListener('abort', abort);
       }
     }),
   };

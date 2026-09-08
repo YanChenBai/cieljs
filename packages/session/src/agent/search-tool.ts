@@ -1,12 +1,11 @@
-import { Type } from "typebox";
+import { defineTool } from '@cieljs/agent-kit';
+import { Type } from 'typebox';
 
-import { defineTool } from "@cieljs/agent-kit";
-
-import type { SessionSearchHit, SessionSearchOptions } from "../types.ts";
-import { sessionResult } from "./helpers.ts";
+import type { SessionSearchHit, SessionSearchOptions } from '../types.ts';
+import { sessionResult } from './helpers.ts';
 
 interface CreateCurrentSearchToolOptions {
-  name: "search_current_session_messages" | "search_all_session_messages";
+  name: 'search_current_session_messages' | 'search_all_session_messages';
   label: string;
   description: string;
   defaultLimit: number;
@@ -14,7 +13,7 @@ interface CreateCurrentSearchToolOptions {
 }
 
 interface CreateScopedSearchToolOptions {
-  name: "search_discovered_session_messages";
+  name: 'search_discovered_session_messages';
   label: string;
   description: string;
   defaultLimit: number;
@@ -30,13 +29,13 @@ const querySchema = {
   query: Type.String({
     minLength: 1,
     description:
-      "要查找的历史对话内容，可用关键词或自然语言描述；查来源请用 find_sessions_by_source。",
+      '要查找的历史对话内容，可用关键词或自然语言描述；查来源请用 find_sessions_by_source。',
   }),
   limit: Type.Optional(
     Type.Integer({
       minimum: 1,
       maximum: 20,
-      description: "最多返回的命中消息数，省略时使用宿主配置。",
+      description: '最多返回的命中消息数，省略时使用宿主配置。',
     }),
   ),
 };
@@ -62,7 +61,7 @@ export const createScopedSearchTool = defineTool(
   Type.Object({
     sessionId: Type.String({
       minLength: 1,
-      description: "由 find_sessions_by_source 返回的 session.id。",
+      description: '由 find_sessions_by_source 返回的 session.id。',
     }),
     ...querySchema,
   }),

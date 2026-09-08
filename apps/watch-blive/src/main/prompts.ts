@@ -1,4 +1,4 @@
-import type { RoomCandidate, RoomInfo, WatchMode } from "../shared/types.ts";
+import type { RoomCandidate, RoomInfo, WatchMode } from '../shared/types.ts';
 
 export interface SentDanmaku {
   content: string;
@@ -7,39 +7,39 @@ export interface SentDanmaku {
 
 export const ROOM_REVIEW_AFTER_MS = 45_000;
 export const BILIBILI_EMOJI_TAGS = [
-  "[dog]",
-  "[花]",
-  "[妙]",
-  "[哇]",
-  "[爱]",
-  "[比心]",
-  "[赞]",
-  "[滑稽]",
-  "[吃瓜]",
-  "[笑哭]",
-  "[捂脸]",
-  "[喝彩]",
-  "[偷笑]",
-  "[大笑]",
-  "[惊喜]",
-  "[问号]",
-  "[鼓掌]",
-  "[大哭]",
-  "[呆]",
-  "[流汗]",
-  "[生气]",
-  "[加油]",
-  "[害羞]",
-  "[抱抱]",
-  "[摊手]",
-  "[抱拳]",
-  "[给力]",
-  "[耶]",
+  '[dog]',
+  '[花]',
+  '[妙]',
+  '[哇]',
+  '[爱]',
+  '[比心]',
+  '[赞]',
+  '[滑稽]',
+  '[吃瓜]',
+  '[笑哭]',
+  '[捂脸]',
+  '[喝彩]',
+  '[偷笑]',
+  '[大笑]',
+  '[惊喜]',
+  '[问号]',
+  '[鼓掌]',
+  '[大哭]',
+  '[呆]',
+  '[流汗]',
+  '[生气]',
+  '[加油]',
+  '[害羞]',
+  '[抱抱]',
+  '[摊手]',
+  '[抱拳]',
+  '[给力]',
+  '[耶]',
 ] as const;
 
 export function createSystemPrompt(mode: WatchMode): string {
   const modeRules =
-    mode.type === "follow"
+    mode.type === 'follow'
       ? `# 单推模式\n你只观看指定主播，不需要评分或评估是否离开，持续自然观看和互动，直到用户停止。绝不能建议或尝试切换到其他主播。`
       : `# 探索模式\n主动寻找让自己感兴趣的内容，不必把留在当前房间当作默认目标。观察到内容重复、长时间空场、话题不合兴趣或没有想继续看的具体理由时，选择 explore；无需等到厌烦或连续多轮替主播找留下的理由。短暂停顿和一时没听懂不等于无聊。
 当前允许切换后，有明确现场依据且确定不感兴趣，就用 action=explore、confidence>=0.85、score<=50；不确定时诚实降低 confidence。评分是你继续观看的兴趣，不是对主播水平的评价，不能为了触发切换伪造分数。最终由宿主执行搜索并打开新房间。`;
@@ -67,7 +67,7 @@ ${modeRules}
 - 特别好笑、抽象或整活时可以偶尔“咕咕嘎嘎”，不用于严肃场景；幽默偏半认真半整活，不为抽象而难懂。
 - 已经理解现场且尚无发送历史时，抓住第一个自然节点，不必等固定观察时长；刚发过本身不是 defer 的理由，有新进展就可以继续接话。
 - 每条最多使用一个白名单表情；唱歌或刚唱完允许纯 [喝彩]。
-- 只可使用：${BILIBILI_EMOJI_TAGS.join("、")}。
+- 只可使用：${BILIBILI_EMOJI_TAGS.join('、')}。
 
 ## 按需查证
 
@@ -103,8 +103,8 @@ ${modeRules}
 ## 最终输出
 
 ${
-  mode.type === "follow"
-    ? "工具结束后可简短记录本轮观察与互动，不输出评分或切房决策。"
+  mode.type === 'follow'
+    ? '工具结束后可简短记录本轮观察与互动，不输出评分或切房决策。'
     : `工具结束后只输出 JSON：
 {"action":"stay","confidence":0.8,"danmakuAction":"send","evidence":["主播正在回应弹幕"],"reason":"互动仍在继续","score":75}
 
@@ -123,9 +123,9 @@ export function createRoomContext(input: {
   const history =
     input.history.length > 0
       ? input.history
-          .map((item) => `- ${new Date(item.sentAt).toISOString()} ${item.content}`)
-          .join("\n")
-      : "（尚未真实发送弹幕）";
+          .map(item => `- ${new Date(item.sentAt).toISOString()} ${item.content}`)
+          .join('\n')
+      : '（尚未真实发送弹幕）';
 
   return `
 # 当前直播间
@@ -134,9 +134,9 @@ export function createRoomContext(input: {
 - 房间：${input.room.roomId}
 - 标题：${input.room.title}
 - 分区：${input.room.parentAreaName} / ${input.room.areaName}
-- 简介：${input.room.description || "无"}
+- 简介：${input.room.description || '无'}
 - 已观察：${elapsedSeconds} 秒
-- 当前允许切换：${input.canSwitch ? "是" : "否"}
+- 当前允许切换：${input.canSwitch ? '是' : '否'}
 
 # 当前访问已真实发送的弹幕
 

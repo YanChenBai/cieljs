@@ -1,6 +1,6 @@
-import { defineConfig } from "vite-plus";
-import vue from "@vitejs/plugin-vue";
-import tailwindcss from "@tailwindcss/vite";
+import tailwindcss from '@tailwindcss/vite';
+import vue from '@vitejs/plugin-vue';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   resolve: {
@@ -8,15 +8,15 @@ export default defineConfig({
   },
   electron: {
     main: {
-      filterConsole: (line) => line.includes("Failed to resolve address"),
+      // filterConsole: line => line.includes('Failed to resolve address'),
     },
     preload: {
       build: {
         externalizeDeps: false,
         rollupOptions: {
           output: {
-            format: "es",
-            entryFileNames: "index.mjs",
+            format: 'es',
+            entryFileNames: 'index.mjs',
           },
         },
       },
@@ -27,7 +27,7 @@ export default defineConfig({
         vue({
           template: {
             compilerOptions: {
-              isCustomElement: (tag) => tag === "webview",
+              isCustomElement: tag => tag === 'webview',
             },
           },
         }),

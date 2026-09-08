@@ -1,4 +1,4 @@
-import type { LiveArea, RoomCandidate, RoomInfo } from "../../shared/types.ts";
+import type { LiveArea, RoomCandidate, RoomInfo } from '../../shared/types.ts';
 
 interface ApiResponse<T> {
   code: number;
@@ -23,10 +23,10 @@ export class BilibiliApi {
 
   async areas(): Promise<readonly LiveArea[]> {
     const data = await this.request<{ data?: readonly AreaGroup[] }>(
-      "https://api.live.bilibili.com/xlive/web-interface/v1/index/getWebAreaList?source_id=2",
+      'https://api.live.bilibili.com/xlive/web-interface/v1/index/getWebAreaList?source_id=2',
     );
 
-    this.areaGroups = (data.data ?? []).flatMap((group) => {
+    this.areaGroups = (data.data ?? []).flatMap(group => {
       if (!validId(group.id) || !group.name) {
         return [];
       }
@@ -35,7 +35,7 @@ export class BilibiliApi {
         {
           id: group.id,
           name: group.name,
-          children: (group.list ?? []).flatMap((area) => {
+          children: (group.list ?? []).flatMap(area => {
             const id = Number(area.id);
 
             return validId(id) && area.name ? [{ id, name: area.name, children: [] }] : [];
@@ -47,7 +47,7 @@ export class BilibiliApi {
   }
 
   async room(roomId: number): Promise<RoomInfo> {
-    assertPositiveInteger(roomId, "roomId");
+    assertPositiveInteger(roomId, 'roomId');
 
     const room = await this.request<RoomPayload>(
       `https://api.live.bilibili.com/room/v1/Room/get_info?id=${roomId}`,
@@ -60,15 +60,15 @@ export class BilibiliApi {
       streamerUid,
       streamerName: status?.uname ?? `UID ${streamerUid}`,
       title: room.title ?? `直播间 ${roomId}`,
-      description: room.description ?? "",
-      parentAreaName: room.parent_area_name ?? "未知",
-      areaName: room.area_name ?? "未知",
+      description: room.description ?? '',
+      parentAreaName: room.parent_area_name ?? '未知',
+      areaName: room.area_name ?? '未知',
       live: room.live_status === 1,
     };
   }
 
   async roomByStreamer(streamerUid: number): Promise<RoomInfo> {
-    assertPositiveInteger(streamerUid, "streamerUid");
+    assertPositiveInteger(streamerUid, 'streamerUid');
 
     const status = await this.streamerStatus(streamerUid);
 
@@ -80,30 +80,30 @@ export class BilibiliApi {
   }
 
   async rooms(areaId: number, page = 1): Promise<readonly RoomCandidate[]> {
-    assertPositiveInteger(areaId, "areaId");
-    assertPositiveInteger(page, "page");
+    assertPositiveInteger(areaId, 'areaId');
+    assertPositiveInteger(page, 'page');
 
     const groups = this.areaGroups ?? (await this.areas());
-    const parent = groups.find((group) => group.id === areaId);
-    const group = parent ?? groups.find((item) => item.children.some((area) => area.id === areaId));
+    const parent = groups.find(group => group.id === areaId);
+    const group = parent ?? groups.find(item => item.children.some(area => area.id === areaId));
 
     if (!group) {
       throw new Error(`未知直播分区 ${areaId}，请刷新分区列表`);
     }
 
     const query = new URLSearchParams({
-      area_id: parent ? "0" : String(areaId),
+      area_id: parent ? '0' : String(areaId),
       page: String(page),
-      page_size: "20",
+      page_size: '20',
       parent_area_id: String(group.id),
-      platform: "web",
-      sort_type: "online",
+      platform: 'web',
+      sort_type: 'online',
     });
     const data = await this.request<{ list?: readonly CandidatePayload[] }>(
       `https://api.live.bilibili.com/room/v3/area/getRoomList?${query}`,
     );
 
-    return (data.list ?? []).flatMap((item) => {
+    return (data.list ?? []).flatMap(item => {
       if (!validId(item.roomid) || !validId(item.uid) || !item.title) {
         return [];
       }
@@ -114,23 +114,23 @@ export class BilibiliApi {
           streamerUid: item.uid,
           streamerName: item.uname ?? `UID ${item.uid}`,
           title: item.title,
-          areaName: item.area_name ?? "未知",
+          areaName: item.area_name ?? '未知',
         },
       ];
     });
   }
 
   async playUrl(roomId: number): Promise<string> {
-    assertPositiveInteger(roomId, "roomId");
+    assertPositiveInteger(roomId, 'roomId');
 
     const query = new URLSearchParams({
       room_id: String(roomId),
-      protocol: "0,1",
-      format: "0,1,2",
-      codec: "0,1,2",
-      qn: "10000",
-      platform: "web",
-      ptype: "8",
+      protocol: '0,1',
+      format: '0,1,2',
+      codec: '0,1,2',
+      qn: '10000',
+      platform: 'web',
+      ptype: '8',
     });
     const data = await this.request<PlayInfoPayload>(
       `https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?${query}`,
@@ -141,18 +141,18 @@ export class BilibiliApi {
     }
 
     const stream = data.playurl_info?.playurl?.stream?.find(
-      (candidate) => candidate.protocol_name === "http_stream",
+      candidate => candidate.protocol_name === 'http_stream',
     );
-    const format = stream?.format?.find((candidate) => candidate.format_name === "flv");
+    const format = stream?.format?.find(candidate => candidate.format_name === 'flv');
     const codec =
-      format?.codec?.find((candidate) => candidate.codec_name === "avc") ?? format?.codec?.[0];
+      format?.codec?.find(candidate => candidate.codec_name === 'avc') ?? format?.codec?.[0];
     const url = codec?.url_info?.[0];
 
     if (!codec?.base_url || !url?.host) {
-      throw new Error("Bilibili 未返回可用的 FLV 地址");
+      throw new Error('Bilibili 未返回可用的 FLV 地址');
     }
 
-    return `${url.host}${codec.base_url}${url.extra ?? ""}`;
+    return `${url.host}${codec.base_url}${url.extra ?? ''}`;
   }
 
   private async streamerStatus(streamerUid: number) {
@@ -165,7 +165,7 @@ export class BilibiliApi {
 
   private async request<T>(url: string): Promise<T> {
     const response = await this.fetch(url, {
-      headers: { Accept: "application/json", Referer: "https://live.bilibili.com/" },
+      headers: { Accept: 'application/json', Referer: 'https://live.bilibili.com/' },
       signal: AbortSignal.timeout(this.timeoutMs),
     });
 

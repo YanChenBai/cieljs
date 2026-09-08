@@ -14,18 +14,18 @@
 ## 观察 Agent
 
 ```ts
-import { DevtoolsHost } from "@cieljs/devtools/host";
+import { DevtoolsHost } from '@cieljs/devtools/host';
 
 const devtools = new DevtoolsHost();
 const unsubscribe = devtools.observe(session.agent, session.id);
 
-devtools.record("frame", { image, roomId: 123 }, session.id);
+devtools.record('frame', { image, roomId: 123 }, session.id);
 
 // Investigation 没有长期暴露 Agent，可传入事件监听器。
 await ciel.investigate({
-  spaceId: "exploration",
-  question: "选择下一间直播间",
-  onEvent: devtools.agentListener("exploration:1"),
+  spaceId: 'exploration',
+  question: '选择下一间直播间',
+  onEvent: devtools.agentListener('exploration:1'),
 });
 
 unsubscribe();
@@ -42,9 +42,9 @@ devtools.close();
 
 ```vue
 <script setup lang="ts">
-import { CielDevtools } from "@cieljs/devtools";
-import { createIpcTransport } from "@cieljs/devtools/client";
-import "@cieljs/devtools/style.css";
+import { CielDevtools } from '@cieljs/devtools';
+import { createIpcTransport } from '@cieljs/devtools/client';
+import '@cieljs/devtools/style.css';
 
 const transport = createIpcTransport(window.watchBlive.devtools);
 </script>
@@ -62,11 +62,11 @@ const transport = createIpcTransport(window.watchBlive.devtools);
 
 ```ts
 // 服务端：连接建立且授权完成后调用。服务端地址、连接鉴权由应用负责。
-import { attachWebSocket } from "@cieljs/devtools/host";
+import { attachWebSocket } from '@cieljs/devtools/host';
 const detach = attachWebSocket(devtools, socket);
 
 // 浏览器：在 socket 的 open 事件后创建 transport，再传给组件。
-import { createWebSocketTransport } from "@cieljs/devtools/client";
+import { createWebSocketTransport } from '@cieljs/devtools/client';
 const transport = createWebSocketTransport(socket);
 
 // 卸载连接：不代替应用关闭共享 socket。

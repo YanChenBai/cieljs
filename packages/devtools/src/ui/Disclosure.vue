@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { shallowRef } from "vue";
-import { Collapsible } from "@vuetify/v0/components";
+import { Collapsible } from '@vuetify/v0/components';
+import { shallowRef } from 'vue';
 const props = withDefaults(defineProps<{ title: string; defaultOpen?: boolean }>(), {
   defaultOpen: true,
 });

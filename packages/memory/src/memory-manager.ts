@@ -1,22 +1,22 @@
-import { fileURLToPath } from "node:url";
+import { fileURLToPath } from 'node:url';
 
-import type { PGlite } from "@electric-sql/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from "@cieljs/agent-kit";
+import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from '@cieljs/agent-kit';
+import type { PGlite } from '@electric-sql/pglite';
+import { migrate } from 'drizzle-orm/pglite/migrator';
 
-import { createDatabase, type Database } from "./database.ts";
-import { MemoryEmbeddingIndex } from "./embedding-index.ts";
-import { MemoryClosedError, MemoryValidationError } from "./errors.ts";
+import { createDatabase, type Database } from './database.ts';
+import { MemoryEmbeddingIndex } from './embedding-index.ts';
+import { MemoryClosedError, MemoryValidationError } from './errors.ts';
 import {
   createGlobalMemory,
   createSpaceMemory,
   type GlobalLongTermMemory,
   type MemoryStoreServices,
   type SpaceMemory,
-} from "./memory-store.ts";
-import { MemoryRepository } from "./repository.ts";
-import { MemoryRetrieval } from "./retrieval.ts";
-import { tokenizeSearchText } from "./search.ts";
+} from './memory-store.ts';
+import { MemoryRepository } from './repository.ts';
+import { MemoryRetrieval } from './retrieval.ts';
+import { tokenizeSearchText } from './search.ts';
 import type {
   FindMemorySpacesOptions,
   MemoryEntry,
@@ -28,13 +28,13 @@ import type {
   MemorySourceSearchOptions,
   MemorySpaceSourceHit,
   SearchAllMemoryOptions,
-} from "./types.ts";
-import { integerOption } from "./validation.ts";
+} from './types.ts';
+import { integerOption } from './validation.ts';
 
-const MIGRATIONS_FOLDER = fileURLToPath(new URL("../migrations/", import.meta.url));
-const ALL_LAYERS = ["global.long_term", "space.long_term", "space.daily"] as const;
+const MIGRATIONS_FOLDER = fileURLToPath(new URL('../migrations/', import.meta.url));
+const ALL_LAYERS = ['global.long_term', 'space.long_term', 'space.daily'] as const;
 
-type ResolvedMemoryManagerOptions = Omit<MemoryManagerOptions, "embedding"> & {
+type ResolvedMemoryManagerOptions = Omit<MemoryManagerOptions, 'embedding'> & {
   embedding?: ResolvedEmbeddingProvider;
 };
 
@@ -54,7 +54,7 @@ export class MemoryManager implements AsyncDisposable {
     db: Database,
     options: ResolvedMemoryManagerOptions,
   ) {
-    this.timeZone = options.timeZone ?? "Asia/Shanghai";
+    this.timeZone = options.timeZone ?? 'Asia/Shanghai';
     const tokenize = options.tokenize ?? tokenizeSearchText;
     this.embeddingIndex = new MemoryEmbeddingIndex(db, options.embedding, options.onIndexError);
     this.repository = new MemoryRepository(db, this.embeddingIndex, this.timeZone, tokenize);
@@ -69,15 +69,15 @@ export class MemoryManager implements AsyncDisposable {
 
   static async open(options: MemoryManagerOptions): Promise<MemoryManager> {
     if (!options.dataDir?.trim()) {
-      throw new MemoryValidationError("dataDir 不能为空");
+      throw new MemoryValidationError('dataDir 不能为空');
     }
 
-    const timeZone = options.timeZone ?? "Asia/Shanghai";
+    const timeZone = options.timeZone ?? 'Asia/Shanghai';
 
     try {
-      new Intl.DateTimeFormat("en", { timeZone });
+      new Intl.DateTimeFormat('en', { timeZone });
     } catch (error) {
-      throw new MemoryValidationError("timeZone 必须是有效的 IANA 时区", { cause: error });
+      throw new MemoryValidationError('timeZone 必须是有效的 IANA 时区', { cause: error });
     }
 
     const resolvedOptions: ResolvedMemoryManagerOptions = {
@@ -90,7 +90,7 @@ export class MemoryManager implements AsyncDisposable {
     try {
       await client.waitReady;
       await client.exec(
-        "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;",
+        'CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;',
       );
       await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 
@@ -110,7 +110,7 @@ export class MemoryManager implements AsyncDisposable {
     this.assertOpen();
 
     if (!spaceId?.trim()) {
-      throw new MemoryValidationError("spaceId 不能为空");
+      throw new MemoryValidationError('spaceId 不能为空');
     }
 
     return createSpaceMemory(this.services, spaceId);
@@ -139,10 +139,10 @@ export class MemoryManager implements AsyncDisposable {
     query: string,
     options: FindMemorySpacesOptions = {},
   ): Promise<MemorySpaceSourceHit[]> {
-    const limit = integerOption(options.limit ?? 10, "limit");
+    const limit = integerOption(options.limit ?? 10, 'limit');
     const hits = await this.searchBySource(query, {
       mode: options.mode,
-      layers: options.layers ?? ["space.long_term", "space.daily"],
+      layers: options.layers ?? ['space.long_term', 'space.daily'],
       limit: 1000,
       signal: options.signal,
     });
@@ -161,7 +161,7 @@ export class MemoryManager implements AsyncDisposable {
         existing.memories.push({
           id: hit.memoryId,
           revision: hit.revision,
-          layer: hit.layer as "space.long_term" | "space.daily",
+          layer: hit.layer as 'space.long_term' | 'space.daily',
           excerpt: hit.excerpt,
         });
       } else {
@@ -173,7 +173,7 @@ export class MemoryManager implements AsyncDisposable {
             {
               id: hit.memoryId,
               revision: hit.revision,
-              layer: hit.layer as "space.long_term" | "space.daily",
+              layer: hit.layer as 'space.long_term' | 'space.daily',
               excerpt: hit.excerpt,
             },
           ],

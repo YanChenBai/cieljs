@@ -1,4 +1,4 @@
-import { defaultChorusConfig, defineChorusConfig } from "./src/config.ts";
+import { defaultChorusConfig, defineChorusConfig } from './src/config.ts';
 
 export default defineChorusConfig({
   embedding: defaultChorusConfig.embedding,
@@ -16,9 +16,9 @@ export default defineChorusConfig({
     },
   },
   conversation: {
-    spaceId: "voice-chat",
-    sessionId: "local-group",
-    sources: ["voice-chat:local-group"],
+    spaceId: 'voice-chat',
+    sessionId: 'local-group',
+    sources: ['voice-chat:local-group'],
     minimumThinkIntervalMs: 200,
   },
   perception: {
@@ -30,10 +30,10 @@ export default defineChorusConfig({
     retentionMs: 60_000,
   },
   tts: {
-    provider: "xiaomi",
-    model: "mimo-v2.5-tts",
-    voice: "冰糖",
-    format: "wav",
-    instructions: "自然、轻松，像正在和熟人聊天；语速适中。",
+    provider: 'xiaomi',
+    model: 'mimo-v2.5-tts',
+    voice: '冰糖',
+    format: 'wav',
+    instructions: '自然、轻松，像正在和熟人聊天；语速适中。',
   },
 });

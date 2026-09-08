@@ -1,19 +1,19 @@
-import { sendDanmaku } from "./send-danmaku.ts";
-import type { WebContents } from "electron";
-import type { Static } from "typebox";
+import type { WebContents } from 'electron';
+import type { Static } from 'typebox';
 
 import {
   DanmakuPageResultSchema,
   LivePageReadinessSchema,
   OptionalAccountSchema,
-} from "../../shared/schemas.ts";
-import type { Account } from "../../shared/types.ts";
-import { executePage, isAllowedPageUrl } from "./page-executor.ts";
+} from '../../shared/schemas.ts';
+import type { Account } from '../../shared/types.ts';
+import { executePage, isAllowedPageUrl } from './page-executor.ts';
+import { sendDanmaku } from './send-danmaku.ts';
 
 export type LivePageReadiness = Static<typeof LivePageReadinessSchema>;
 export type DanmakuPageResult = Static<typeof DanmakuPageResultSchema>;
 
-const LOGIN_URL = "https://passport.bilibili.com/login";
+const LOGIN_URL = 'https://passport.bilibili.com/login';
 
 export class LivePage {
   private contents?: WebContents;
@@ -22,18 +22,18 @@ export class LivePage {
 
   attach(contents: WebContents): void {
     if (contents.isDestroyed()) {
-      throw new Error("不能绑定已经销毁的直播页面");
+      throw new Error('不能绑定已经销毁的直播页面');
     }
 
     if (!isAllowedPageUrl(contents.getURL())) {
-      throw new Error("不能绑定非 Bilibili 页面");
+      throw new Error('不能绑定非 Bilibili 页面');
     }
 
     this.generation += 1;
     this.contents = contents;
     this.roomId = undefined;
 
-    contents.once("destroyed", () => {
+    contents.once('destroyed', () => {
       if (this.contents !== contents) {
         return;
       }
@@ -59,14 +59,14 @@ export class LivePage {
     this.roomId = undefined;
 
     await contents.session.clearStorageData({
-      storages: ["cookies", "localstorage"],
+      storages: ['cookies', 'localstorage'],
     });
     await contents.loadURL(LOGIN_URL);
   }
 
   async open(roomId: number): Promise<void> {
     if (!Number.isSafeInteger(roomId) || roomId < 1) {
-      throw new Error("roomId 必须是正整数");
+      throw new Error('roomId 必须是正整数');
     }
 
     const contents = this.requireContents();
@@ -78,7 +78,7 @@ export class LivePage {
     await contents.loadURL(`https://live.bilibili.com/${roomId}`);
 
     if (generation !== this.generation) {
-      throw new Error("打开直播间期间页面已切换");
+      throw new Error('打开直播间期间页面已切换');
     }
 
     this.roomId = roomId;
@@ -95,7 +95,7 @@ export class LivePage {
           ? ({ uid: body.data.mid, name: body.data.uname, face: body.data.face ?? "" })
           : null)`,
       OptionalAccountSchema,
-      this.executionOptions("读取登录账号", generation),
+      this.executionOptions('读取登录账号', generation),
     );
 
     return account ?? undefined;
@@ -125,7 +125,7 @@ export class LivePage {
         };
       })()`,
       LivePageReadinessSchema,
-      this.executionOptions("检查直播页面状态", generation),
+      this.executionOptions('检查直播页面状态', generation),
     );
   }
 
@@ -134,11 +134,11 @@ export class LivePage {
     const generation = this.generation;
     const roomId = this.roomId;
     if (!roomId || (await this.readiness()).roomId !== roomId)
-      throw new Error("当前页面不是目标直播间");
-    if (generation !== this.generation) throw new Error("检查发送目标期间直播间已切换");
+      throw new Error('当前页面不是目标直播间');
+    if (generation !== this.generation) throw new Error('检查发送目标期间直播间已切换');
     const result = await sendDanmaku(contents, content);
     if (generation !== this.generation)
-      throw new Error("发送期间直播间已切换，发送结果不再属于当前访问");
+      throw new Error('发送期间直播间已切换，发送结果不再属于当前访问');
     return result;
   }
 
@@ -149,7 +149,7 @@ export class LivePage {
 
   private requireContents(): WebContents {
     if (!this.contents || this.contents.isDestroyed()) {
-      throw new Error("直播页面尚未绑定");
+      throw new Error('直播页面尚未绑定');
     }
 
     return this.contents;

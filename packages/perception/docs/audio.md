@@ -20,7 +20,7 @@ perception.asr.write({
 ```ts
 const perception = createPerception({
   asr: {
-    speaker: [{ name: "主播", file: "./voiceprints/streamer.voiceprint" }],
+    speaker: [{ name: '主播', file: './voiceprints/streamer.voiceprint' }],
     bufferSeconds: 30,
     speakerThreshold: 0.6,
     maxSpeakers: 8,

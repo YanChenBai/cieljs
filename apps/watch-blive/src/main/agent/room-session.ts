@@ -1,11 +1,11 @@
-import type { RoomInfo } from "../../shared/types.ts";
-import { createRoomSources } from "../prompts.ts";
+import type { RoomInfo } from '../../shared/types.ts';
+import { createRoomSources } from '../prompts.ts';
 
-const watchDate = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Shanghai",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
+const watchDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
 });
 
 export function createRoomSessionOptions(room: RoomInfo, enteredAt: Date) {

@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { Button } from "@vuetify/v0/components";
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "lucide-vue-next";
-import { CielDevtools } from "@cieljs/devtools";
-import { rpc } from "./rpc.ts";
-import "@cieljs/devtools/style.css";
-import EventTimeline from "./components/EventTimeline.vue";
-import WatchControls from "./components/WatchControls.vue";
-import AccountControls from "./components/AccountControls.vue";
-import LiveRoomWebview from "./components/LiveRoomWebview.vue";
-import { useWatchBlive } from "./composables/useWatchBlive.ts";
-import { useSidebar } from "./composables/useSidebar.ts";
+import { CielDevtools } from '@cieljs/devtools';
+import { Button } from '@vuetify/v0/components';
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-vue-next';
+
+import AccountControls from './components/AccountControls.vue';
+
+import '@cieljs/devtools/style.css';
+import EventTimeline from './components/EventTimeline.vue';
+import LiveRoomWebview from './components/LiveRoomWebview.vue';
+import WatchControls from './components/WatchControls.vue';
+import { useSidebar } from './composables/useSidebar.ts';
+import { useWatchBlive } from './composables/useWatchBlive.ts';
+import { rpc } from './rpc.ts';
 
 const {
   events,
@@ -29,7 +31,7 @@ const {
 } = useWatchBlive();
 const { collapsed, width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyboardResize } =
   useSidebar();
-const right = useSidebar("right");
+const right = useSidebar('right');
 </script>
 
 <template>
@@ -47,7 +49,7 @@ const right = useSidebar("right");
       <span class="room-title">{{
         state.room
           ? `${state.room.streamerName} · ${state.room.title}`
-          : "一起看看，今天有什么有趣的直播"
+          : '一起看看，今天有什么有趣的直播'
       }}</span>
       <span class="status">{{ state.status }}</span>
       <Button.Root

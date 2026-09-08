@@ -1,6 +1,5 @@
-import type { CallToolResult, ContentBlock } from "@modelcontextprotocol/client";
-
-import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
+import type { ImageContent, TextContent } from '@earendil-works/pi-ai';
+import type { CallToolResult, ContentBlock } from '@modelcontextprotocol/client';
 
 type AgentContent = TextContent | ImageContent;
 
@@ -15,7 +14,7 @@ export function convertMcpContent(result: CallToolResult): AgentContent[] {
 
   if (!hasVisibleContent && result.structuredContent !== undefined) {
     content.push({
-      type: "text",
+      type: 'text',
       text: JSON.stringify(result.structuredContent, null, 2),
     });
   }
@@ -27,9 +26,9 @@ export function mcpErrorMessage(result: CallToolResult): string {
   const content = convertMcpContent(result);
 
   const text = content
-    .filter((item): item is TextContent => item.type === "text")
-    .map((item) => item.text)
-    .join("\n")
+    .filter((item): item is TextContent => item.type === 'text')
+    .map(item => item.text)
+    .join('\n')
     .trim();
 
   if (text) {
@@ -40,51 +39,51 @@ export function mcpErrorMessage(result: CallToolResult): string {
     return JSON.stringify(result.structuredContent);
   }
 
-  return "MCP tool execution failed";
+  return 'MCP tool execution failed';
 }
 
 function convertContentBlock(block: ContentBlock): AgentContent[] {
   switch (block.type) {
-    case "text":
+    case 'text':
       return [
         {
-          type: "text",
+          type: 'text',
           text: block.text,
         },
       ];
 
-    case "image":
+    case 'image':
       return [
         {
-          type: "image",
+          type: 'image',
           data: block.data,
           mimeType: block.mimeType,
         },
       ];
 
-    case "audio":
+    case 'audio':
       return [
         {
-          type: "text",
+          type: 'text',
           text: `[MCP audio: ${block.mimeType}]`,
         },
       ];
 
-    case "resource_link":
+    case 'resource_link':
       return [
         {
-          type: "text",
+          type: 'text',
           text: formatResourceLink(block),
         },
       ];
 
-    case "resource":
+    case 'resource':
       return convertEmbeddedResource(block);
 
     default:
       return [
         {
-          type: "text",
+          type: 'text',
           text: JSON.stringify(block),
         },
       ];
@@ -92,23 +91,23 @@ function convertContentBlock(block: ContentBlock): AgentContent[] {
 }
 
 function convertEmbeddedResource(
-  block: Extract<ContentBlock, { type: "resource" }>,
+  block: Extract<ContentBlock, { type: 'resource' }>,
 ): AgentContent[] {
   const resource = block.resource;
 
-  if ("text" in resource) {
+  if ('text' in resource) {
     return [
       {
-        type: "text",
+        type: 'text',
         text: resource.text,
       },
     ];
   }
 
-  if ("blob" in resource && resource.mimeType?.startsWith("image/")) {
+  if ('blob' in resource && resource.mimeType?.startsWith('image/')) {
     return [
       {
-        type: "image",
+        type: 'image',
         data: resource.blob,
         mimeType: resource.mimeType,
       },
@@ -117,26 +116,26 @@ function convertEmbeddedResource(
 
   return [
     {
-      type: "text",
+      type: 'text',
       text: [
-        "[MCP resource]",
+        '[MCP resource]',
         `uri: ${resource.uri}`,
         resource.mimeType ? `mimeType: ${resource.mimeType}` : undefined,
       ]
         .filter(Boolean)
-        .join("\n"),
+        .join('\n'),
     },
   ];
 }
 
-function formatResourceLink(block: Extract<ContentBlock, { type: "resource_link" }>): string {
+function formatResourceLink(block: Extract<ContentBlock, { type: 'resource_link' }>): string {
   return [
-    "[MCP resource]",
+    '[MCP resource]',
     block.name ? `name: ${block.name}` : undefined,
     `uri: ${block.uri}`,
     block.description ? `description: ${block.description}` : undefined,
     block.mimeType ? `mimeType: ${block.mimeType}` : undefined,
   ]
     .filter(Boolean)
-    .join("\n");
+    .join('\n');
 }

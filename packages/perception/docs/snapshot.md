@@ -5,7 +5,7 @@
 快照创建后不再加入新的 transcript 或 frame，后续音频和图片写入不会改变已经创建的快照。`speechend` 快照的 `endAt` 严格等于该次语音结束时间，只包含 `endAt` 之前、仍在保留窗口内的数据。
 
 ```ts
-const unsubscribe = perception.on("speechend", ({ snapshot }) => {
+const unsubscribe = perception.on('speechend', ({ snapshot }) => {
   // snapshot 已冻结，后续写入不会改变它
 });
 ```
@@ -14,8 +14,8 @@ const unsubscribe = perception.on("speechend", ({ snapshot }) => {
 
 ```ts
 const snapshot = await perception.snapshot({
-  startAt: new Date("2026-09-05T11:59:00.000Z"),
-  endAt: new Date("2026-09-05T12:00:10.000Z"),
+  startAt: new Date('2026-09-05T11:59:00.000Z'),
+  endAt: new Date('2026-09-05T12:00:10.000Z'),
 });
 ```
 

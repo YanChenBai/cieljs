@@ -1,7 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { serialize, deserialize } from "node:v8";
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { serialize, deserialize } from 'node:v8';
 
 /** 二进制快照保留图片、循环对象和原始类型，不执行 getter。 */
 export class TraceStore {
@@ -9,7 +9,7 @@ export class TraceStore {
 
   constructor(directory?: string) {
     if (directory) mkdirSync(directory, { recursive: true });
-    this.db = new DatabaseSync(directory ? join(directory, "trace.sqlite") : ":memory:");
+    this.db = new DatabaseSync(directory ? join(directory, 'trace.sqlite') : ':memory:');
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, category TEXT NOT NULL, sequence INTEGER NOT NULL, run_id TEXT, value BLOB NOT NULL);
@@ -19,17 +19,17 @@ export class TraceStore {
   }
 
   get sequence() {
-    return Number(this.db.prepare("SELECT COALESCE(MAX(sequence), 0) AS n FROM records").get()!.n);
+    return Number(this.db.prepare('SELECT COALESCE(MAX(sequence), 0) AS n FROM records').get()!.n);
   }
 
   put(id: string, category: string, sequence: number, value: unknown, runId?: string) {
     this.db
-      .prepare("INSERT OR REPLACE INTO records VALUES (?, ?, ?, ?, ?)")
+      .prepare('INSERT OR REPLACE INTO records VALUES (?, ?, ?, ?, ?)')
       .run(id, category, sequence, runId ?? null, serialize(snapshot(value)));
   }
 
   get<T>(id: string): T | undefined {
-    const row = this.db.prepare("SELECT value FROM records WHERE id = ?").get(id);
+    const row = this.db.prepare('SELECT value FROM records WHERE id = ?').get(id);
     return row ? (deserialize(row.value as Uint8Array) as T) : undefined;
   }
 
@@ -45,7 +45,7 @@ export class TraceStore {
   ): T[] {
     const rows = this.db
       .prepare(
-        `SELECT value FROM records WHERE category = ? AND sequence > ? AND sequence < ? AND (? IS NULL OR run_id = ?) ORDER BY sequence ${options.ascending ? "ASC" : "DESC"} LIMIT ?`,
+        `SELECT value FROM records WHERE category = ? AND sequence > ? AND sequence < ? AND (? IS NULL OR run_id = ?) ORDER BY sequence ${options.ascending ? 'ASC' : 'DESC'} LIMIT ?`,
       )
       .all(
         category,
@@ -56,7 +56,7 @@ export class TraceStore {
         options.limit ?? 100,
       );
     return (options.ascending ? rows : rows.reverse()).map(
-      (row) => deserialize(row.value as Uint8Array) as T,
+      row => deserialize(row.value as Uint8Array) as T,
     );
   }
 
@@ -66,8 +66,8 @@ export class TraceStore {
 }
 
 function snapshot(value: unknown, seen = new Map<object, unknown>()): unknown {
-  if (!value || typeof value !== "object")
-    return typeof value === "function" ? "[Function]" : value;
+  if (!value || typeof value !== 'object')
+    return typeof value === 'function' ? '[Function]' : value;
   if (seen.has(value)) return seen.get(value);
   if (
     value instanceof Date ||
@@ -91,9 +91,9 @@ function snapshot(value: unknown, seen = new Map<object, unknown>()): unknown {
   const result: Record<string, unknown> | unknown[] = Array.isArray(value) ? [] : {};
   seen.set(value, result);
   for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
-    if (key === "length" && Array.isArray(result)) continue;
+    if (key === 'length' && Array.isArray(result)) continue;
     Object.defineProperty(result, key, {
-      value: "value" in descriptor ? snapshot(descriptor.value, seen) : "[Getter / Setter]",
+      value: 'value' in descriptor ? snapshot(descriptor.value, seen) : '[Getter / Setter]',
       enumerable: true,
       configurable: true,
       writable: true,

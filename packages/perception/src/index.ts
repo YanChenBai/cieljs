@@ -1,4 +1,4 @@
-export { createPerception } from "./perception.ts";
+export { createPerception } from './perception.ts';
 export type {
   ImageInput,
   ImageStream,
@@ -10,5 +10,5 @@ export type {
   SnapshotOptions,
   SpeechEndEvent,
   VisionOptions,
-} from "./types.ts";
-export type { ASROptions, ASRResult, SpeakerProfile } from "@cieljs/hearing";
+} from './types.ts';
+export type { ASROptions, ASRResult, SpeakerProfile } from '@cieljs/hearing';

@@ -5,6 +5,6 @@ export {
   QWEN_EMBEDDING_MODEL,
   QWEN_EMBEDDING_SOURCE,
   qwen,
-} from "./qwen.ts";
+} from './qwen.ts';
 
-export type { QwenEmbeddingDType, QwenEmbeddingDevice, QwenEmbeddingOptions } from "./types.ts";
+export type { QwenEmbeddingDType, QwenEmbeddingDevice, QwenEmbeddingOptions } from './types.ts';

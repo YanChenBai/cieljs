@@ -145,7 +145,7 @@ await ciel.close();
 
 ```ts
 export interface Ciel {
-  readonly status: "idle" | "starting" | "running" | "closing" | "closed";
+  readonly status: 'idle' | 'starting' | 'running' | 'closing' | 'closed';
 
   start(): Promise<void>;
 
@@ -193,7 +193,7 @@ export interface OpenSessionOptions {
 静态来源：
 
 ```ts
-sources: ["room:1000", "streamer:42"];
+sources: ['room:1000', 'streamer:42'];
 ```
 
 动态来源：
@@ -226,15 +226,15 @@ export interface CielSession {
 使用方式：
 
 ```ts
-let roomId = "room:1000";
+let roomId = 'room:1000';
 
 const session = await ciel.session({
-  sessionId: "conversation:1",
-  spaceId: "livestream",
+  sessionId: 'conversation:1',
+  spaceId: 'livestream',
   sources: () => [roomId],
 });
 
-await session.agent.prompt("总结当前直播间的情况");
+await session.agent.prompt('总结当前直播间的情况');
 ```
 
 一次生成的上下文组合顺序为：
@@ -288,16 +288,16 @@ export interface InvestigationResult {
 
 ```ts
 const result = await ciel.investigate({
-  sessionId: "memory-question:1",
-  spaceId: "livestream",
+  sessionId: 'memory-question:1',
+  spaceId: 'livestream',
   sources: () => [currentRoomId],
-  question: "主播以前提到过喜欢什么类型的游戏？",
+  question: '主播以前提到过喜欢什么类型的游戏？',
 });
 
 await session.agent.prompt([
   {
-    role: "user",
-    content: "请结合以下调查结果继续判断",
+    role: 'user',
+    content: '请结合以下调查结果继续判断',
   },
   result.answer,
 ]);
@@ -373,7 +373,7 @@ export interface InvestigationRunRecord {
   messages: AgentMessage[];
   startedAt: Date;
   completedAt: Date;
-  status: "completed" | "failed" | "aborted";
+  status: 'completed' | 'failed' | 'aborted';
 }
 ```
 
@@ -442,55 +442,55 @@ Core 不静默吞掉错误。后续实现需要提供统一的错误观察接口
 ```ts
 const ciel = defineCiel({
   model,
-  systemPrompt: "你是 Ciel。",
+  systemPrompt: '你是 Ciel。',
   storage: {
     session: {
-      dataDir: ".ciel/session",
+      dataDir: '.ciel/session',
     },
     memory: {
-      dataDir: ".ciel/memory",
+      dataDir: '.ciel/memory',
     },
     investigation: {
-      dataDir: ".ciel/investigation",
+      dataDir: '.ciel/investigation',
     },
   },
   investigation: {
-    systemPrompt: "根据检索结果回答问题，并说明信息来源。",
+    systemPrompt: '根据检索结果回答问题，并说明信息来源。',
     tools: [searchPerceptionTimeline],
   },
 });
 
 await ciel.start();
 
-let roomId = "room:1000";
+let roomId = 'room:1000';
 
 const session = await ciel.session({
-  sessionId: "conversation:1",
-  spaceId: "livestream",
+  sessionId: 'conversation:1',
+  spaceId: 'livestream',
   sources: () => [roomId],
 });
 
 const result = await ciel.investigate({
-  sessionId: "preference-query:1",
-  spaceId: "livestream",
+  sessionId: 'preference-query:1',
+  spaceId: 'livestream',
   sources: () => [roomId],
-  question: "主播以前提到过哪些明确的游戏偏好？",
+  question: '主播以前提到过哪些明确的游戏偏好？',
 });
 
 await session.agent.prompt([
   {
-    role: "user",
-    content: "请根据调查结果决定接下来聊什么",
+    role: 'user',
+    content: '请根据调查结果决定接下来聊什么',
   },
   result.answer,
 ]);
 
-roomId = "room:2000";
+roomId = 'room:2000';
 
 const nextResult = await ciel.investigate({
-  spaceId: "livestream",
+  spaceId: 'livestream',
   sources: () => [roomId],
-  question: "这个直播间最近发生了什么？",
+  question: '这个直播间最近发生了什么？',
 });
 
 await session.agent.prompt(nextResult.answer);

@@ -1,4 +1,4 @@
-import { styleText } from "node:util";
+import { styleText } from 'node:util';
 
 export function progress(current: number, total: number, width = 30): void {
   const ratio = total > 0 ? Math.min(1, current / total) : 0;
@@ -7,13 +7,13 @@ export function progress(current: number, total: number, width = 30): void {
   const percentText = `${percent}%`.padStart(4);
 
   process.stdout.write(
-    "\r" +
-      styleText("cyan", "━".repeat(filled)) +
-      styleText("gray", "━".repeat(width - filled)) +
+    '\r' +
+      styleText('cyan', '━'.repeat(filled)) +
+      styleText('gray', '━'.repeat(width - filled)) +
       ` ${percentText}`,
   );
 
   if (current >= total) {
-    process.stdout.write("\n");
+    process.stdout.write('\n');
   }
 }

@@ -1,11 +1,11 @@
-import type { AgentEvent } from "@earendil-works/pi-agent-core";
-export const DEVTOOLS_CHANNEL = "ciel:devtools";
+import type { AgentEvent } from '@earendil-works/pi-agent-core';
+export const DEVTOOLS_CHANNEL = 'ciel:devtools';
 
 export interface TraceEntry {
   id: string;
   sequence: number;
   sessionId: string;
-  kind: "message" | "tool" | "event";
+  kind: 'message' | 'tool' | 'event';
   name: string;
   label?: string;
   description?: string;
@@ -17,7 +17,7 @@ export interface TraceEntry {
   model?: { id: string; name: string; provider: string };
   revision?: number;
   raw?: ValueRef;
-  status: "running" | "completed" | "error";
+  status: 'running' | 'completed' | 'error';
   startedAt: number;
   endedAt?: number;
   text?: string;
@@ -37,7 +37,7 @@ export interface ValueItem {
   expandable: boolean;
 }
 export interface ValuePage {
-  kind: "object" | "text" | "image" | "binary";
+  kind: 'object' | 'text' | 'image' | 'binary';
   preview: string;
   items?: ValueItem[];
   text?: string;
@@ -48,9 +48,9 @@ export interface ValuePage {
 }
 
 export type DevtoolsRequest =
-  | { type: "snapshot" }
-  | { type: "read"; id: string; path?: string[]; offset?: number }
-  | { type: "clear" };
+  | { type: 'snapshot' }
+  | { type: 'read'; id: string; path?: string[]; offset?: number }
+  | { type: 'clear' };
 export type DevtoolsResponse = { entries: TraceEntry[] } | ValuePage | { cleared: true };
 export interface DevtoolsUpdate {
   entries: TraceEntry[];
@@ -64,32 +64,32 @@ export interface DevtoolsTransport {
 }
 
 export function parseRequest(value: unknown): DevtoolsRequest {
-  if (!value || typeof value !== "object" || !("type" in value))
-    throw new Error("无效的 DevTools 请求");
-  if (value.type === "snapshot" || value.type === "clear") return { type: value.type };
+  if (!value || typeof value !== 'object' || !('type' in value))
+    throw new Error('无效的 DevTools 请求');
+  if (value.type === 'snapshot' || value.type === 'clear') return { type: value.type };
   if (
-    value.type !== "read" ||
-    !("id" in value) ||
-    typeof value.id !== "string" ||
+    value.type !== 'read' ||
+    !('id' in value) ||
+    typeof value.id !== 'string' ||
     value.id.length > 200
   )
-    throw new Error("无效的内容引用");
-  const path = "path" in value ? value.path : [];
-  const offset = "offset" in value ? value.offset : 0;
+    throw new Error('无效的内容引用');
+  const path = 'path' in value ? value.path : [];
+  const offset = 'offset' in value ? value.offset : 0;
   if (
     !Array.isArray(path) ||
     path.length > 32 ||
     path.some(
-      (key) =>
-        typeof key !== "string" ||
+      key =>
+        typeof key !== 'string' ||
         key.length > 1024 ||
-        ["__proto__", "constructor", "prototype"].includes(key),
+        ['__proto__', 'constructor', 'prototype'].includes(key),
     )
   )
-    throw new Error("无效的内容路径");
-  if (typeof offset !== "number" || !Number.isSafeInteger(offset) || offset < 0)
-    throw new Error("无效的分页位置");
-  return { type: "read", id: value.id, path, offset };
+    throw new Error('无效的内容路径');
+  if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0)
+    throw new Error('无效的分页位置');
+  return { type: 'read', id: value.id, path, offset };
 }
 
 export interface TraceEvent {

@@ -1,9 +1,9 @@
 // @env node
 
-import type { SpeakerEmbeddingExtractor } from "sherpa-onnx-node";
+import type { SpeakerEmbeddingExtractor } from 'sherpa-onnx-node';
 
-import type { SpeakerProfile } from "./types.ts";
-import { normalizeEmbedding, readVoiceprint } from "./voiceprint.ts";
+import type { SpeakerProfile } from './types.ts';
+import { normalizeEmbedding, readVoiceprint } from './voiceprint.ts';
 
 interface SpeakerCenter {
   embedding: Float32Array;
@@ -24,8 +24,8 @@ export class SpeakerTracker {
     private readonly maxSpeakers: number,
   ) {
     for (const profile of profiles) {
-      if (!profile.name.trim()) throw new Error("Speaker name cannot be empty");
-      if (this.centers.some((center) => center.label === profile.name)) {
+      if (!profile.name.trim()) throw new Error('Speaker name cannot be empty');
+      if (this.centers.some(center => center.label === profile.name)) {
         throw new Error(`Duplicate speaker name: ${profile.name}`);
       }
       const embedding = readVoiceprint(profile.file);
@@ -54,7 +54,7 @@ export class SpeakerTracker {
       }
     }
     if (!this.extractor.isReady(stream)) {
-      throw new Error("Speech segment cannot produce a speaker embedding");
+      throw new Error('Speech segment cannot produce a speaker embedding');
     }
 
     const embedding = normalizeEmbedding(this.extractor.compute(stream));
@@ -80,10 +80,10 @@ export class SpeakerTracker {
   }
 
   private createDynamicSpeaker(embedding: Float32Array): string {
-    let label = "speaker_" + this.nextDynamicId;
-    while (this.centers.some((center) => center.label === label)) {
+    let label = 'speaker_' + this.nextDynamicId;
+    while (this.centers.some(center => center.label === label)) {
       this.nextDynamicId += 1;
-      label = "speaker_" + this.nextDynamicId;
+      label = 'speaker_' + this.nextDynamicId;
     }
     this.nextDynamicId += 1;
     this.dynamicSpeakers += 1;
@@ -109,7 +109,7 @@ export class SpeakerTracker {
 
 function cosineSimilarity(left: Float32Array, right: Float32Array): number {
   if (left.length !== right.length) {
-    throw new Error("Speaker embedding dimensions do not match");
+    throw new Error('Speaker embedding dimensions do not match');
   }
   let similarity = 0;
   for (let index = 0; index < left.length; index += 1) {

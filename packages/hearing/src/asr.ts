@@ -1,15 +1,15 @@
 // @env node
 
-import { EventEmitter } from "node:events";
+import { EventEmitter } from 'node:events';
 
-import sherpaOnnx from "sherpa-onnx-node";
+import sherpaOnnx from 'sherpa-onnx-node';
 import type {
   CircularBuffer as CircularBufferInstance,
   OfflineRecognizer as OfflineRecognizerInstance,
   OfflineRecognizerResult,
   SpeechSegment,
   Vad as VadInstance,
-} from "sherpa-onnx-node";
+} from 'sherpa-onnx-node';
 
 import {
   SAMPLE_RATE,
@@ -17,14 +17,14 @@ import {
   DEFAULT_BUFFER_SECONDS,
   DEFAULT_MAX_SPEAKERS,
   DEFAULT_SPEAKER_THRESHOLD,
-} from "./constants.ts";
-import { createModelConfig } from "./models.ts";
-import { ProcessASR } from "./process-asr.ts";
-import { SpeakerTracker } from "./speaker.ts";
-import type { ASREventMap, ASROptions, ASRSegment, Unsubscribe } from "./types.ts";
+} from './constants.ts';
+import { createModelConfig } from './models.ts';
+import { ProcessASR } from './process-asr.ts';
+import { SpeakerTracker } from './speaker.ts';
+import type { ASREventMap, ASROptions, ASRSegment, Unsubscribe } from './types.ts';
 
 const { CircularBuffer, OfflineRecognizer, SpeakerEmbeddingExtractor, Vad } = sherpaOnnx;
-const QWEN3_ASR_TEXT_MARKER = "<asr_text>";
+const QWEN3_ASR_TEXT_MARKER = '<asr_text>';
 const MAX_TRANSCRIPTION_RETRY_DEPTH = 2;
 const MIN_TRANSCRIPTION_RETRY_SAMPLES = SAMPLE_RATE * 4;
 
@@ -66,7 +66,7 @@ export class NativeASR {
       this.processWindows();
       this.drainVad();
     } catch (error) {
-      this.emit("error", toError(error));
+      this.emit('error', toError(error));
     }
   }
 
@@ -83,7 +83,7 @@ export class NativeASR {
       this.vad.flush();
       this.drainVad();
     } catch (error) {
-      this.emit("error", toError(error));
+      this.emit('error', toError(error));
     } finally {
       this.vad.reset();
       this.buffer.reset();
@@ -106,7 +106,7 @@ export class NativeASR {
     while (offset < samples.length) {
       this.processWindows();
       const free = this.bufferCapacity - this.buffer.size();
-      if (free === 0) throw new Error("ASR circular buffer is full");
+      if (free === 0) throw new Error('ASR circular buffer is full');
       const length = Math.min(free, samples.length - offset);
       this.buffer.push(samples.subarray(offset, offset + length));
       offset += length;
@@ -132,23 +132,23 @@ export class NativeASR {
   private transcribe(segment: SpeechSegment): void {
     const baseAt = this.streamStartAt;
     if (!baseAt) {
-      throw new Error("Cannot map ASR timestamps before audio is written");
+      throw new Error('Cannot map ASR timestamps before audio is written');
     }
 
     const segmentStartAt = addSamples(baseAt, segment.start);
     const segmentEndAt = addSamples(segmentStartAt, segment.samples.length);
-    this.emit("speechstart", segmentStartAt);
+    this.emit('speechstart', segmentStartAt);
 
     const content = this.recognize(segment.samples);
     if (content) {
-      this.emit("result", {
+      this.emit('result', {
         content,
         speaker: this.speaker.assign(segment.samples, SAMPLE_RATE),
         startAt: segmentStartAt,
         endAt: segmentEndAt,
       });
     }
-    this.emit("speechend", segmentEndAt);
+    this.emit('speechend', segmentEndAt);
   }
 
   private recognize(samples: Float32Array, depth = 0): string {
@@ -165,7 +165,7 @@ export class NativeASR {
       depth >= MAX_TRANSCRIPTION_RETRY_DEPTH ||
       samples.length < MIN_TRANSCRIPTION_RETRY_SAMPLES
     ) {
-      return "";
+      return '';
     }
     const midpoint = Math.floor(samples.length / 2);
     return joinTranscriptParts([
@@ -205,7 +205,7 @@ export class ASR {
 
 function pcm16ToFloat32(data: Buffer): Float32Array {
   if (data.length % Int16Array.BYTES_PER_ELEMENT !== 0) {
-    throw new Error("Echo data must contain aligned s16le PCM samples");
+    throw new Error('Echo data must contain aligned s16le PCM samples');
   }
   const samples = new Float32Array(data.length / Int16Array.BYTES_PER_ELEMENT);
   for (let index = 0; index < samples.length; index += 1) {
@@ -229,14 +229,14 @@ function isDegenerateResult(
 }
 
 function hasExcessiveRepetition(content: string): boolean {
-  const characters = Array.from(content.normalize().replaceAll(/[\s\p{P}\p{S}]+/gu, ""));
+  const characters = Array.from(content.normalize().replaceAll(/[\s\p{P}\p{S}]+/gu, ''));
   if (characters.length < 32) return false;
   for (let unitLength = 1; unitLength <= 8; unitLength += 1) {
     const unitStart = characters.length - unitLength;
-    const unit = characters.slice(unitStart).join("");
+    const unit = characters.slice(unitStart).join('');
     let repeats = 1;
     for (let cursor = unitStart - unitLength; cursor >= 0; cursor -= unitLength) {
-      if (characters.slice(cursor, cursor + unitLength).join("") !== unit) break;
+      if (characters.slice(cursor, cursor + unitLength).join('') !== unit) break;
       repeats += 1;
     }
     if (repeats >= 8 && repeats * unitLength >= characters.length / 2) return true;
@@ -248,9 +248,9 @@ function joinTranscriptParts(parts: readonly string[]): string {
   return parts.filter(Boolean).reduce((combined, part) => {
     if (!combined) return part;
     const separator =
-      /[\p{Script=Han}\p{P}]$/u.test(combined) || /^[\p{Script=Han}\p{P}]/u.test(part) ? "" : " ";
+      /[\p{Script=Han}\p{P}]$/u.test(combined) || /^[\p{Script=Han}\p{P}]/u.test(part) ? '' : ' ';
     return `${combined}${separator}${part}`;
-  }, "");
+  }, '');
 }
 
 function addSamples(at: Date, samples: number): Date {
@@ -276,12 +276,12 @@ function validateOptions(options: ASROptions): void {
     options.speakerThreshold !== undefined &&
     !(options.speakerThreshold > 0 && options.speakerThreshold <= 1)
   ) {
-    throw new Error("speakerThreshold must be greater than 0 and at most 1");
+    throw new Error('speakerThreshold must be greater than 0 and at most 1');
   }
   if (
     options.maxSpeakers !== undefined &&
     (!Number.isInteger(options.maxSpeakers) || options.maxSpeakers < 1)
   ) {
-    throw new Error("maxSpeakers must be a positive integer");
+    throw new Error('maxSpeakers must be a positive integer');
   }
 }

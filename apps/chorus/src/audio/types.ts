@@ -1,4 +1,4 @@
-import type { SpeechAudio } from "../tts/types.ts";
+import type { SpeechAudio } from '../tts/types.ts';
 
 export interface AudioDevice {
   index: number;
@@ -23,7 +23,7 @@ export interface AudioInputChunk {
   capturedAt: Date;
   sampleRate: number;
   channels: number;
-  format: "s16le" | "f32le";
+  format: 's16le' | 'f32le';
 }
 
 export interface AudioInput {
@@ -51,15 +51,15 @@ export function resolveDevice<T extends AudioDevice>(
   devices: readonly T[],
   selector: DeviceSelector,
 ): T | undefined {
-  if (typeof selector === "number") {
-    return devices.find((device) => device.index === selector);
+  if (typeof selector === 'number') {
+    return devices.find(device => device.index === selector);
   }
 
-  if (typeof selector === "string") {
+  if (typeof selector === 'string') {
     const query = selector.toLowerCase();
 
-    return devices.find((device) => device.name.toLowerCase().includes(query));
+    return devices.find(device => device.name.toLowerCase().includes(query));
   }
 
-  return devices.find((device) => device.id === selector.id);
+  return devices.find(device => device.id === selector.id);
 }

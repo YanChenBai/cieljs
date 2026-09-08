@@ -1,8 +1,8 @@
-import { defineConfig } from "vite-plus";
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   pack: {
-    entry: ["src/index.ts", "src/agent/index.ts"],
+    entry: ['src/index.ts', 'src/agent/index.ts'],
     dts: { tsgo: true },
     exports: true,
   },

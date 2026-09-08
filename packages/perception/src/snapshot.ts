@@ -1,12 +1,12 @@
 // @env node
 
-import { randomUUID } from "node:crypto";
+import { randomUUID } from 'node:crypto';
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ASRResult } from "@cieljs/hearing";
+import type { ASRResult } from '@cieljs/hearing';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import type { PerceptionFrame, PerceptionSnapshot } from "./types.ts";
-import { composeVisionFrames } from "./vision/composer.ts";
+import type { PerceptionFrame, PerceptionSnapshot } from './types.ts';
+import { composeVisionFrames } from './vision/composer.ts';
 
 interface SnapshotData {
   readonly startAt: Date;
@@ -45,25 +45,25 @@ class FrozenPerceptionSnapshot implements PerceptionSnapshot {
 
   async compose(): Promise<AgentMessage[]> {
     const content: Array<
-      { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
+      { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
     > = [];
 
     const images = await this.composeImages();
 
     if (images.length > 0) {
       content.push({
-        type: "text",
-        text: ["# 视觉", this.visionPrompt].filter(Boolean).join("\n\n"),
+        type: 'text',
+        text: ['# 视觉', this.visionPrompt].filter(Boolean).join('\n\n'),
       });
       content.push(...images);
     }
 
     if (this.transcripts.length > 0) {
-      const transcript = this.transcripts.map(formatTranscript).join("\n");
+      const transcript = this.transcripts.map(formatTranscript).join('\n');
 
       content.push({
-        type: "text",
-        text: ["# 听觉", this.hearingPrompt, transcript].filter(Boolean).join("\n\n"),
+        type: 'text',
+        text: ['# 听觉', this.hearingPrompt, transcript].filter(Boolean).join('\n\n'),
       });
     }
 
@@ -73,7 +73,7 @@ class FrozenPerceptionSnapshot implements PerceptionSnapshot {
 
     return [
       {
-        role: "user",
+        role: 'user',
         content,
         timestamp: this.endAt.getTime(),
       },
@@ -86,12 +86,12 @@ class FrozenPerceptionSnapshot implements PerceptionSnapshot {
 
     for (const frames of groups.values()) {
       const selected = selectFrames(frames, this.maxFrames);
-      const data = await composeVisionFrames(selected.map((frame) => frame.data));
+      const data = await composeVisionFrames(selected.map(frame => frame.data));
 
       images.push({
-        type: "image" as const,
-        data: data.toString("base64"),
-        mimeType: "image/jpeg",
+        type: 'image' as const,
+        data: data.toString('base64'),
+        mimeType: 'image/jpeg',
       });
     }
 
@@ -129,7 +129,7 @@ function selectFrames(frames: readonly PerceptionFrame[], limit: number) {
 }
 
 function formatTranscript(transcript: ASRResult) {
-  const speaker = transcript.speaker ? `[${transcript.speaker}]` : "";
+  const speaker = transcript.speaker ? `[${transcript.speaker}]` : '';
 
   return `[${transcript.startAt.toISOString()}]${speaker} ${transcript.content}`;
 }
@@ -139,7 +139,7 @@ function cloneTranscript(transcript: ASRResult): ASRResult {
     ...transcript,
     startAt: new Date(transcript.startAt),
     endAt: new Date(transcript.endAt),
-    tokens: transcript.tokens?.map((token) => ({
+    tokens: transcript.tokens?.map(token => ({
       ...token,
       startAt: new Date(token.startAt),
       endAt: new Date(token.endAt),

@@ -1,6 +1,6 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import type { SessionContext } from "./types.ts";
+import type { SessionContext } from './types.ts';
 
 export interface ContextTokenEstimate {
   tokens: number;
@@ -18,15 +18,15 @@ export function estimateAgentMessageTokens(message: AgentMessage): number {
     command?: unknown;
     output?: unknown;
   };
-  if (typeof value.summary === "string") {
+  if (typeof value.summary === 'string') {
     return Math.ceil(value.summary.length / 4);
   }
-  if (typeof value.command === "string" && typeof value.output === "string") {
+  if (typeof value.command === 'string' && typeof value.output === 'string') {
     return Math.ceil((value.command.length + value.output.length) / 4);
   }
 
   let chars = 0;
-  if (typeof value.content === "string") {
+  if (typeof value.content === 'string') {
     return Math.ceil(value.content.length / 4);
   }
   if (!Array.isArray(value.content)) {
@@ -34,15 +34,15 @@ export function estimateAgentMessageTokens(message: AgentMessage): number {
   }
 
   for (const entry of value.content) {
-    if (!entry || typeof entry !== "object") continue;
+    if (!entry || typeof entry !== 'object') continue;
     const block = entry as Record<string, unknown>;
-    if (block.type === "text" && typeof block.text === "string") {
+    if (block.type === 'text' && typeof block.text === 'string') {
       chars += block.text.length;
-    } else if (block.type === "image") {
+    } else if (block.type === 'image') {
       chars += 4800;
-    } else if (block.type === "thinking" && typeof block.thinking === "string") {
+    } else if (block.type === 'thinking' && typeof block.thinking === 'string') {
       chars += block.thinking.length;
-    } else if (block.type === "toolCall" && typeof block.name === "string") {
+    } else if (block.type === 'toolCall' && typeof block.name === 'string') {
       chars += block.name.length + (JSON.stringify(block.arguments)?.length ?? 0);
     }
   }
@@ -63,14 +63,14 @@ export function estimateContextTokens(
     usageStartIndex < 0 ||
     usageStartIndex > messages.length
   ) {
-    throw new TypeError("usageStartIndex 必须位于消息数组的边界内");
+    throw new TypeError('usageStartIndex 必须位于消息数组的边界内');
   }
   for (let index = messages.length - 1; index >= usageStartIndex; index--) {
     const message = messages[index]!;
     if (
-      message.role !== "assistant" ||
-      message.stopReason === "error" ||
-      message.stopReason === "aborted"
+      message.role !== 'assistant' ||
+      message.stopReason === 'error' ||
+      message.stopReason === 'aborted'
     ) {
       continue;
     }

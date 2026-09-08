@@ -1,6 +1,6 @@
-export { createMcp, Mcp } from "./mcp.ts";
+export { createMcp, Mcp } from './mcp.ts';
 
-export { DEFAULT_MCP_CONFIG_FILE, loadMcpConfig } from "./config.ts";
+export { DEFAULT_MCP_CONFIG_FILE, loadMcpConfig } from './config.ts';
 
 export type {
   McpConfig,
@@ -10,4 +10,4 @@ export type {
   McpServerConfig,
   McpStdioServerConfig,
   McpToolDetails,
-} from "./types.ts";
+} from './types.ts';

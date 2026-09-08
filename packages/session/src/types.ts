@@ -1,7 +1,7 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { EmbeddingProvider } from "@cieljs/agent-kit";
+import type { EmbeddingProvider } from '@cieljs/agent-kit';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-export type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/agent-kit";
+export type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/agent-kit';
 
 export type SessionSource = string;
 
@@ -84,8 +84,8 @@ export interface SessionCompaction {
   createdAt: Date;
 }
 
-export type SessionSearchMode = "hybrid" | "full_text" | "trigram" | "vector";
-export type SessionSearchMatch = "full_text" | "trigram" | "vector";
+export type SessionSearchMode = 'hybrid' | 'full_text' | 'trigram' | 'vector';
+export type SessionSearchMatch = 'full_text' | 'trigram' | 'vector';
 
 export interface SessionSearchOptions {
   mode?: SessionSearchMode;
@@ -106,7 +106,7 @@ export interface SessionSearchHit {
   matches: SessionSearchMatch[];
 }
 
-export type SessionSourceSearchMode = "auto" | "exact" | "text";
+export type SessionSourceSearchMode = 'auto' | 'exact' | 'text';
 
 export interface FindSessionsBySourceOptions {
   mode?: SessionSourceSearchMode;

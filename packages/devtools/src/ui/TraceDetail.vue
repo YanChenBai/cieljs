@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { shallowRef, watch } from "vue";
-import { Button, Tabs } from "@vuetify/v0/components";
-import type { DevtoolsClient } from "../client/index.ts";
-import type { TraceEntry } from "../protocol/index.ts";
-import ContentRenderer from "./ContentRenderer.vue";
-import Disclosure from "./Disclosure.vue";
+import { Button, Tabs } from '@vuetify/v0/components';
+import { shallowRef, watch } from 'vue';
+
+import type { DevtoolsClient } from '../client/index.ts';
+import type { TraceEntry } from '../protocol/index.ts';
+import ContentRenderer from './ContentRenderer.vue';
+import Disclosure from './Disclosure.vue';
 const props = defineProps<{ client: DevtoolsClient; entry: TraceEntry }>();
 defineEmits<{ close: [] }>();
-const tab = shallowRef("overview");
-const sections = shallowRef<{ key: "input" | "output" | "raw"; value: unknown }[]>([]);
-const error = shallowRef("");
+const tab = shallowRef('overview');
+const sections = shallowRef<{ key: 'input' | 'output' | 'raw'; value: unknown }[]>([]);
+const error = shallowRef('');
 watch(
   () => [props.entry.id, props.entry.revision],
   async (_next, _old, onCleanup) => {
@@ -18,10 +19,10 @@ watch(
       disposed = true;
     });
     if (_next[0] !== _old?.[0]) sections.value = [];
-    error.value = "";
+    error.value = '';
     try {
       const values = await Promise.all(
-        (["input", "output", "raw"] as const).map(async (key) => ({
+        (['input', 'output', 'raw'] as const).map(async key => ({
           key,
           value: props.entry[key]
             ? await props.client.values.get({
@@ -39,10 +40,10 @@ watch(
   { immediate: true },
 );
 const tabs = [
-  { value: "overview", label: "概览" },
-  { value: "input", label: "输入" },
-  { value: "output", label: "输出" },
-  { value: "raw", label: "原始事件" },
+  { value: 'overview', label: '概览' },
+  { value: 'input', label: '输入' },
+  { value: 'output', label: '输出' },
+  { value: 'raw', label: '原始事件' },
 ];
 </script>
 <template>

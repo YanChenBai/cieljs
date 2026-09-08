@@ -5,10 +5,10 @@
 `manager.global` 只访问 `global.long_term`。`manager.space(spaceId)` 返回绑定空间的对象，其中 `longTerm` 和 `daily` 分别固定写入对应层级。
 
 ```ts
-const space = manager.space("space-1");
+const space = manager.space('space-1');
 
-await space.longTerm.remember({ content: "空间内稳定成立的事实" });
-await space.daily.remember({ content: "今天发生的事件" });
+await space.longTerm.remember({ content: '空间内稳定成立的事实' });
+await space.daily.remember({ content: '今天发生的事件' });
 ```
 
 `space.get()`、`space.list()` 和 `space.search()` 只访问当前 space，不包含全局记忆，也不会访问其他 space。
@@ -24,8 +24,8 @@ await space.daily.remember({ content: "今天发生的事件" });
 ```ts
 const updated = await space.update(memory.id, {
   expectedRevision: memory.revision,
-  kind: "preference",
-  content: "更新后的完整正文",
+  kind: 'preference',
+  content: '更新后的完整正文',
 });
 ```
 

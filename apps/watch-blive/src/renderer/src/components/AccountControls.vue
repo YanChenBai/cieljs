@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Button } from "@vuetify/v0/components";
-import { LoaderCircle, LogIn, LogOut, RefreshCw, UserRound } from "lucide-vue-next";
-import type { Account } from "../../../shared/types.ts";
+import { Button } from '@vuetify/v0/components';
+import { LoaderCircle, LogIn, LogOut, RefreshCw, UserRound } from 'lucide-vue-next';
+
+import type { Account } from '../../../shared/types.ts';
 
 defineProps<{ account?: Account; pending: string; ready: boolean }>();
 defineEmits<{ login: []; logout: []; refresh: [] }>();
@@ -19,8 +20,8 @@ defineEmits<{ login: []; logout: []; refresh: [] }>();
       />
       <span v-else class="avatar"><UserRound :size="20" /></span>
       <div class="account-copy">
-        <strong>{{ account?.name ?? "尚未登录" }}</strong
-        ><small>{{ account ? `UID ${account.uid}` : "和 Ciel 一起看直播" }}</small>
+        <strong>{{ account?.name ?? '尚未登录' }}</strong
+        ><small>{{ account ? `UID ${account.uid}` : '和 Ciel 一起看直播' }}</small>
       </div>
       <Button.Root
         v-if="account"

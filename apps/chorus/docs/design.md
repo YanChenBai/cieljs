@@ -89,7 +89,7 @@ Node AudioOutput ─────────────┘
 ```ts
 export default defineChorusConfig({
   embedding: {
-    cacheDir: ".cache",
+    cacheDir: '.cache',
   },
   mcp: {
     enabled: true,
@@ -105,9 +105,9 @@ export default defineChorusConfig({
     },
   },
   conversation: {
-    spaceId: "voice-chat",
-    sessionId: "local-group",
-    sources: ["voice-chat:local-group"],
+    spaceId: 'voice-chat',
+    sessionId: 'local-group',
+    sources: ['voice-chat:local-group'],
     minimumThinkIntervalMs: 2_000,
   },
   perception: {
@@ -119,11 +119,11 @@ export default defineChorusConfig({
     retentionMs: 60_000,
   },
   tts: {
-    provider: "xiaomi",
-    model: "mimo-v2.5-tts",
-    voice: "冰糖",
-    format: "wav",
-    instructions: "自然、轻松，像正在和熟人聊天；语速适中。",
+    provider: 'xiaomi',
+    model: 'mimo-v2.5-tts',
+    voice: '冰糖',
+    format: 'wav',
+    instructions: '自然、轻松，像正在和熟人聊天；语速适中。',
   },
 });
 ```
@@ -158,10 +158,10 @@ export default defineChorusConfig({
 
 ```ts
 type SchedulerState =
-  | { status: "idle" }
-  | { status: "waiting"; pending: PendingWindow; eligibleAt: Date }
-  | { status: "thinking"; run: ThinkRun; pending?: PendingWindow }
-  | { status: "closed" };
+  | { status: 'idle' }
+  | { status: 'waiting'; pending: PendingWindow; eligibleAt: Date }
+  | { status: 'thinking'; run: ThinkRun; pending?: PendingWindow }
+  | { status: 'closed' };
 
 interface PendingWindow {
   startInclusive: Date;
@@ -263,8 +263,8 @@ interface SpeakInput {
 }
 
 type SpeakResult =
-  | { status: "delivered"; startedAt: string; endedAt: string }
-  | { status: "superseded"; reason: "new_speech" };
+  | { status: 'delivered'; startedAt: string; endedAt: string }
+  | { status: 'superseded'; reason: 'new_speech' };
 ```
 
 行为约束：
@@ -300,7 +300,7 @@ Chorus 不维护“等待播放的多条发言”队列：
 第一版采用完整音频返回的最小契约。小米当前返回 Base64 WAV，不为了未来可能的流式服务提前引入复杂的 chunk protocol。
 
 ```ts
-export type SpeechAudioFormat = "wav" | "pcm_s16le";
+export type SpeechAudioFormat = 'wav' | 'pcm_s16le';
 
 export interface SpeechSynthesisRequest {
   text: string;
@@ -347,7 +347,7 @@ export interface TextToSpeech {
 interface XiaomiTextToSpeechOptions {
   apiKey: string;
   baseUrl?: string;
-  model?: "mimo-v2.5-tts";
+  model?: 'mimo-v2.5-tts';
 }
 ```
 
@@ -398,7 +398,7 @@ export interface AudioInputChunk {
   capturedAt: Date;
   sampleRate: number;
   channels: number;
-  format: "s16le" | "f32le";
+  format: 's16le' | 'f32le';
 }
 
 export interface AudioInput {
@@ -534,17 +534,17 @@ Core 当前 `defineCiel()` 需要调用方提供 `Model<Api>`。仓库内部已�
 
 ```ts
 type ChorusEvent =
-  | { type: "speech_end"; at: Date; speaker?: string }
-  | { type: "pending_created"; window: PendingWindow }
-  | { type: "pending_merged"; window: PendingWindow }
-  | { type: "think_started"; window: PendingWindow }
-  | { type: "think_finished"; spoke: boolean; durationMs: number }
-  | { type: "tts_started"; characterCount: number }
-  | { type: "tts_finished"; durationMs: number }
-  | { type: "playback_started"; deviceId: number }
-  | { type: "playback_finished"; durationMs: number }
-  | { type: "self_echo_ignored"; at: Date }
-  | { type: "error"; stage: string; error: Error };
+  | { type: 'speech_end'; at: Date; speaker?: string }
+  | { type: 'pending_created'; window: PendingWindow }
+  | { type: 'pending_merged'; window: PendingWindow }
+  | { type: 'think_started'; window: PendingWindow }
+  | { type: 'think_finished'; spoke: boolean; durationMs: number }
+  | { type: 'tts_started'; characterCount: number }
+  | { type: 'tts_finished'; durationMs: number }
+  | { type: 'playback_started'; deviceId: number }
+  | { type: 'playback_finished'; durationMs: number }
+  | { type: 'self_echo_ignored'; at: Date }
+  | { type: 'error'; stage: string; error: Error };
 ```
 
 日志可以记录 speaker 标签、时间范围、字符数、耗时和设备 ID，但默认不记录完整转写、Memory 内容、合成后的音频或 API key。

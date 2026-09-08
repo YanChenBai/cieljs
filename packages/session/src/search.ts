@@ -1,4 +1,4 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 function tryStringify(value: unknown): string | undefined {
   try {
@@ -9,7 +9,7 @@ function tryStringify(value: unknown): string | undefined {
 }
 
 function isString(value: unknown): value is string {
-  return typeof value === "string";
+  return typeof value === 'string';
 }
 
 /**
@@ -29,20 +29,20 @@ export function messageToSearchText(message: AgentMessage): string {
   }
 
   if (!Array.isArray(content)) {
-    return "";
+    return '';
   }
 
   const parts: string[] = [];
 
   for (const block of content) {
-    if (!block || typeof block !== "object") {
+    if (!block || typeof block !== 'object') {
       continue;
     }
 
     const item = block as Record<string, unknown>;
 
     switch (item.type) {
-      case "text": {
+      case 'text': {
         if (isString(item.text)) {
           parts.push(item.text);
         }
@@ -50,7 +50,7 @@ export function messageToSearchText(message: AgentMessage): string {
         break;
       }
 
-      case "toolCall": {
+      case 'toolCall': {
         const argumentsText = tryStringify(item.arguments);
 
         if (isString(item.name) && argumentsText) {
@@ -64,12 +64,12 @@ export function messageToSearchText(message: AgentMessage): string {
        * 不把 reasoning / thinking
        * 放入搜索索引。
        */
-      case "thinking":
+      case 'thinking':
         break;
     }
   }
 
-  return parts.join("\n").trim();
+  return parts.join('\n').trim();
 }
 
 /**
@@ -84,18 +84,18 @@ export function messageToSearchText(message: AgentMessage): string {
  * "上下文 压缩 session ..."
  */
 export function normalizeSearchText(text: string): string {
-  return text.normalize("NFKC").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+  return text.normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
 }
 
 export function tokenizeSearchText(text: string): string[] {
   const normalized = normalizeSearchText(text);
-  const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
+  const segmenter = new Intl.Segmenter('zh', { granularity: 'word' });
 
   return [
     ...new Set(
       [...segmenter.segment(normalized)]
-        .filter((segment) => segment.isWordLike)
-        .map((segment) => segment.segment),
+        .filter(segment => segment.isWordLike)
+        .map(segment => segment.segment),
     ),
   ];
 }
@@ -119,7 +119,7 @@ export function chunkSearchText(text: string, maxChars = 4_000, overlap = 300): 
     overlap < 0 ||
     overlap >= maxChars
   ) {
-    throw new TypeError("分块长度必须是正整数，重叠长度必须是小于分块长度的非负整数");
+    throw new TypeError('分块长度必须是正整数，重叠长度必须是小于分块长度的非负整数');
   }
   const normalized = normalizeSearchText(text);
 

@@ -1,28 +1,28 @@
-import { homedir } from "node:os";
-import { qwen } from "@cieljs/embed";
-import { join, resolve } from "node:path";
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
-import { defineCiel, type Ciel, type CielSession } from "@cieljs/core";
-import { createPerception, type Perception, type SpeechEndEvent } from "@cieljs/perception";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import { defineCiel, type Ciel, type CielSession } from '@cieljs/core';
+import { qwen } from '@cieljs/embed';
+import { createPerception, type Perception, type SpeechEndEvent } from '@cieljs/perception';
+import type { Api, Model } from '@earendil-works/pi-ai';
 
-import { createAudioInput } from "./audio/input.ts";
-import { AudioNormalizer } from "./audio/normalizer.ts";
-import { createAudioOutput } from "./audio/output.ts";
-import type { AudioInput, AudioOutput, DeviceSelector } from "./audio/types.ts";
-import { resolveDevice } from "./audio/types.ts";
-import type { ChorusConfig } from "./config.ts";
+import { createAudioInput } from './audio/input.ts';
+import { AudioNormalizer } from './audio/normalizer.ts';
+import { createAudioOutput } from './audio/output.ts';
+import type { AudioInput, AudioOutput, DeviceSelector } from './audio/types.ts';
+import { resolveDevice } from './audio/types.ts';
+import type { ChorusConfig } from './config.ts';
 import {
   ConversationScheduler,
   type ChorusEvent,
   type SchedulerState,
-} from "./conversation/scheduler.ts";
-import { createSpeakTool, SpeakController } from "./conversation/speak-tool.ts";
-import { CHORUS_SYSTEM_PROMPT } from "./system-prompt.ts";
-import type { TextToSpeech } from "./tts/types.ts";
-import { createXiaomiTextToSpeech } from "./tts/xiaomi.ts";
+} from './conversation/scheduler.ts';
+import { createSpeakTool, SpeakController } from './conversation/speak-tool.ts';
+import { CHORUS_SYSTEM_PROMPT } from './system-prompt.ts';
+import type { TextToSpeech } from './tts/types.ts';
+import { createXiaomiTextToSpeech } from './tts/xiaomi.ts';
 
-export type ChorusStatus = "idle" | "starting" | "running" | "closing" | "closed";
+export type ChorusStatus = 'idle' | 'starting' | 'running' | 'closing' | 'closed';
 
 export interface ChorusOptions {
   config: ChorusConfig;
@@ -48,7 +48,7 @@ export function createChorus(options: ChorusOptions): Chorus {
 }
 
 class ChorusRuntime implements Chorus {
-  private currentStatus: ChorusStatus = "idle";
+  private currentStatus: ChorusStatus = 'idle';
   private startPromise: Promise<void> | undefined;
   private closePromise: Promise<void> | undefined;
 
@@ -74,7 +74,7 @@ class ChorusRuntime implements Chorus {
   get scheduler(): SchedulerState {
     return (
       this.schedulerInstance?.state ?? {
-        status: this.currentStatus === "running" ? "idle" : "closed",
+        status: this.currentStatus === 'running' ? 'idle' : 'closed',
       }
     );
   }
@@ -86,19 +86,19 @@ class ChorusRuntime implements Chorus {
   }
 
   start(): Promise<void> {
-    if (this.currentStatus === "running") {
+    if (this.currentStatus === 'running') {
       return Promise.resolve();
     }
 
-    if (this.currentStatus === "starting" && this.startPromise) {
+    if (this.currentStatus === 'starting' && this.startPromise) {
       return this.startPromise;
     }
 
-    if (this.currentStatus !== "idle") {
+    if (this.currentStatus !== 'idle') {
       return Promise.reject(new Error(`Chorus 当前不可用：${this.currentStatus}`));
     }
 
-    this.currentStatus = "starting";
+    this.currentStatus = 'starting';
     this.startPromise = this.startRuntime();
 
     return this.startPromise;
@@ -141,9 +141,9 @@ class ChorusRuntime implements Chorus {
         format: config.tts.format,
         instructions: config.tts.instructions,
         outputDevice: config.audio.output.device,
-        emit: (event) => this.emit(event),
-        onDelivered: (delivery) => this.selfEcho.recordPlayback(delivery),
-        onAecReference: (pcm) => this.input?.pushAecReference(pcm),
+        emit: event => this.emit(event),
+        onDelivered: delivery => this.selfEcho.recordPlayback(delivery),
+        onAecReference: pcm => this.input?.pushAecReference(pcm),
       });
 
       this.ciel = defineCiel({
@@ -163,11 +163,11 @@ class ChorusRuntime implements Chorus {
         sources: config.conversation.sources,
       });
 
-      this.unsubscribeAgent = this.session.agent.subscribe((event) => {
-        if (event.type === "tool_execution_start") {
-          this.emit({ type: "tool_call_started", name: event.toolName, args: event.args });
-        } else if (event.type === "tool_execution_end") {
-          this.emit({ type: "tool_call_finished", name: event.toolName, isError: event.isError });
+      this.unsubscribeAgent = this.session.agent.subscribe(event => {
+        if (event.type === 'tool_execution_start') {
+          this.emit({ type: 'tool_call_started', name: event.toolName, args: event.args });
+        } else if (event.type === 'tool_execution_end') {
+          this.emit({ type: 'tool_call_finished', name: event.toolName, isError: event.isError });
         }
       });
 
@@ -177,22 +177,22 @@ class ChorusRuntime implements Chorus {
         speak,
         minimumThinkIntervalMs: config.conversation.minimumThinkIntervalMs,
         startedAt: new Date(),
-        emit: (event) => this.emit(event),
+        emit: event => this.emit(event),
       });
 
       this.schedulerInstance = scheduler;
 
-      this.unsubscribeSpeechEnd = this.perception.on("speechend", (event) =>
+      this.unsubscribeSpeechEnd = this.perception.on('speechend', event =>
         this.handleSpeechEnd(event),
       );
 
       await this.pumpAudio(scheduler, config);
 
-      this.currentStatus = "running";
+      this.currentStatus = 'running';
     } catch (error) {
       await this.dispose();
       this.startPromise = undefined;
-      this.currentStatus = "idle";
+      this.currentStatus = 'idle';
 
       throw error;
     }
@@ -202,7 +202,7 @@ class ChorusRuntime implements Chorus {
     const apiKey = process.env.XIAOMI_API_KEY;
 
     if (!apiKey) {
-      throw new Error("缺少 XIAOMI_API_KEY 环境变量");
+      throw new Error('缺少 XIAOMI_API_KEY 环境变量');
     }
 
     return createXiaomiTextToSpeech({
@@ -212,12 +212,12 @@ class ChorusRuntime implements Chorus {
   }
 
   private createStorage() {
-    const root = resolve(this.options.dataDir ?? join(homedir(), ".ciel"));
+    const root = resolve(this.options.dataDir ?? join(homedir(), '.ciel'));
 
     return {
-      session: { dataDir: join(root, "session") },
-      memory: { dataDir: join(root, "memory") },
-      investigation: { dataDir: join(root, "investigation") },
+      session: { dataDir: join(root, 'session') },
+      memory: { dataDir: join(root, 'memory') },
+      investigation: { dataDir: join(root, 'investigation') },
     };
   }
 
@@ -236,8 +236,8 @@ class ChorusRuntime implements Chorus {
           this.perception!.asr.write({ data: pcm, startAt: chunk.capturedAt });
         }
       }
-    })().catch((error) => {
-      this.emit({ type: "error", stage: "input", error: toError(error) });
+    })().catch(error => {
+      this.emit({ type: 'error', stage: 'input', error: toError(error) });
     });
   }
 
@@ -247,14 +247,14 @@ class ChorusRuntime implements Chorus {
     }
 
     if (this.selfEcho.isSelfEcho(event.at, event.result?.content)) {
-      this.emit({ type: "self_echo_ignored", at: event.at });
+      this.emit({ type: 'self_echo_ignored', at: event.at });
       this.schedulerInstance.skipThrough(event.at);
 
       return;
     }
 
     this.emit({
-      type: "speech_end",
+      type: 'speech_end',
       at: event.at,
       speaker: event.result?.speaker,
       content: event.result?.content,
@@ -263,19 +263,19 @@ class ChorusRuntime implements Chorus {
   }
 
   private async closeRuntime(): Promise<void> {
-    if (this.currentStatus === "closed") {
+    if (this.currentStatus === 'closed') {
       return;
     }
 
-    if (this.currentStatus === "starting" && this.startPromise) {
+    if (this.currentStatus === 'starting' && this.startPromise) {
       await this.startPromise;
     }
 
-    this.currentStatus = "closing";
+    this.currentStatus = 'closing';
 
     await this.dispose();
 
-    this.currentStatus = "closed";
+    this.currentStatus = 'closed';
   }
 
   private async dispose(): Promise<void> {
@@ -318,8 +318,8 @@ async function assertInputDevice(
   const devices = await input.devices();
 
   if (device === undefined) {
-    if (!devices.some((candidate) => candidate.maxInputChannels > 0)) {
-      throw new Error("未找到可用的输入设备");
+    if (!devices.some(candidate => candidate.maxInputChannels > 0)) {
+      throw new Error('未找到可用的输入设备');
     }
 
     return;
@@ -345,8 +345,8 @@ async function assertOutputDevice(
   const devices = await output.devices();
 
   if (device === undefined) {
-    if (!devices.some((candidate) => candidate.maxOutputChannels > 0)) {
-      throw new Error("未找到可用的输出设备");
+    if (!devices.some(candidate => candidate.maxOutputChannels > 0)) {
+      throw new Error('未找到可用的输出设备');
     }
 
     return;
@@ -364,11 +364,11 @@ async function assertOutputDevice(
 }
 
 function describeSelector(selector: DeviceSelector): string {
-  if (typeof selector === "number") {
+  if (typeof selector === 'number') {
     return `index=${selector}`;
   }
 
-  if (typeof selector === "string") {
+  if (typeof selector === 'string') {
     return `name="${selector}"`;
   }
 
@@ -414,7 +414,7 @@ function textSimilar(left: string, right: string): boolean {
 }
 
 function normalize(text: string): string {
-  return text.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
+  return text.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
 }
 
 function toError(error: unknown): Error {

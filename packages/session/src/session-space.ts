@@ -1,5 +1,5 @@
-import type { SessionServices } from "./session.ts";
-import { Session } from "./session.ts";
+import type { SessionServices } from './session.ts';
+import { Session } from './session.ts';
 import type {
   FindSessionsBySourceOptions,
   SessionInfo,
@@ -8,7 +8,7 @@ import type {
   SessionSearchHit,
   SessionSearchOptions,
   SessionSourceHit,
-} from "./types.ts";
+} from './types.ts';
 
 export interface SessionSpace {
   readonly spaceId: string;
@@ -33,12 +33,12 @@ export function createSessionSpace(services: SessionServices, spaceId: string): 
         const info = await services.repository.open(selector, options);
         return new Session(services, info.id, info.spaceId);
       }),
-    getSession: (id) =>
+    getSession: id =>
       services.operate(async () => {
         const info = await services.repository.getInfo({ ...selector, sessionId: id });
         return info ? new Session(services, info.id, info.spaceId) : null;
       }),
-    list: (options) => services.operate(() => services.repository.list(selector, options)),
+    list: options => services.operate(() => services.repository.list(selector, options)),
     search: (query, options) =>
       services.operate(() => services.retrieval.search(selector, query, options)),
     findSessionsBySource: (query, options) =>

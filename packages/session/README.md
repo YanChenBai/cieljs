@@ -28,21 +28,21 @@
 打开一个会话，写入消息，再取回它的当前上下文：
 
 ```ts
-import { SessionManager } from "@cieljs/session";
+import { SessionManager } from '@cieljs/session';
 
-const manager = await SessionManager.open({ dataDir: ".ciel/sessions" });
-const space = manager.space("blive:room:21452505");
+const manager = await SessionManager.open({ dataDir: '.ciel/sessions' });
+const space = manager.space('blive:room:21452505');
 
 try {
   // ID 已存在时复用已有 Session。
   const session = await space.session({
-    id: "conversation-1",
-    sources: ["project:ciel", "user:alice"],
+    id: 'conversation-1',
+    sources: ['project:ciel', 'user:alice'],
   });
 
   await session.appendMessage({
-    role: "user",
-    content: "我们决定用本地数据库保存会话。",
+    role: 'user',
+    content: '我们决定用本地数据库保存会话。',
     timestamp: Date.now(),
   });
 
@@ -96,7 +96,7 @@ Agent Tool 从独立入口导入。通过 `sessionTools({ session, space })`，�
 下面三组工具是不同授权方式，按需要选择一组：
 
 ```ts
-import { sessionTools } from "@cieljs/session/agent";
+import { sessionTools } from '@cieljs/session/agent';
 
 // 默认：仅在当前空间内找回历史。
 const localTools = sessionTools({ session, space });
@@ -107,7 +107,7 @@ const relatedTools = sessionTools({
   space,
   crossSpace: {
     manager,
-    access: "related",
+    access: 'related',
   },
 });
 
@@ -115,7 +115,7 @@ const relatedTools = sessionTools({
 const allTools = sessionTools({
   session,
   space,
-  crossSpace: { manager, access: "all" },
+  crossSpace: { manager, access: 'all' },
 });
 ```
 

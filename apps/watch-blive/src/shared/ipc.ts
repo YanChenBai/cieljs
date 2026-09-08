@@ -5,23 +5,23 @@ import type {
   StartWatchOptions,
   WatchEvent,
   WatchStatus,
-} from "./types.ts";
+} from './types.ts';
 
 export const WATCH_BLIVE_IPC = {
-  attachLiveWebContents: "watch-blive:live-page:attach",
-  start: "watch-blive:start",
-  stop: "watch-blive:stop",
-  login: "watch-blive:login",
-  logout: "watch-blive:logout",
-  account: "watch-blive:account",
-  areas: "watch-blive:areas",
-  snapshot: "watch-blive:snapshot",
-  event: "watch-blive:event",
+  attachLiveWebContents: 'watch-blive:live-page:attach',
+  start: 'watch-blive:start',
+  stop: 'watch-blive:stop',
+  login: 'watch-blive:login',
+  logout: 'watch-blive:logout',
+  account: 'watch-blive:account',
+  areas: 'watch-blive:areas',
+  snapshot: 'watch-blive:snapshot',
+  event: 'watch-blive:event',
 } as const;
 
 export type WatchBridgeEvent =
-  | Exclude<WatchEvent, { type: "error" }>
-  | { type: "error"; stage: string; message: string };
+  | Exclude<WatchEvent, { type: 'error' }>
+  | { type: 'error'; stage: string; message: string };
 export interface WatchSnapshot {
   status: WatchStatus;
   room?: RoomInfo;

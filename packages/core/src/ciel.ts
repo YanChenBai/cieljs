@@ -1,13 +1,13 @@
-import { resolve, dirname, join, sep } from "node:path";
-import { platform } from "node:process";
+import { resolve, dirname, join, sep } from 'node:path';
+import { platform } from 'node:process';
 
-import { MemoryManager } from "@cieljs/memory";
-import { createMcp, type Mcp } from "@cieljs/mcp";
-import { SessionManager } from "@cieljs/session";
+import { createMcp, type Mcp } from '@cieljs/mcp';
+import { MemoryManager } from '@cieljs/memory';
+import { SessionManager } from '@cieljs/session';
 
-import { runInvestigation } from "./agents/investigation-agent.ts";
-import { createCielSessionAgent, type SessionAgentHandle } from "./agents/session-agent.ts";
-import { createSourceResolver } from "./sources.ts";
+import { runInvestigation } from './agents/investigation-agent.ts';
+import { createCielSessionAgent, type SessionAgentHandle } from './agents/session-agent.ts';
+import { createSourceResolver } from './sources.ts';
 import type {
   Ciel,
   CielSession,
@@ -16,7 +16,7 @@ import type {
   InvestigateOptions,
   InvestigationResult,
   OpenSessionOptions,
-} from "./types.ts";
+} from './types.ts';
 
 interface CielResources {
   sessionManager: SessionManager;
@@ -27,7 +27,7 @@ interface CielResources {
 function investigationStorage(options: DefineCielOptions) {
   return (
     options.investigation ?? {
-      dataDir: join(dirname(resolve(options.session.dataDir)), "investigation"),
+      dataDir: join(dirname(resolve(options.session.dataDir)), 'investigation'),
     }
   );
 }
@@ -35,7 +35,7 @@ function investigationStorage(options: DefineCielOptions) {
 function storageIdentity(dataDir: string) {
   const identity = resolve(dataDir);
 
-  return platform === "win32" ? identity.toLocaleLowerCase("en-US") : identity;
+  return platform === 'win32' ? identity.toLocaleLowerCase('en-US') : identity;
 }
 
 function assertDistinctStorage(options: DefineCielOptions) {
@@ -53,14 +53,14 @@ function assertDistinctStorage(options: DefineCielOptions) {
       ),
     )
   ) {
-    throw new Error("Session、Memory 与 Investigation 必须使用不同的 dataDir");
+    throw new Error('Session、Memory 与 Investigation 必须使用不同的 dataDir');
   }
 }
 
 class CielSessionRuntime implements CielSession {
   readonly id: string;
   readonly spaceId: string;
-  readonly agent: CielSession["agent"];
+  readonly agent: CielSession['agent'];
 
   constructor(private readonly handle: SessionAgentHandle) {
     this.id = handle.session.id;
@@ -74,7 +74,7 @@ class CielSessionRuntime implements CielSession {
 }
 
 class CielRuntime implements Ciel {
-  private currentStatus: CielStatus = "idle";
+  private currentStatus: CielStatus = 'idle';
   private startPromise: Promise<void> | undefined;
   private closePromise: Promise<void> | undefined;
   private sessionManager: SessionManager | undefined;
@@ -93,19 +93,19 @@ class CielRuntime implements Ciel {
   }
 
   start(): Promise<void> {
-    if (this.currentStatus === "running") {
+    if (this.currentStatus === 'running') {
       return Promise.resolve();
     }
 
-    if (this.currentStatus === "starting" && this.startPromise) {
+    if (this.currentStatus === 'starting' && this.startPromise) {
       return this.startPromise;
     }
 
-    if (this.currentStatus === "closing" || this.currentStatus === "closed") {
+    if (this.currentStatus === 'closing' || this.currentStatus === 'closed') {
       return Promise.reject(new Error(`Ciel 已开始关闭：${this.currentStatus}`));
     }
 
-    this.currentStatus = "starting";
+    this.currentStatus = 'starting';
     this.startPromise = this.startResources();
 
     return this.startPromise;
@@ -198,7 +198,7 @@ class CielRuntime implements Ciel {
         this.mcp = await createMcp(mcpOptions);
       }
 
-      this.currentStatus = "running";
+      this.currentStatus = 'running';
     } catch (error) {
       await Promise.allSettled([
         this.sessionManager?.close(),
@@ -211,25 +211,25 @@ class CielRuntime implements Ciel {
       this.memoryManager = undefined;
       this.mcp = undefined;
       this.startPromise = undefined;
-      this.currentStatus = "idle";
+      this.currentStatus = 'idle';
 
       throw error;
     }
   }
 
   private async closeResources() {
-    if (this.currentStatus === "closed") {
+    if (this.currentStatus === 'closed') {
       return;
     }
 
-    if (this.currentStatus === "starting" && this.startPromise) {
+    if (this.currentStatus === 'starting' && this.startPromise) {
       await this.startPromise;
     }
 
-    this.currentStatus = "closing";
+    this.currentStatus = 'closing';
     const openingResults = await Promise.allSettled(this.sessionOpenings);
     const activeResults = await Promise.allSettled([
-      ...[...this.sessions].map((session) => session.close()),
+      ...[...this.sessions].map(session => session.close()),
       ...this.investigations,
     ]);
     const storageResults = await Promise.allSettled([
@@ -239,27 +239,27 @@ class CielRuntime implements Ciel {
       this.mcp?.close(),
     ]);
 
-    this.currentStatus = "closed";
+    this.currentStatus = 'closed';
     this.mcp = undefined;
 
     const failures = [...openingResults, ...activeResults, ...storageResults]
-      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-      .map((result) => result.reason);
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map(result => result.reason);
 
     if (failures.length) {
-      throw new AggregateError(failures, "Ciel 关闭时发生错误");
+      throw new AggregateError(failures, 'Ciel 关闭时发生错误');
     }
   }
 
   private assertRunning() {
-    if (this.currentStatus !== "running") {
+    if (this.currentStatus !== 'running') {
       throw new Error(`Ciel 当前不可用：${this.currentStatus}`);
     }
   }
 
   private requireResources(): CielResources {
     if (!this.sessionManager || !this.investigationManager || !this.memoryManager) {
-      throw new Error("Ciel 尚未完成启动");
+      throw new Error('Ciel 尚未完成启动');
     }
 
     return {

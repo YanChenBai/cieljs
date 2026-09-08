@@ -1,20 +1,20 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
-import type { Database } from "./database.ts";
-import type { EmbeddingIndex } from "./embedding-index.ts";
-import { SessionValidationError } from "./errors.ts";
-import { chunkCondition, sessionCondition, type SessionSelector } from "./query.ts";
-import { materializeMessage, materializeSession } from "./repository.ts";
-import { retrievalChunks, retrievalEmbeddings, sessionMessages, sessions } from "./schema.ts";
-import { normalizeSearchText } from "./search.ts";
+import type { Database } from './database.ts';
+import type { EmbeddingIndex } from './embedding-index.ts';
+import { SessionValidationError } from './errors.ts';
+import { chunkCondition, sessionCondition, type SessionSelector } from './query.ts';
+import { materializeMessage, materializeSession } from './repository.ts';
+import { retrievalChunks, retrievalEmbeddings, sessionMessages, sessions } from './schema.ts';
+import { normalizeSearchText } from './search.ts';
 import type {
   FindSessionsBySourceOptions,
   SessionSearchHit,
   SessionSearchMatch,
   SessionSearchOptions,
   SessionSourceHit,
-} from "./types.ts";
-import { integerOption } from "./validation.ts";
+} from './types.ts';
+import { integerOption } from './validation.ts';
 
 interface RawContentHit {
   messageId: string;
@@ -38,13 +38,13 @@ export class SessionRetrieval {
     query: string,
     options: SessionSearchOptions = {},
   ): Promise<SessionSearchHit[]> {
-    const mode = options.mode ?? "hybrid";
+    const mode = options.mode ?? 'hybrid';
 
-    if (!["hybrid", "full_text", "trigram", "vector"].includes(mode)) {
-      throw new SessionValidationError("无效的 Session 检索模式");
+    if (!['hybrid', 'full_text', 'trigram', 'vector'].includes(mode)) {
+      throw new SessionValidationError('无效的 Session 检索模式');
     }
 
-    if (mode !== "hybrid") {
+    if (mode !== 'hybrid') {
       const method = mode as SessionSearchMatch;
       return this.mergeContentHits(
         selector,
@@ -54,9 +54,9 @@ export class SessionRetrieval {
     }
 
     const routes = await Promise.all([
-      this.searchRoute("full_text", selector, query, options),
-      this.searchRoute("trigram", selector, query, options),
-      this.searchRoute("vector", selector, query, options).catch((error: unknown) => {
+      this.searchRoute('full_text', selector, query, options),
+      this.searchRoute('trigram', selector, query, options),
+      this.searchRoute('vector', selector, query, options).catch((error: unknown) => {
         options.signal?.throwIfAborted();
         this.embeddingIndex.reportError(error);
         return [];
@@ -66,9 +66,9 @@ export class SessionRetrieval {
     return this.mergeContentHits(
       selector,
       [
-        ["full_text", routes[0]],
-        ["trigram", routes[1]],
-        ["vector", routes[2]],
+        ['full_text', routes[0]],
+        ['trigram', routes[1]],
+        ['vector', routes[2]],
       ],
       options,
     );
@@ -80,22 +80,22 @@ export class SessionRetrieval {
     options: FindSessionsBySourceOptions = {},
   ): Promise<SessionSourceHit[]> {
     options.signal?.throwIfAborted();
-    const sourceQuery = query.normalize("NFKC").trim();
+    const sourceQuery = query.normalize('NFKC').trim();
     if (!sourceQuery) return [];
 
-    const mode = options.mode ?? "auto";
-    if (!["auto", "exact", "text"].includes(mode)) {
-      throw new SessionValidationError("无效的来源检索模式");
+    const mode = options.mode ?? 'auto';
+    if (!['auto', 'exact', 'text'].includes(mode)) {
+      throw new SessionValidationError('无效的来源检索模式');
     }
 
-    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
-    const limit = integerOption(options.limit ?? 10, "limit");
+    const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 10, 'limit');
     const candidateLimit = Math.min(1000, offset + limit);
     const routes: RawSourceHit[][] = [];
 
-    if (mode === "auto" || mode === "exact")
+    if (mode === 'auto' || mode === 'exact')
       routes.push(await this.searchSourceExact(selector, sourceQuery, candidateLimit));
-    if (mode === "auto" || mode === "text")
+    if (mode === 'auto' || mode === 'text')
       routes.push(await this.searchSourceText(selector, sourceQuery, candidateLimit));
 
     options.signal?.throwIfAborted();
@@ -117,15 +117,15 @@ export class SessionRetrieval {
           left.session.id.localeCompare(right.session.id),
       )
       .slice(offset, offset + limit)
-      .map((row) => ({
+      .map(row => ({
         session: materializeSession(row.session),
-        matchedSources: row.session.sources.filter((source) => {
+        matchedSources: row.session.sources.filter(source => {
           const sourceText = normalizeSearchText(source);
           const sourceTokens = this.tokenize(sourceText).map(normalizeSearchText);
           return (
             source === sourceQuery ||
             sourceText.includes(normalizedQuery) ||
-            queryTokens.some((token) => sourceTokens.includes(token))
+            queryTokens.some(token => sourceTokens.includes(token))
           );
         }),
         score: row.score,
@@ -142,13 +142,13 @@ export class SessionRetrieval {
     const normalized = normalizeSearchText(query);
     if (!normalized) return [];
 
-    const limit = integerOption(options.candidateLimit ?? 50, "candidateLimit");
-    if (method === "vector") return this.searchVector(selector, query, limit, options);
+    const limit = integerOption(options.candidateLimit ?? 50, 'candidateLimit');
+    if (method === 'vector') return this.searchVector(selector, query, limit, options);
 
     let score;
     let match;
-    if (method === "full_text") {
-      const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(" ");
+    if (method === 'full_text') {
+      const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(' ');
       if (!tokens) return [];
       const document = sql`to_tsvector('simple', ${retrievalChunks.tokenText})`;
       const tsQuery = sql`plainto_tsquery('simple', ${tokens})`;
@@ -181,7 +181,7 @@ export class SessionRetrieval {
 
     const threshold = options.minVectorSimilarity ?? 0.35;
     if (!Number.isFinite(threshold) || threshold < -1 || threshold > 1) {
-      throw new SessionValidationError("相似度阈值必须在 -1 到 1 之间");
+      throw new SessionValidationError('相似度阈值必须在 -1 到 1 之间');
     }
 
     const vector = await this.embeddingIndex.embedQuery(query, options.signal);
@@ -200,7 +200,7 @@ export class SessionRetrieval {
           chunkCondition(selector),
           eq(retrievalEmbeddings.model, model.model),
           eq(retrievalEmbeddings.dimensions, model.dimensions),
-          eq(retrievalEmbeddings.status, "ready"),
+          eq(retrievalEmbeddings.status, 'ready'),
           sql`${score} >= ${threshold}`,
         ),
       )
@@ -221,7 +221,7 @@ export class SessionRetrieval {
       for (const row of rows) {
         if (seen.has(row.messageId)) continue;
         seen.add(row.messageId);
-        const score = (method === "trigram" ? 0.7 : 1) / (60 + seen.size);
+        const score = (method === 'trigram' ? 0.7 : 1) / (60 + seen.size);
         const existing = hits.get(row.messageId);
         if (existing) {
           existing.score += score;
@@ -239,11 +239,11 @@ export class SessionRetrieval {
       .innerJoin(sessions, eq(sessions.id, sessionMessages.sessionId))
       .where(and(inArray(sessionMessages.id, [...hits.keys()]), sessionCondition(selector)));
     options.signal?.throwIfAborted();
-    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
-    const limit = integerOption(options.limit ?? 10, "limit");
+    const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 10, 'limit');
 
     return rows
-      .map((row) => {
+      .map(row => {
         const hit = hits.get(row.message.id)!;
         return {
           spaceId: row.spaceId,
@@ -281,7 +281,7 @@ export class SessionRetrieval {
     limit: number,
   ): Promise<RawSourceHit[]> {
     const normalized = normalizeSearchText(query);
-    const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(" ");
+    const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(' ');
     const pattern = `%${escapeLike(normalized)}%`;
     const document = sql`to_tsvector('simple', ${sessions.sourceTokenText})`;
     const tsQuery = sql`plainto_tsquery('simple', ${tokens})`;
@@ -306,5 +306,5 @@ export class SessionRetrieval {
 }
 
 function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, "\\$&");
+  return value.replace(/[\\%_]/g, '\\$&');
 }

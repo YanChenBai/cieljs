@@ -1,20 +1,20 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
-import type { Database } from "./database.ts";
-import type { MemoryEmbeddingIndex } from "./embedding-index.ts";
-import { filterCondition, type MemorySelector } from "./query.ts";
-import { materializeMemory } from "./repository.ts";
-import { memories, memoryChunks, memoryEmbeddings, memoryRevisions } from "./schema.ts";
-import { normalizeSearchText } from "./search.ts";
+import type { Database } from './database.ts';
+import type { MemoryEmbeddingIndex } from './embedding-index.ts';
+import { MemoryValidationError } from './errors.ts';
+import { filterCondition, type MemorySelector } from './query.ts';
+import { materializeMemory } from './repository.ts';
+import { memories, memoryChunks, memoryEmbeddings, memoryRevisions } from './schema.ts';
+import { normalizeSearchText } from './search.ts';
 import type {
   MemorySearchHit,
   MemorySearchMatch,
   MemorySearchOptions,
   MemorySourceSearchHit,
   MemorySourceSearchOptions,
-} from "./types.ts";
-import { MemoryValidationError } from "./errors.ts";
-import { integerOption } from "./validation.ts";
+} from './types.ts';
+import { integerOption } from './validation.ts';
 
 interface RawContentHit {
   id: string;
@@ -27,7 +27,7 @@ interface RawSourceHit {
   memoryId: string;
   revision: number;
   spaceId: string | null;
-  layer: "global.long_term" | "space.long_term" | "space.daily";
+  layer: 'global.long_term' | 'space.long_term' | 'space.daily';
   date: string | null;
   sources: string[];
   content: string;
@@ -48,13 +48,13 @@ export class MemoryRetrieval {
     query: string,
     options: SearchOptions = {},
   ): Promise<MemorySearchHit[]> {
-    const mode = options.mode ?? "hybrid";
+    const mode = options.mode ?? 'hybrid';
 
-    if (!["hybrid", "full_text", "trigram", "vector"].includes(mode)) {
-      throw new MemoryValidationError("无效的内容检索模式");
+    if (!['hybrid', 'full_text', 'trigram', 'vector'].includes(mode)) {
+      throw new MemoryValidationError('无效的内容检索模式');
     }
 
-    if (mode !== "hybrid") {
+    if (mode !== 'hybrid') {
       const method = mode as MemorySearchMatch;
       const hits = await this.searchRoute(method, selector, query, options);
 
@@ -62,9 +62,9 @@ export class MemoryRetrieval {
     }
 
     const routes = await Promise.all([
-      this.searchRoute("full_text", selector, query, options),
-      this.searchRoute("trigram", selector, query, options),
-      this.searchRoute("vector", selector, query, options).catch((error: unknown) => {
+      this.searchRoute('full_text', selector, query, options),
+      this.searchRoute('trigram', selector, query, options),
+      this.searchRoute('vector', selector, query, options).catch((error: unknown) => {
         options.signal?.throwIfAborted();
         this.embeddingIndex.reportError(error);
 
@@ -75,9 +75,9 @@ export class MemoryRetrieval {
     return this.mergeContentHits(
       selector,
       [
-        ["full_text", routes[0]],
-        ["trigram", routes[1]],
-        ["vector", routes[2]],
+        ['full_text', routes[0]],
+        ['trigram', routes[1]],
+        ['vector', routes[2]],
       ],
       options,
     );
@@ -89,25 +89,25 @@ export class MemoryRetrieval {
     options: MemorySourceSearchOptions = {},
   ): Promise<MemorySourceSearchHit[]> {
     options.signal?.throwIfAborted();
-    const normalized = query.normalize("NFKC").trim();
+    const normalized = query.normalize('NFKC').trim();
 
     if (!normalized) {
       return [];
     }
 
-    const candidateLimit = integerOption((options.limit ?? 10) + (options.offset ?? 0), "limit");
-    const mode = options.mode ?? "auto";
+    const candidateLimit = integerOption((options.limit ?? 10) + (options.offset ?? 0), 'limit');
+    const mode = options.mode ?? 'auto';
 
-    if (!["auto", "exact", "text"].includes(mode)) {
-      throw new MemoryValidationError("无效的来源检索模式");
+    if (!['auto', 'exact', 'text'].includes(mode)) {
+      throw new MemoryValidationError('无效的来源检索模式');
     }
     const routes: RawSourceHit[][] = [];
 
-    if (mode === "auto" || mode === "exact") {
+    if (mode === 'auto' || mode === 'exact') {
       routes.push(await this.searchSourceExact(selector, normalized, options, candidateLimit));
     }
 
-    if (mode === "auto" || mode === "text") {
+    if (mode === 'auto' || mode === 'text') {
       routes.push(await this.searchSourceText(selector, normalized, options, candidateLimit));
     }
 
@@ -127,28 +127,28 @@ export class MemoryRetrieval {
 
     const queryText = normalizeSearchText(normalized);
     const queryTokens = this.tokenize(queryText).map(normalizeSearchText).filter(Boolean);
-    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
-    const limit = integerOption(options.limit ?? 10, "limit");
+    const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 10, 'limit');
 
     return [...merged.values()]
       .sort(
         (left, right) => right.score - left.score || left.memoryId.localeCompare(right.memoryId),
       )
       .slice(offset, offset + limit)
-      .map((row) => ({
+      .map(row => ({
         memoryId: row.memoryId,
         revision: row.revision,
         spaceId: row.spaceId,
         layer: row.layer,
         date: row.date,
-        matchedSources: row.sources.filter((source) => {
+        matchedSources: row.sources.filter(source => {
           const sourceText = normalizeSearchText(source);
           const sourceTokens = this.tokenize(sourceText).map(normalizeSearchText);
 
           return (
             source === normalized ||
             sourceText.includes(queryText) ||
-            queryTokens.some((token) => sourceTokens.includes(token))
+            queryTokens.some(token => sourceTokens.includes(token))
           );
         }),
         excerpt: createExcerpt(row.content),
@@ -169,18 +169,18 @@ export class MemoryRetrieval {
       return [];
     }
 
-    const limit = integerOption(options.candidateLimit ?? 50, "candidateLimit");
+    const limit = integerOption(options.candidateLimit ?? 50, 'candidateLimit');
     const filter = filterCondition(selector, options);
 
-    if (method === "vector") {
+    if (method === 'vector') {
       return this.searchVector(query, filter, limit, options);
     }
 
     let score;
     let match;
 
-    if (method === "full_text") {
-      const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(" ");
+    if (method === 'full_text') {
+      const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(' ');
 
       if (!tokens) {
         return [];
@@ -237,7 +237,7 @@ export class MemoryRetrieval {
     const threshold = options.minVectorSimilarity ?? 0.35;
 
     if (!Number.isFinite(threshold) || threshold < -1 || threshold > 1) {
-      throw new TypeError("相似度阈值必须在 -1 到 1 之间");
+      throw new TypeError('相似度阈值必须在 -1 到 1 之间');
     }
 
     const vector = await this.embeddingIndex.embedQuery(query, options.signal);
@@ -300,7 +300,7 @@ export class MemoryRetrieval {
         }
 
         seen.add(row.id);
-        const score = (method === "trigram" ? 0.7 : 1) / (60 + seen.size);
+        const score = (method === 'trigram' ? 0.7 : 1) / (60 + seen.size);
         const existing = hits.get(row.id);
 
         if (existing) {
@@ -329,11 +329,11 @@ export class MemoryRetrieval {
       .where(and(inArray(memories.id, [...hits.keys()]), filterCondition(selector, options)));
 
     options.signal?.throwIfAborted();
-    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
-    const limit = integerOption(options.limit ?? 10, "limit");
+    const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 10, 'limit');
 
     return rows
-      .flatMap((row) => {
+      .flatMap(row => {
         const hit = hits.get(row.memory.id)!;
 
         if (row.revision.revision !== hit.revision) {
@@ -380,7 +380,7 @@ export class MemoryRetrieval {
     limit: number,
   ): Promise<RawSourceHit[]> {
     const normalized = normalizeSearchText(query);
-    const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(" ");
+    const tokens = this.tokenize(normalized).map(normalizeSearchText).filter(Boolean).join(' ');
     const pattern = `%${escapeLike(normalized)}%`;
     const document = sql`to_tsvector('simple', ${memoryRevisions.sourceTokenText})`;
     const tsQuery = sql`plainto_tsquery('simple', ${tokens})`;
@@ -425,9 +425,9 @@ export class MemoryRetrieval {
 }
 
 function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, "\\$&");
+  return value.replace(/[\\%_]/g, '\\$&');
 }
 
 function createExcerpt(content: string): string {
-  return Array.from(content).slice(0, 400).join("");
+  return Array.from(content).slice(0, 400).join('');
 }

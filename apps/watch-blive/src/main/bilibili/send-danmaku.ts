@@ -1,7 +1,7 @@
-import type { WebContents } from "electron";
+import type { WebContents } from 'electron';
+import Type from 'typebox';
 
-import { executePage } from "./page-executor";
-import Type from "typebox";
+import { executePage } from './page-executor';
 
 export async function sendDanmaku(contents: WebContents, content: string) {
   const {
@@ -20,5 +20,5 @@ export async function sendDanmaku(contents: WebContents, content: string) {
     }),
   );
 
-  return { accepted: code === 0, code, message: message ?? msg ?? "" };
+  return { accepted: code === 0, code, message: message ?? msg ?? '' };
 }

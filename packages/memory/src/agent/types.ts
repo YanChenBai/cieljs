@@ -1,12 +1,12 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-import type { MemoryManager } from "../memory-manager.ts";
-import type { GlobalLongTermMemory, SpaceMemory } from "../memory-store.ts";
-import type { MemoryEntry, MemorySource } from "../types.ts";
+import type { MemoryManager } from '../memory-manager.ts';
+import type { GlobalLongTermMemory, SpaceMemory } from '../memory-store.ts';
+import type { MemoryEntry, MemorySource } from '../types.ts';
 
 export interface MemorySourceProviderContext {
   toolCallId: string;
-  action: "remember" | "update";
+  action: 'remember' | 'update';
   signal?: AbortSignal;
 }
 
@@ -14,7 +14,7 @@ export type MemorySourceProvider = (
   context: MemorySourceProviderContext,
 ) => MemorySource[] | Promise<MemorySource[]>;
 
-export type CrossSpaceMemoryAccess = "related" | "all";
+export type CrossSpaceMemoryAccess = 'related' | 'all';
 
 export interface CrossSpaceMemoryOptions {
   manager: MemoryManager;
@@ -24,7 +24,7 @@ export interface CrossSpaceMemoryOptions {
 export interface MemoryToolsOptions {
   space: SpaceMemory;
   sources?: MemorySource[] | MemorySourceProvider;
-  sourcesMode?: "append" | "replace";
+  sourcesMode?: 'append' | 'replace';
   rememberDaily?: boolean;
   rememberLongTerm?: boolean;
   update?: boolean;
@@ -37,7 +37,7 @@ export interface MemoryToolsOptions {
 export interface GlobalMemoryToolsOptions {
   memory: GlobalLongTermMemory;
   sources?: MemorySource[] | MemorySourceProvider;
-  sourcesMode?: "append" | "replace";
+  sourcesMode?: 'append' | 'replace';
   remember?: boolean;
   update?: boolean;
   forget?: boolean;
@@ -72,7 +72,7 @@ export interface LoadedMemoryContext {
 export interface ResolvedToolOptions {
   maxReadChars: number;
   searchLimit: number;
-  sourcesMode: "append" | "replace";
+  sourcesMode: 'append' | 'replace';
   resolveSources(context: MemorySourceProviderContext): Promise<MemorySource[]>;
 }
 

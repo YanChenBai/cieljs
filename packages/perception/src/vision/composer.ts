@@ -1,6 +1,6 @@
 // @env node
 
-import sharp from "sharp";
+import sharp from 'sharp';
 
 interface FrameSlot {
   readonly height: number;
@@ -15,10 +15,10 @@ const COLUMNS = 3;
 
 export async function composeVisionFrames(frames: readonly Buffer[]): Promise<Buffer> {
   if (frames.length === 0 || frames.length > 9) {
-    throw new Error("Vision composition requires between 1 and 9 frames");
+    throw new Error('Vision composition requires between 1 and 9 frames');
   }
 
-  const metadata = await Promise.all(frames.map((frame) => sharp(frame).metadata()));
+  const metadata = await Promise.all(frames.map(frame => sharp(frame).metadata()));
   const rows = Math.ceil(frames.length / COLUMNS);
   const rowHeight = Math.floor(OUTPUT_HEIGHT / rows);
   const slots: FrameSlot[] = [];
@@ -46,7 +46,7 @@ export async function composeVisionFrames(frames: readonly Buffer[]): Promise<Bu
   const resized = await Promise.all(
     slots.map((slot, index) =>
       sharp(frames[index]!)
-        .resize(slot.width, slot.height, { fit: "contain" })
+        .resize(slot.width, slot.height, { fit: 'contain' })
         .jpeg({ quality: 85 })
         .toBuffer(),
     ),

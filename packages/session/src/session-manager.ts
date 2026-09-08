@@ -1,17 +1,17 @@
-import { fileURLToPath } from "node:url";
+import { fileURLToPath } from 'node:url';
 
-import type { PGlite } from "@electric-sql/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from "@cieljs/agent-kit";
+import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from '@cieljs/agent-kit';
+import type { PGlite } from '@electric-sql/pglite';
+import { migrate } from 'drizzle-orm/pglite/migrator';
 
-import { createDatabase, type Database } from "./database.ts";
-import { EmbeddingIndex } from "./embedding-index.ts";
-import { SessionClosedError, SessionValidationError } from "./errors.ts";
-import { SessionRepository } from "./repository.ts";
-import { SessionRetrieval } from "./retrieval.ts";
-import { tokenizeSearchText } from "./search.ts";
-import { Session, type SessionServices } from "./session.ts";
-import { createSessionSpace, type SessionSpace } from "./session-space.ts";
+import { createDatabase, type Database } from './database.ts';
+import { EmbeddingIndex } from './embedding-index.ts';
+import { SessionClosedError, SessionValidationError } from './errors.ts';
+import { SessionRepository } from './repository.ts';
+import { SessionRetrieval } from './retrieval.ts';
+import { tokenizeSearchText } from './search.ts';
+import { createSessionSpace, type SessionSpace } from './session-space.ts';
+import { Session, type SessionServices } from './session.ts';
 import type {
   FindSessionsBySourceOptions,
   SearchAllSessionsOptions,
@@ -21,11 +21,11 @@ import type {
   SessionManagerOptions,
   SessionSearchHit,
   SessionSourceHit,
-} from "./types.ts";
+} from './types.ts';
 
-const MIGRATIONS_FOLDER = fileURLToPath(new URL("../migrations/", import.meta.url));
+const MIGRATIONS_FOLDER = fileURLToPath(new URL('../migrations/', import.meta.url));
 
-type ResolvedSessionManagerOptions = Omit<SessionManagerOptions, "embedding"> & {
+type ResolvedSessionManagerOptions = Omit<SessionManagerOptions, 'embedding'> & {
   embedding?: ResolvedEmbeddingProvider;
 };
 
@@ -58,7 +58,7 @@ export class SessionManager implements AsyncDisposable {
 
   static async open(options: SessionManagerOptions): Promise<SessionManager> {
     if (!options.dataDir?.trim()) {
-      throw new SessionValidationError("dataDir 不能为空");
+      throw new SessionValidationError('dataDir 不能为空');
     }
 
     const resolvedOptions: ResolvedSessionManagerOptions = {
@@ -70,7 +70,7 @@ export class SessionManager implements AsyncDisposable {
     try {
       await client.waitReady;
       await client.exec(
-        "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;",
+        'CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;',
       );
       await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 
@@ -89,7 +89,7 @@ export class SessionManager implements AsyncDisposable {
     this.assertOpen();
 
     if (!spaceId?.trim()) {
-      throw new SessionValidationError("spaceId 不能为空");
+      throw new SessionValidationError('spaceId 不能为空');
     }
 
     return createSessionSpace(this.services, spaceId);

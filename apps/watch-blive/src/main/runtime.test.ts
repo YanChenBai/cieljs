@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { registerFauxProvider } from "@earendil-works/pi-ai/compat";
-import type { OpenSessionOptions } from "@cieljs/core";
-import type { Perception } from "@cieljs/perception";
-import type { LivePage } from "./bilibili/live-page.ts";
-import type { BilibiliApi } from "./bilibili/api.ts";
-import { createWatchBlive, type WatchBlive } from "./runtime.ts";
+import type { OpenSessionOptions } from '@cieljs/core';
+import type { Perception } from '@cieljs/perception';
+import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
+
+import type { BilibiliApi } from './bilibili/api.ts';
+import type { LivePage } from './bilibili/live-page.ts';
+import { createWatchBlive, type WatchBlive } from './runtime.ts';
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
@@ -14,11 +15,11 @@ const mocks = vi.hoisted(() => ({
   mediaStart: vi.fn(),
   mediaClose: vi.fn(),
 }));
-vi.mock("@cieljs/core", () => ({ defineCiel: () => mocks }));
-vi.mock("@cieljs/perception", () => ({ createPerception: vi.fn() }));
-vi.mock("./bilibili/api.ts", () => ({ BilibiliApi: class {} }));
-vi.mock("./bilibili/live-page.ts", () => ({ LivePage: class {} }));
-vi.mock("./media/live-media.ts", () => ({
+vi.mock('@cieljs/core', () => ({ defineCiel: () => mocks }));
+vi.mock('@cieljs/perception', () => ({ createPerception: vi.fn() }));
+vi.mock('./bilibili/api.ts', () => ({ BilibiliApi: class {} }));
+vi.mock('./bilibili/live-page.ts', () => ({ LivePage: class {} }));
+vi.mock('./media/live-media.ts', () => ({
   LiveMedia: class {
     start = mocks.mediaStart;
     close = mocks.mediaClose;
@@ -28,11 +29,11 @@ vi.mock("./media/live-media.ts", () => ({
 const room = {
   roomId: 123,
   streamerUid: 456,
-  streamerName: "主播",
-  title: "聊天",
-  description: "",
-  parentAreaName: "娱乐",
-  areaName: "聊天",
+  streamerName: '主播',
+  title: '聊天',
+  description: '',
+  parentAreaName: '娱乐',
+  areaName: '聊天',
   live: true,
 };
 let runtime: WatchBlive;
@@ -61,7 +62,7 @@ function setup() {
   };
   const api = {
     roomByStreamer: vi.fn().mockResolvedValue(room),
-    playUrl: vi.fn().mockResolvedValue("https://example.com/live"),
+    playUrl: vi.fn().mockResolvedValue('https://example.com/live'),
     rooms: vi.fn().mockResolvedValue([room]),
     room: vi.fn().mockResolvedValue(room),
   };
@@ -81,12 +82,12 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-describe("观看生命周期", () => {
-  it("停止期间返回的房间查询不能重新导航或打开 Session", async () => {
+describe('观看生命周期', () => {
+  it('停止期间返回的房间查询不能重新导航或打开 Session', async () => {
     const { api, page } = setup();
     const query = Promise.withResolvers<typeof room>();
     api.room.mockReturnValue(query.promise);
-    const starting = runtime.start({ mode: { type: "follow", roomId: 456 } });
+    const starting = runtime.start({ mode: { type: 'follow', roomId: 456 } });
     const rejected = expect(starting).rejects.toThrow();
     await vi.waitFor(() => expect(api.room).toHaveBeenCalled());
     const stopping = runtime.stop();
@@ -96,19 +97,19 @@ describe("观看生命周期", () => {
     await stopping;
     expect(page.open).not.toHaveBeenCalled();
     expect(mocks.session).not.toHaveBeenCalled();
-    expect(runtime.status).toBe("idle");
+    expect(runtime.status).toBe('idle');
   });
 
-  it("切换房间前关闭旧访问，使用房间 Space 和日期 Session", async () => {
+  it('切换房间前关闭旧访问，使用房间 Space 和日期 Session', async () => {
     const { api, page, sessionClose, perceptionClose } = setup();
-    await runtime.start({ mode: { type: "follow", roomId: 456 } });
+    await runtime.start({ mode: { type: 'follow', roomId: 456 } });
     api.room.mockResolvedValue({ ...room, roomId: 789 });
     page.readiness.mockResolvedValue({ ready: true, roomId: 789 });
-    await runtime.start({ mode: { type: "follow", roomId: 456 } });
+    await runtime.start({ mode: { type: 'follow', roomId: 456 } });
 
-    expect(mocks.session.mock.calls[0][0].spaceId).toBe("bilibili:room:123");
+    expect(mocks.session.mock.calls[0][0].spaceId).toBe('bilibili:room:123');
     expect(mocks.session.mock.calls[1][0]).toMatchObject({
-      spaceId: "bilibili:room:789",
+      spaceId: 'bilibili:room:789',
       crossSpace: true,
     });
     expect(mocks.session.mock.calls[1][0].sessionId).toMatch(
@@ -120,42 +121,42 @@ describe("观看生命周期", () => {
     expect(perceptionClose).toHaveBeenCalledTimes(1);
   });
 
-  it("流地址失败会释放已经打开的 Session 与感知", async () => {
+  it('流地址失败会释放已经打开的 Session 与感知', async () => {
     const { api, sessionClose, perceptionClose } = setup();
-    api.playUrl.mockRejectedValue(new Error("播放地址失败"));
-    await expect(runtime.start({ mode: { type: "follow", roomId: 456 } })).rejects.toThrow(
-      "播放地址失败",
+    api.playUrl.mockRejectedValue(new Error('播放地址失败'));
+    await expect(runtime.start({ mode: { type: 'follow', roomId: 456 } })).rejects.toThrow(
+      '播放地址失败',
     );
     expect(sessionClose).toHaveBeenCalledTimes(1);
     expect(perceptionClose).toHaveBeenCalledTimes(1);
     expect(runtime.room).toBeUndefined();
-    expect(runtime.status).toBe("idle");
+    expect(runtime.status).toBe('idle');
   });
 
-  it("探索显式允许跨空间读取，停止后不使用迟到的选择", async () => {
+  it('探索显式允许跨空间读取，停止后不使用迟到的选择', async () => {
     const { page } = setup();
     const investigation = Promise.withResolvers<unknown>();
     mocks.investigate.mockReturnValue(investigation.promise);
-    const starting = runtime.start({ mode: { type: "explore", areaId: 1 } });
+    const starting = runtime.start({ mode: { type: 'explore', areaId: 1 } });
     const rejected = expect(starting).rejects.toThrow();
     await vi.waitFor(() => expect(mocks.investigate).toHaveBeenCalled());
     expect(mocks.investigate.mock.calls[0][0]).toMatchObject({
-      spaceId: "bilibili:exploration",
+      spaceId: 'bilibili:exploration',
       crossSpace: true,
     });
     const stopping = runtime.stop();
     expect(mocks.investigate.mock.calls[0][0].signal.aborted).toBe(true);
     investigation.resolve({
       answer: {
-        role: "assistant",
-        content: [{ type: "text", text: '{"roomId":123,"reason":"聊天"}' }],
+        role: 'assistant',
+        content: [{ type: 'text', text: '{"roomId":123,"reason":"聊天"}' }],
       },
     });
     await rejected;
     await stopping;
     expect(page.open).not.toHaveBeenCalled();
   });
-  it("连续低分会真正重新探索和开房，不在思考结束回调中死锁", async () => {
+  it('连续低分会真正重新探索和开房，不在思考结束回调中死锁', async () => {
     vi.useFakeTimers();
     const { api, page, sessionClose } = setup();
     const secondRoom = { ...room, roomId: 789 };
@@ -167,8 +168,8 @@ describe("观看生命周期", () => {
     }));
     const answer = (id: number) => ({
       answer: {
-        role: "assistant",
-        content: [{ type: "text", text: JSON.stringify({ roomId: id, reason: "看看新内容" }) }],
+        role: 'assistant',
+        content: [{ type: 'text', text: JSON.stringify({ roomId: id, reason: '看看新内容' }) }],
       },
     });
     mocks.investigate.mockResolvedValueOnce(answer(123)).mockResolvedValue(answer(789));
@@ -181,17 +182,17 @@ describe("观看生命周期", () => {
         state: {
           messages: [
             {
-              role: "assistant",
+              role: 'assistant',
               content: [
                 {
-                  type: "text",
+                  type: 'text',
                   text: JSON.stringify({
-                    action: "explore",
+                    action: 'explore',
                     confidence: 0.9,
                     score: 10,
-                    danmakuAction: "defer",
-                    evidence: ["长期没有新内容"],
-                    reason: "探索其他房间",
+                    danmakuAction: 'defer',
+                    evidence: ['长期没有新内容'],
+                    reason: '探索其他房间',
                   }),
                 },
               ],
@@ -200,13 +201,13 @@ describe("观看生命周期", () => {
         },
       },
     }));
-    await runtime.start({ mode: { type: "explore", areaId: 1 } });
+    await runtime.start({ mode: { type: 'explore', areaId: 1 } });
     await vi.advanceTimersByTimeAsync(90_001);
     expect(api.rooms).toHaveBeenCalledTimes(2);
     expect(runtime.room?.roomId).toBe(789);
     expect(sessionClose.mock.invocationCallOrder[0]).toBeLessThan(
       page.open.mock.invocationCallOrder[1],
     );
-    expect(mocks.session.mock.calls[1][0].spaceId).toBe("bilibili:room:789");
+    expect(mocks.session.mock.calls[1][0].spaceId).toBe('bilibili:room:789');
   });
 });

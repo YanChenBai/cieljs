@@ -22,39 +22,39 @@
 ## 基本使用
 
 ```ts
-import { defineCiel } from "@cieljs/core";
+import { defineCiel } from '@cieljs/core';
 
 const ciel = defineCiel({
   model,
-  systemPrompt: "你是 Ciel。",
+  systemPrompt: '你是 Ciel。',
   embedding: {
-    cacheDir: ".cache",
+    cacheDir: '.cache',
   },
   mcp: {
     enabled: true,
   },
   storage: {
-    session: { dataDir: ".ciel/session" },
-    memory: { dataDir: ".ciel/memory" },
-    investigation: { dataDir: ".ciel/investigation" },
+    session: { dataDir: '.ciel/session' },
+    memory: { dataDir: '.ciel/memory' },
+    investigation: { dataDir: '.ciel/investigation' },
   },
 });
 
 await ciel.start();
 
-let roomId = "room:1000";
+let roomId = 'room:1000';
 
 const session = await ciel.session({
-  spaceId: "livestream",
+  spaceId: 'livestream',
   sources: () => [roomId],
 });
 
-await session.agent.prompt("你好");
+await session.agent.prompt('你好');
 
 const result = await ciel.investigate({
-  spaceId: "livestream",
+  spaceId: 'livestream',
   sources: () => [roomId],
-  question: "主播以前提到过哪些游戏偏好？",
+  question: '主播以前提到过哪些游戏偏好？',
 });
 
 await session.agent.prompt(result.answer);

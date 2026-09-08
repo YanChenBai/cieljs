@@ -45,21 +45,19 @@ export const prompt: Prompt = Object.assign(
     dedent(strings: TemplateStringsArray, ...values: unknown[]) {
       const value = String.raw({ raw: strings }, ...values).trim();
 
-      const lines = value.split("\n");
+      const lines = value.split('\n');
 
       const indent = Math.min(
-        ...lines
-          .filter((line) => line.trim())
-          .map((line) => line.match(/^[ \t]*/)?.[0].length ?? 0),
+        ...lines.filter(line => line.trim()).map(line => line.match(/^[ \t]*/)?.[0].length ?? 0),
       );
 
-      return lines.map((line) => line.slice(indent)).join("\n");
+      return lines.map(line => line.slice(indent)).join('\n');
     },
 
     inline(strings: TemplateStringsArray, ...values: unknown[]) {
       return String.raw(strings, ...values)
         .trim()
-        .replace(/\s+/g, " ");
+        .replace(/\s+/g, ' ');
     },
   },
 );

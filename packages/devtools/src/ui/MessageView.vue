@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { shallowRef, watch } from "vue";
-import type { DevtoolsClient } from "../client/index.ts";
-import type { TraceEntry } from "../protocol/index.ts";
-import ContentRenderer from "./ContentRenderer.vue";
+import { shallowRef, watch } from 'vue';
+
+import type { DevtoolsClient } from '../client/index.ts';
+import type { TraceEntry } from '../protocol/index.ts';
+import ContentRenderer from './ContentRenderer.vue';
 const props = defineProps<{ client: DevtoolsClient; entry: TraceEntry }>();
 const value = shallowRef<unknown>();
-const error = shallowRef("");
+const error = shallowRef('');
 watch(
   () => [props.entry.id, props.entry.revision],
   async (_next, _old, onCleanup) => {
@@ -17,7 +18,7 @@ watch(
       const content = await props.client.messages.get({ messageId: props.entry.id });
       if (!disposed) {
         value.value = content;
-        error.value = "";
+        error.value = '';
       }
     } catch (cause) {
       if (!disposed) error.value = String(cause);
@@ -31,15 +32,15 @@ watch(
     <header>
       <strong>
         {{
-          entry.name === "assistant"
-            ? "Ciel"
-            : entry.name === "user"
-              ? "观察输入"
+          entry.name === 'assistant'
+            ? 'Ciel'
+            : entry.name === 'user'
+              ? '观察输入'
               : (entry.label ?? entry.name)
         }}
       </strong>
       <small>
-        {{ entry.status === "running" ? "生成中…" : entry.model?.name }}
+        {{ entry.status === 'running' ? '生成中…' : entry.model?.name }}
       </small>
     </header>
     <p v-if="error" class="dt-error">{{ error }}</p>

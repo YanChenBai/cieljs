@@ -1,6 +1,6 @@
-import { constants } from "node:fs";
-import { mkdir, readdir, copyFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { constants } from 'node:fs';
+import { mkdir, readdir, copyFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 /** 允许目标目录已经存在；逐文件补齐，绝不覆盖已有资源。 */
 export async function copyMissingResources(source: string, target: string): Promise<void> {
@@ -14,7 +14,7 @@ export async function copyMissingResources(source: string, target: string): Prom
       try {
         await copyFile(from, to, constants.COPYFILE_EXCL);
       } catch (error) {
-        if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+        if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
       }
     }
   }

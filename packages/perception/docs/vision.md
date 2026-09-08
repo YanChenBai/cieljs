@@ -24,7 +24,7 @@ const perception = createPerception({
 
 ```ts
 await perception.image?.write({
-  source: "livestream", // 默认 "default"
+  source: 'livestream', // 默认 "default"
   data: image, // sharp 可读的图片字节
   at: new Date(),
 });
@@ -36,11 +36,11 @@ await perception.image?.write({
 
 每个来源维护以下状态：
 
-| 选项                   | 默认   | 含义                                     |
-| ---------------------- | ------ | ---------------------------------------- |
-| `sampleIntervalMs`     | 6_666  | 两次候选采样之间的最小间隔（毫秒）       |
-| `differenceThreshold`  | 0.03   | 相对上一张已保留画面的平均像素变化阈值   |
-| `maxFrames`            | 9      | 每来源合成时最多选择的画面数（1-9）      |
+| 选项                  | 默认  | 含义                                   |
+| --------------------- | ----- | -------------------------------------- |
+| `sampleIntervalMs`    | 6_666 | 两次候选采样之间的最小间隔（毫秒）     |
+| `differenceThreshold` | 0.03  | 相对上一张已保留画面的平均像素变化阈值 |
+| `maxFrames`           | 9     | 每来源合成时最多选择的画面数（1-9）    |
 
 `differenceThreshold` 范围为 0-1，差异基准与上一张**已保留**画面比较，而不是上一张收到的画面。未变化的候选不会替换基准，这避免轻微抖动逐渐累积成一次误判。
 

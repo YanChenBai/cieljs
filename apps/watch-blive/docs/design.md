@@ -182,15 +182,15 @@ apps/watch-blive/
 ```ts
 type WatchMode =
   | {
-      type: "explore";
+      type: 'explore';
       areaId: number;
     }
   | {
-      type: "follow";
+      type: 'follow';
       streamerUid: number;
     };
 
-type DanmakuDelivery = "simulate" | "live";
+type DanmakuDelivery = 'simulate' | 'live';
 
 interface WatchBliveOptions {
   dataDir?: string;
@@ -270,7 +270,7 @@ Vue 模板中嵌入一个持久化 guest：
 guest 触发 `did-attach` 后，渲染进程只读取并上报 ID：
 
 ```ts
-const webview = document.querySelector("webview")!;
+const webview = document.querySelector('webview')!;
 const id = webview.getWebContentsId();
 
 await window.watchBlive.attachLiveWebContents({ id });
@@ -318,7 +318,7 @@ return Value.Parse(schema, value);
 例如读取标题最终由主进程执行：
 
 ```ts
-const title = await contents.executeJavaScript("document.title");
+const title = await contents.executeJavaScript('document.title');
 ```
 
 Electron 的 `executeJavaScript()` 本身返回 Promise，并会等待页面脚本返回的 Promise；不再需要 callback、JSON envelope 或二次 JSON 解码。
@@ -509,9 +509,9 @@ defineCiel({
     systemPrompt: explorationSystemPrompt,
   },
   storage: {
-    session: { dataDir: join(dataDir, "session") },
-    memory: { dataDir: join(dataDir, "memory") },
-    investigation: { dataDir: join(dataDir, "investigation") },
+    session: { dataDir: join(dataDir, 'session') },
+    memory: { dataDir: join(dataDir, 'memory') },
+    investigation: { dataDir: join(dataDir, 'investigation') },
   },
 });
 ```
@@ -647,9 +647,9 @@ Agent 每轮在探索模式输出：
 
 ```ts
 const RoomDecisionSchema = Type.Object({
-  action: Type.Union([Type.Literal("stay"), Type.Literal("explore")]),
+  action: Type.Union([Type.Literal('stay'), Type.Literal('explore')]),
   confidence: Type.Number({ minimum: 0, maximum: 1 }),
-  danmakuAction: Type.Union([Type.Literal("send"), Type.Literal("defer")]),
+  danmakuAction: Type.Union([Type.Literal('send'), Type.Literal('defer')]),
   evidence: Type.Array(Type.String({ maxLength: 120 }), { maxItems: 5 }),
   reason: Type.String({ minLength: 1, maxLength: 200 }),
   score: Type.Number({ minimum: 0, maximum: 100 }),
@@ -681,7 +681,7 @@ Agent 的单轮结果是观测建议，不是切换命令。`RoomScorePolicy` �
 
 ```ts
 const SendDanmakuSchema = Type.Object({
-  action: Type.Union([Type.Literal("send"), Type.Literal("defer")]),
+  action: Type.Union([Type.Literal('send'), Type.Literal('defer')]),
   content: Type.String({ maxLength: 40 }),
   reason: Type.String({ minLength: 1, maxLength: 120 }),
 });
@@ -713,9 +713,9 @@ record delivered history + emit event
 
 ```ts
 type DanmakuToolResult =
-  | { status: "deferred"; reason: string }
-  | { status: "simulated"; content: string }
-  | { status: "delivered"; content: string; roomId: number };
+  | { status: 'deferred'; reason: string }
+  | { status: 'simulated'; content: string }
+  | { status: 'delivered'; content: string; roomId: number };
 ```
 
 ## 12. 提示规则

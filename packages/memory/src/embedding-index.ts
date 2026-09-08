@@ -1,9 +1,9 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from "@cieljs/agent-kit";
+import { assertEmbeddingVectors, type ResolvedEmbeddingProvider } from '@cieljs/agent-kit';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
-import type { Database, Transaction } from "./database.ts";
-import { memoryChunks, memoryEmbeddings } from "./schema.ts";
-import type { MemoryIndexStatus } from "./types.ts";
+import type { Database, Transaction } from './database.ts';
+import { memoryChunks, memoryEmbeddings } from './schema.ts';
+import type { MemoryIndexStatus } from './types.ts';
 
 export class MemoryEmbeddingIndex {
   private indexing: Promise<void> = Promise.resolve();
@@ -19,21 +19,21 @@ export class MemoryEmbeddingIndex {
       return;
     }
 
-    await this.db.transaction(async (transaction) => {
+    await this.db.transaction(async transaction => {
       const rows = await transaction.select({ id: memoryChunks.id }).from(memoryChunks);
 
       for (let start = 0; start < rows.length; start += 500) {
-        const ids = rows.slice(start, start + 500).map((row) => row.id);
+        const ids = rows.slice(start, start + 500).map(row => row.id);
 
         await this.addPending(transaction, ids);
         await transaction
           .update(memoryEmbeddings)
-          .set({ status: "pending", embedding: null, error: null })
+          .set({ status: 'pending', embedding: null, error: null })
           .where(
             and(
               this.modelCondition(),
               inArray(memoryEmbeddings.chunkId, ids),
-              reset ? undefined : eq(memoryEmbeddings.status, "failed"),
+              reset ? undefined : eq(memoryEmbeddings.status, 'failed'),
             ),
           );
       }
@@ -50,7 +50,7 @@ export class MemoryEmbeddingIndex {
     await transaction
       .insert(memoryEmbeddings)
       .values(
-        chunkIds.map((chunkId) => ({
+        chunkIds.map(chunkId => ({
           chunkId,
           model: provider.model,
           dimensions: provider.dimensions,
@@ -104,7 +104,7 @@ export class MemoryEmbeddingIndex {
       return null;
     }
 
-    const vector = await this.provider.embed(query, { purpose: "query", signal });
+    const vector = await this.provider.embed(query, { purpose: 'query', signal });
     signal?.throwIfAborted();
 
     return vector;
@@ -130,10 +130,10 @@ export class MemoryEmbeddingIndex {
       if (this.onIndexError) {
         this.onIndexError(error);
       } else {
-        console.warn("[memory] 向量索引或检索失败", error);
+        console.warn('[memory] 向量索引或检索失败', error);
       }
     } catch (callbackError) {
-      console.warn("[memory] 索引错误回调失败", callbackError);
+      console.warn('[memory] 索引错误回调失败', callbackError);
     }
   }
 
@@ -154,7 +154,7 @@ export class MemoryEmbeddingIndex {
         .select({ id: memoryChunks.id, content: memoryChunks.content })
         .from(memoryEmbeddings)
         .innerJoin(memoryChunks, eq(memoryChunks.id, memoryEmbeddings.chunkId))
-        .where(and(this.modelCondition(), eq(memoryEmbeddings.status, "pending")))
+        .where(and(this.modelCondition(), eq(memoryEmbeddings.status, 'pending')))
         .orderBy(asc(memoryChunks.id))
         .limit(provider.batchSize);
 
@@ -164,21 +164,21 @@ export class MemoryEmbeddingIndex {
 
       try {
         const vectors = await provider.embedBatch(
-          rows.map((row) => row.content),
-          { purpose: "document" },
+          rows.map(row => row.content),
+          { purpose: 'document' },
         );
         assertEmbeddingVectors(vectors, rows.length, provider.dimensions);
 
-        await this.db.transaction(async (transaction) => {
+        await this.db.transaction(async transaction => {
           for (const [index, row] of rows.entries()) {
             await transaction
               .update(memoryEmbeddings)
-              .set({ embedding: vectors[index]!, status: "ready", error: null })
+              .set({ embedding: vectors[index]!, status: 'ready', error: null })
               .where(
                 and(
                   this.modelCondition(),
                   eq(memoryEmbeddings.chunkId, row.id),
-                  eq(memoryEmbeddings.status, "pending"),
+                  eq(memoryEmbeddings.status, 'pending'),
                 ),
               );
           }
@@ -187,7 +187,7 @@ export class MemoryEmbeddingIndex {
         await this.db
           .update(memoryEmbeddings)
           .set({
-            status: "failed",
+            status: 'failed',
             embedding: null,
             error: error instanceof Error ? error.message : String(error),
           })
@@ -196,9 +196,9 @@ export class MemoryEmbeddingIndex {
               this.modelCondition(),
               inArray(
                 memoryEmbeddings.chunkId,
-                rows.map((row) => row.id),
+                rows.map(row => row.id),
               ),
-              eq(memoryEmbeddings.status, "pending"),
+              eq(memoryEmbeddings.status, 'pending'),
             ),
           );
         this.reportError(error);

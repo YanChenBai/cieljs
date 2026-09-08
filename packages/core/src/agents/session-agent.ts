@@ -1,14 +1,14 @@
-import type { Agent, AgentTool } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
-import { streamSimple } from "@earendil-works/pi-ai/compat";
-import type { MemoryManager } from "@cieljs/memory";
-import { globalMemoryTools, memoryTools } from "@cieljs/memory/agent";
-import type { Session, SessionManager } from "@cieljs/session";
-import { sessionTools } from "@cieljs/session/agent";
+import type { MemoryManager } from '@cieljs/memory';
+import { globalMemoryTools, memoryTools } from '@cieljs/memory/agent';
+import type { Session, SessionManager } from '@cieljs/session';
+import { sessionTools } from '@cieljs/session/agent';
+import type { Agent, AgentTool } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import { streamSimple } from '@earendil-works/pi-ai/compat';
 
-import { createSessionContextTransformer } from "./context.ts";
-import { ManagedAgent } from "./managed-agent.ts";
-import { assertUniqueTools } from "./tools.ts";
+import { createSessionContextTransformer } from './context.ts';
+import { ManagedAgent } from './managed-agent.ts';
+import { assertUniqueTools } from './tools.ts';
 
 export class SessionAgentHandle {
   private closePromise: Promise<void> | undefined;
@@ -79,13 +79,13 @@ export async function createCielSessionAgent(options: {
       session,
       space: sessionSpace,
       crossSpace: options.crossSpace
-        ? { manager: options.sessionManager, access: "related" }
+        ? { manager: options.sessionManager, access: 'related' }
         : undefined,
     }),
     ...memoryTools({
       space: memorySpace,
       crossSpace: options.crossSpace
-        ? { manager: options.memoryManager, access: "related" }
+        ? { manager: options.memoryManager, access: 'related' }
         : undefined,
       sources: () => [`session:${session.id}`, ...options.resolveSources()],
     }),
@@ -125,8 +125,8 @@ export async function createCielSessionAgent(options: {
     },
   });
 
-  const unsubscribe = agent.subscribe(async (event) => {
-    if (event.type === "message_end") {
+  const unsubscribe = agent.subscribe(async event => {
+    if (event.type === 'message_end') {
       await session.appendMessage(event.message);
     }
   });

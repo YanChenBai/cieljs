@@ -41,7 +41,7 @@ voiceprints/...
 `ASR` 构造时自动调用 `createModelConfig()`，无需手动传入。`checkConfiguration()` 校验所有模型文件是否齐备：
 
 ```ts
-import { checkConfiguration } from "@cieljs/hearing";
+import { checkConfiguration } from '@cieljs/hearing';
 
 const check = await checkConfiguration();
 // { modelsPath, missingFiles, valid }

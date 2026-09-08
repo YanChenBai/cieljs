@@ -62,14 +62,14 @@ Image ── sampling ── differ ┘
 ## 创建感知实例
 
 ```ts
-import { createPerception } from "@cieljs/perception";
+import { createPerception } from '@cieljs/perception';
 
 const perception = createPerception({
   asr: {
     speaker: [
       {
-        name: "主播",
-        file: "./voiceprints/streamer.voiceprint",
+        name: '主播',
+        file: './voiceprints/streamer.voiceprint',
       },
     ],
     speakerThreshold: 0.6,
@@ -83,8 +83,8 @@ const perception = createPerception({
     maxFrames: 9,
   },
 
-  hearingPrompt: "一段语音刚刚结束，请结合以下听觉转写作出判断。",
-  visionPrompt: "以下画面按采集时间排列，请结合画面变化理解现场。",
+  hearingPrompt: '一段语音刚刚结束，请结合以下听觉转写作出判断。',
+  visionPrompt: '以下画面按采集时间排列，请结合画面变化理解现场。',
   retentionMs: 60_000,
 });
 ```
@@ -96,8 +96,8 @@ const perception = createPerception({
   asr: {
     speaker: [
       {
-        name: "alice",
-        file: "./voiceprints/alice.voiceprint",
+        name: 'alice',
+        file: './voiceprints/alice.voiceprint',
       },
     ],
   },
@@ -111,7 +111,7 @@ const perception = createPerception({
 ### 初始化配置
 
 ```ts
-import type { ASROptions } from "@cieljs/hearing";
+import type { ASROptions } from '@cieljs/hearing';
 
 export interface PerceptionOptions {
   /**
@@ -192,7 +192,7 @@ export interface SpeakerProfile {
 感知包应重新导出外部常用的听觉类型，调用方不需要为了配置感知实例再增加一组 type-only import：
 
 ```ts
-export type { ASROptions, ASRResult, SpeakerProfile } from "@cieljs/hearing";
+export type { ASROptions, ASRResult, SpeakerProfile } from '@cieljs/hearing';
 ```
 
 第一版只支持在创建实例时传入说话人配置。`@cieljs/hearing` 当前没有运行时注册声纹的能力，因此感知包不额外虚构 `registerSpeaker()`。
@@ -231,8 +231,8 @@ export interface ImageStream {
 ### 快照
 
 ```ts
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ASRResult } from "@cieljs/hearing";
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { ASRResult } from '@cieljs/hearing';
 
 export interface SnapshotOptions {
   readonly startAt?: Date;
@@ -283,21 +283,21 @@ await agent.prompt(messages);
 ```ts
 const messages: AgentMessage[] = [
   {
-    role: "user",
+    role: 'user',
     content: [
       {
-        type: "text",
-        text: ["# 视觉", visionPrompt].filter(Boolean).join("\n\n"),
+        type: 'text',
+        text: ['# 视觉', visionPrompt].filter(Boolean).join('\n\n'),
       },
       {
-        type: "image",
+        type: 'image',
         data: composedImageBase64,
-        mimeType: "image/jpeg",
+        mimeType: 'image/jpeg',
       },
       // 可能继续包含其他合成图片
       {
-        type: "text",
-        text: ["# 听觉", hearingPrompt, transcript].filter(Boolean).join("\n\n"),
+        type: 'text',
+        text: ['# 听觉', hearingPrompt, transcript].filter(Boolean).join('\n\n'),
       },
     ],
     timestamp: snapshot.endAt.getTime(),
@@ -349,7 +349,7 @@ const messages: AgentMessage[] = [
 ## 语音结束事件
 
 ```ts
-import type { ASR, ASRResult } from "@cieljs/hearing";
+import type { ASR, ASRResult } from '@cieljs/hearing';
 
 export interface SpeechEndEvent {
   readonly at: Date;
@@ -406,14 +406,14 @@ export function createPerception(options?: PerceptionOptions): Perception;
 ## 完整使用示例
 
 ```ts
-import { createPerception } from "@cieljs/perception";
+import { createPerception } from '@cieljs/perception';
 
 const perception = createPerception({
   asr: {
     speaker: [
       {
-        name: "主播",
-        file: "./voiceprints/streamer.voiceprint",
+        name: '主播',
+        file: './voiceprints/streamer.voiceprint',
       },
     ],
   },
@@ -423,13 +423,13 @@ const perception = createPerception({
     maxFrames: 9,
   },
 
-  hearingPrompt: "一段语音刚刚结束，请结合以下听觉转写作出判断。",
-  visionPrompt: "以下画面按采集时间排列，请结合画面变化理解现场。",
+  hearingPrompt: '一段语音刚刚结束，请结合以下听觉转写作出判断。',
+  visionPrompt: '以下画面按采集时间排列，请结合画面变化理解现场。',
 });
 
 let thinkingQueue = Promise.resolve();
 
-const unsubscribe = perception.on("speechend", ({ snapshot }) => {
+const unsubscribe = perception.on('speechend', ({ snapshot }) => {
   thinkingQueue = thinkingQueue.then(async () => {
     const messages = await snapshot.compose();
 
@@ -443,7 +443,7 @@ perception.asr.write({
 });
 
 await perception.image?.write({
-  source: "livestream",
+  source: 'livestream',
   data: image,
   at: new Date(),
 });

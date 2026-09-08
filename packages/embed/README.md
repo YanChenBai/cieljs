@@ -11,17 +11,17 @@ Provider 会复用已经创建的推理管线。模型文件默认从 ModelScope
 ## 基本使用
 
 ```ts
-import { qwen } from "@cieljs/embed";
+import { qwen } from '@cieljs/embed';
 
 const embedding = qwen();
 
-const query = await embedding.embed("怎么保存长期记忆？", {
-  purpose: "query",
+const query = await embedding.embed('怎么保存长期记忆？', {
+  purpose: 'query',
 });
 
 const documents = await embedding.embedBatch(
-  ["长期记忆按空间隔离。", "会话历史保存在本地数据库中。"],
-  { purpose: "document" },
+  ['长期记忆按空间隔离。', '会话历史保存在本地数据库中。'],
+  { purpose: 'document' },
 );
 ```
 
@@ -32,12 +32,12 @@ const documents = await embedding.embedBatch(
 
 ```ts
 const embedding = qwen({
-  cacheDir: ".cache",
+  cacheDir: '.cache',
   dimensions: 512,
   batchSize: 16,
-  dtype: "q8",
-  device: "wasm",
-  instruction: "根据查询找出相关文档。",
+  dtype: 'q8',
+  device: 'wasm',
+  instruction: '根据查询找出相关文档。',
 });
 ```
 

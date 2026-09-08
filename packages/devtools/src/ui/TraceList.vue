@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { Button } from "@vuetify/v0/components";
-import type { TraceEntry } from "../protocol/index.ts";
+import { Button } from '@vuetify/v0/components';
+
+import type { TraceEntry } from '../protocol/index.ts';
 defineProps<{ entries: TraceEntry[]; selectedId: string }>();
 defineEmits<{ select: [entry: TraceEntry] }>();
 function duration(entry: TraceEntry) {
   const elapsed = Math.max(0, (entry.endedAt ?? Date.now()) - entry.startedAt);
   const value = elapsed < 1000 ? `${Math.round(elapsed)} ms` : `${(elapsed / 1000).toFixed(1)} s`;
-  return entry.status === "running" ? `${value}…` : value;
+  return entry.status === 'running' ? `${value}…` : value;
 }
 </script>
 <template>
@@ -21,9 +22,9 @@ function duration(entry: TraceEntry) {
       @click="$emit('select', entry)"
     >
       <span class="dt-step-icon" :data-kind="entry.kind">
-        {{ entry.kind === "tool" ? "{}" : entry.kind === "message" ? "≡" : "◇" }}
+        {{ entry.kind === 'tool' ? '{}' : entry.kind === 'message' ? '≡' : '◇' }}
       </span>
-      <span class="dt-step-name">{{ entry.label ? `${entry.label} · ` : "" }}{{ entry.name }}</span>
+      <span class="dt-step-name">{{ entry.label ? `${entry.label} · ` : '' }}{{ entry.name }}</span>
       <span class="dt-duration" :title="entry.status === 'running' ? '执行中' : '执行耗时'">
         {{ duration(entry) }}
       </span>

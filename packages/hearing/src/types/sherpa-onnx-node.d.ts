@@ -1,4 +1,4 @@
-declare module "sherpa-onnx-node" {
+declare module 'sherpa-onnx-node' {
   /** 原生构造器返回的不透明句柄。不要读取或修改内部状态，请原样传给 API。 */
   export type OfflineStreamHandle = object;
   export type OnlineStreamHandle = object;

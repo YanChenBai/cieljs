@@ -1,14 +1,14 @@
-import type { AgentToolResult } from "@earendil-works/pi-agent-core";
-import { defineTool } from "@cieljs/agent-kit";
-import { Type } from "typebox";
+import { defineTool } from '@cieljs/agent-kit';
+import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import { Type } from 'typebox';
 
-import type { AudioOutput, DeviceSelector } from "../audio/types.ts";
-import type { SpeechAudio, SpeechAudioFormat, TextToSpeech } from "../tts/types.ts";
-import type { ChorusEvent } from "./scheduler.ts";
+import type { AudioOutput, DeviceSelector } from '../audio/types.ts';
+import type { SpeechAudio, SpeechAudioFormat, TextToSpeech } from '../tts/types.ts';
+import type { ChorusEvent } from './scheduler.ts';
 
 export type SpeakResult =
-  | { status: "delivered"; startedAt: string; endedAt: string }
-  | { status: "superseded"; reason: "new_speech" };
+  | { status: 'delivered'; startedAt: string; endedAt: string }
+  | { status: 'superseded'; reason: 'new_speech' };
 
 export interface ThinkRunGate {
   readonly revision: number;
@@ -95,20 +95,20 @@ export const createSpeakTool = defineTool(
     text: Type.String({
       minLength: 1,
       maxLength: 4_000,
-      description: "要朗读的最终口语文本，不含 Markdown、列表、网址或舞台说明。",
+      description: '要朗读的最终口语文本，不含 Markdown、列表、网址或舞台说明。',
     }),
     instructions: Type.Optional(
       Type.String({
         maxLength: 1_000,
-        description: "这一句话的语气、情绪或节奏；缺省时使用全局 TTS 配置。",
+        description: '这一句话的语气、情绪或节奏；缺省时使用全局 TTS 配置。',
       }),
     ),
   }),
   (options: SpeakToolOptions) => ({
-    name: "speak",
-    label: "发言",
+    name: 'speak',
+    label: '发言',
     description:
-      "把 text 合成语音并通过扬声器播放。一轮思考最多调用一次；思考期间出现新语音时会返回 superseded，表示这句话没有被播放。",
+      '把 text 合成语音并通过扬声器播放。一轮思考最多调用一次；思考期间出现新语音时会返回 superseded，表示这句话没有被播放。',
     execute: (params, { signal }) => executeSpeak(params, options, signal),
   }),
 );
@@ -121,26 +121,26 @@ async function executeSpeak(
   const gate = options.controller.currentGate();
 
   if (!gate) {
-    throw new Error("speak 只能在一次思考运行期间调用");
+    throw new Error('speak 只能在一次思考运行期间调用');
   }
 
   if (!gate.markSpoke()) {
-    throw new Error("本轮已经调用过 speak，同一轮只能发言一次");
+    throw new Error('本轮已经调用过 speak，同一轮只能发言一次');
   }
 
   const text = params.text.trim();
 
   if (!text) {
-    throw new Error("text 不能为空");
+    throw new Error('text 不能为空');
   }
 
   if (options.controller.currentRevision() !== gate.revision) {
-    return speakResult({ status: "superseded", reason: "new_speech" });
+    return speakResult({ status: 'superseded', reason: 'new_speech' });
   }
 
   const signal = agentSignal ? AbortSignal.any([gate.signal, agentSignal]) : gate.signal;
 
-  options.emit({ type: "tts_started", text, characterCount: text.length });
+  options.emit({ type: 'tts_started', text, characterCount: text.length });
   const ttsStartedAt = Date.now();
 
   let audio: SpeechAudio;
@@ -155,35 +155,35 @@ async function executeSpeak(
     });
   } catch (error) {
     if (gate.signal.aborted) {
-      return speakResult({ status: "superseded", reason: "new_speech" });
+      return speakResult({ status: 'superseded', reason: 'new_speech' });
     }
 
     throw error;
   }
 
-  options.emit({ type: "tts_finished", durationMs: Date.now() - ttsStartedAt });
+  options.emit({ type: 'tts_finished', durationMs: Date.now() - ttsStartedAt });
 
   if (options.controller.currentRevision() !== gate.revision) {
-    return speakResult({ status: "superseded", reason: "new_speech" });
+    return speakResult({ status: 'superseded', reason: 'new_speech' });
   }
 
   const startedAt = new Date();
 
-  options.emit({ type: "playback_started", device: options.outputDevice });
+  options.emit({ type: 'playback_started', device: options.outputDevice });
   await options.output.play(audio, {
     device: options.outputDevice,
     onAecReference: options.onAecReference,
   });
   const endedAt = new Date();
 
-  options.emit({ type: "playback_finished", durationMs: endedAt.getTime() - startedAt.getTime() });
+  options.emit({ type: 'playback_finished', durationMs: endedAt.getTime() - startedAt.getTime() });
 
   gate.recordDelivered();
 
   options.onDelivered?.({ text, startedAt, endedAt });
 
   return speakResult({
-    status: "delivered",
+    status: 'delivered',
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),
   });
@@ -191,12 +191,12 @@ async function executeSpeak(
 
 function speakResult(result: SpeakResult): AgentToolResult<SpeakResult> {
   const message =
-    result.status === "delivered"
-      ? "这句话已经通过扬声器播放。"
-      : "这句话没有播放：思考期间出现了新语音，已由下一轮重新判断。";
+    result.status === 'delivered'
+      ? '这句话已经通过扬声器播放。'
+      : '这句话没有播放：思考期间出现了新语音，已由下一轮重新判断。';
 
   return {
-    content: [{ type: "text", text: `${message}\n${JSON.stringify(result)}` }],
+    content: [{ type: 'text', text: `${message}\n${JSON.stringify(result)}` }],
     details: result,
   };
 }

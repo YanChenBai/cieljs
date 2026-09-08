@@ -1,4 +1,4 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 export function assertUniqueTools(tools: AgentTool[]) {
   const names = new Set<string>();

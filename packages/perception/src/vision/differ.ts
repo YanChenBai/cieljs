@@ -1,6 +1,6 @@
 // @env node
 
-import sharp from "sharp";
+import sharp from 'sharp';
 
 interface VisionDifference {
   readonly changed: boolean;
@@ -17,7 +17,7 @@ export class VisionDiffer {
 
   async evaluate(data: Buffer): Promise<VisionDifference> {
     const current = await sharp(data)
-      .resize(FINGERPRINT_WIDTH, FINGERPRINT_HEIGHT, { fit: "fill" })
+      .resize(FINGERPRINT_WIDTH, FINGERPRINT_HEIGHT, { fit: 'fill' })
       .grayscale()
       .raw()
       .toBuffer();

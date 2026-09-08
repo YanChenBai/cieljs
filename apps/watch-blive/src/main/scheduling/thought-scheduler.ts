@@ -1,9 +1,9 @@
-import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Perception } from "@cieljs/perception";
+import type { Perception } from '@cieljs/perception';
+import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 
 export interface ThoughtSchedulerOptions {
-  perception: Pick<Perception, "snapshot">;
-  agent: Pick<Agent, "prompt">;
+  perception: Pick<Perception, 'snapshot'>;
+  agent: Pick<Agent, 'prompt'>;
   minimumIntervalMs: number;
   startedAt: Date;
   context: () => AgentMessage;

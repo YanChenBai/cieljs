@@ -8,7 +8,7 @@
 - 感知包事件表示对应快照已经准备完成，参数包含 `result` 与 `snapshot`。
 
 ```ts
-perception.on("speechend", ({ at, result, snapshot }) => {
+perception.on('speechend', ({ at, result, snapshot }) => {
   // result 在当前语音段识别出文本时存在
   // snapshot 是截止本次 speechend 的冻结快照
 });

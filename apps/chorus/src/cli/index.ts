@@ -1,10 +1,9 @@
-import config from "../../chorus.config.ts";
-
-import { createAudioInput } from "../audio/input.ts";
-import { createAudioOutput } from "../audio/output.ts";
-import type { ChorusEvent } from "../conversation/scheduler.ts";
-import { resolveChorusModel } from "../index.ts";
-import { createChorus } from "../runtime.ts";
+import config from '../../chorus.config.ts';
+import { createAudioInput } from '../audio/input.ts';
+import { createAudioOutput } from '../audio/output.ts';
+import type { ChorusEvent } from '../conversation/scheduler.ts';
+import { resolveChorusModel } from '../index.ts';
+import { createChorus } from '../runtime.ts';
 
 async function main(): Promise<void> {
   loadLocalEnv();
@@ -12,19 +11,19 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   switch (args[0]) {
-    case "list-devices":
-    case "devices":
+    case 'list-devices':
+    case 'devices':
       await listDevices();
       return;
 
-    case "start":
+    case 'start':
     case undefined:
       await start();
       return;
 
-    case "help":
-    case "--help":
-    case "-h":
+    case 'help':
+    case '--help':
+    case '-h':
       printHelp();
       return;
 
@@ -51,18 +50,18 @@ async function listDevices(): Promise<void> {
 
   const [inputs, outputs] = await Promise.all([input.devices(), output.devices()]);
 
-  process.stdout.write("输入设备：\n");
+  process.stdout.write('输入设备：\n');
   for (const device of inputs) {
     process.stdout.write(
-      `  index=${device.index}  name="${device.name}"  maxInputChannels=${device.maxInputChannels}  rate=${device.defaultSampleRate}${device.isDefault ? "  (默认)" : ""}\n`,
+      `  index=${device.index}  name="${device.name}"  maxInputChannels=${device.maxInputChannels}  rate=${device.defaultSampleRate}${device.isDefault ? '  (默认)' : ''}\n`,
     );
     process.stdout.write(`    id=${device.id}\n`);
   }
 
-  process.stdout.write("输出设备：\n");
+  process.stdout.write('输出设备：\n');
   for (const device of outputs) {
     process.stdout.write(
-      `  index=${device.index}  name="${device.name}"  maxOutputChannels=${device.maxOutputChannels}  rate=${device.defaultSampleRate}${device.isDefault ? "  (默认)" : ""}\n`,
+      `  index=${device.index}  name="${device.name}"  maxOutputChannels=${device.maxOutputChannels}  rate=${device.defaultSampleRate}${device.isDefault ? '  (默认)' : ''}\n`,
     );
     process.stdout.write(`    id=${device.id}\n`);
   }
@@ -74,10 +73,10 @@ async function start(): Promise<void> {
     model: resolveChorusModel(),
   });
 
-  chorus.onEvent((event) => logEvent(event));
+  chorus.onEvent(event => logEvent(event));
 
   await chorus.start();
-  process.stdout.write("Chorus 已启动，Ctrl+C 退出。\n");
+  process.stdout.write('Chorus 已启动，Ctrl+C 退出。\n');
 
   let closing = false;
   const shutdown = async () => {
@@ -90,19 +89,19 @@ async function start(): Promise<void> {
     process.exit(0);
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 const hasColor = process.stdout.isTTY === true && process.env.NO_COLOR === undefined;
 
-const RESET = "\u001b[0m";
-const DIM = "\u001b[2m";
-const RED = "\u001b[31m";
-const GREEN = "\u001b[32m";
-const YELLOW = "\u001b[33m";
-const BLUE = "\u001b[34m";
-const MAGENTA = "\u001b[35m";
+const RESET = '\u001b[0m';
+const DIM = '\u001b[2m';
+const RED = '\u001b[31m';
+const GREEN = '\u001b[32m';
+const YELLOW = '\u001b[33m';
+const BLUE = '\u001b[34m';
+const MAGENTA = '\u001b[35m';
 
 function paint(text: string, color: string): string {
   return hasColor ? `${color}${text}${RESET}` : text;
@@ -114,76 +113,76 @@ function log(label: string, content: string): void {
 
 function describeArgs(args: unknown): string {
   if (args === undefined || args === null) {
-    return "";
+    return '';
   }
 
   try {
     const json = JSON.stringify(args);
     return json.length > 120 ? `${json.slice(0, 117)}...` : json;
   } catch {
-    return "";
+    return '';
   }
 }
 
 function logEvent(event: ChorusEvent): void {
   switch (event.type) {
-    case "speech_end":
+    case 'speech_end':
       if (event.content) {
-        log(paint("识别", GREEN), `${event.speaker ?? "未知说话人"}：${event.content}`);
+        log(paint('识别', GREEN), `${event.speaker ?? '未知说话人'}：${event.content}`);
       }
       return;
 
-    case "self_echo_ignored":
-      log(paint("忽略", DIM), "检测到自身回声，跳过");
+    case 'self_echo_ignored':
+      log(paint('忽略', DIM), '检测到自身回声，跳过');
       return;
 
-    case "think_started":
-      log(paint("思考", BLUE), `处理 ${event.window.speechEndCount} 段语音`);
+    case 'think_started':
+      log(paint('思考', BLUE), `处理 ${event.window.speechEndCount} 段语音`);
       return;
 
-    case "think_finished":
+    case 'think_finished':
       log(
-        paint("思考", DIM),
+        paint('思考', DIM),
         event.spoke ? `决定发言（${event.durationMs}ms）` : `保持沉默（${event.durationMs}ms）`,
       );
       return;
 
-    case "tool_call_started":
+    case 'tool_call_started':
       log(
-        paint("工具", YELLOW),
+        paint('工具', YELLOW),
         event.args === undefined ? event.name : `${event.name} ${describeArgs(event.args)}`,
       );
       return;
 
-    case "tool_call_finished":
+    case 'tool_call_finished':
       log(
-        paint("工具", event.isError ? RED : DIM),
+        paint('工具', event.isError ? RED : DIM),
         event.isError ? `${event.name} 失败` : `${event.name} 完成`,
       );
       return;
 
-    case "tts_started":
-      log(paint("朗读", MAGENTA), event.text);
+    case 'tts_started':
+      log(paint('朗读', MAGENTA), event.text);
       return;
 
-    case "tts_finished":
-      log(paint("朗读", DIM), `合成完成（${event.durationMs}ms）`);
+    case 'tts_finished':
+      log(paint('朗读', DIM), `合成完成（${event.durationMs}ms）`);
       return;
 
-    case "playback_started":
-      log(paint("播放", MAGENTA), describeSelector(event.device));
+    case 'playback_started':
+      log(paint('播放', MAGENTA), describeSelector(event.device));
       return;
 
-    case "playback_finished":
-      log(paint("播放", DIM), `${event.durationMs}ms`);
+    case 'playback_finished':
+      log(paint('播放', DIM), `${event.durationMs}ms`);
       return;
 
-    case "error":
-      process.stderr.write(`${paint("错误", RED)} [${event.stage}] ${event.error.message}\n`);
+    case 'error':
+      process.stderr.write(`${paint('错误', RED)} [${event.stage}] ${event.error.message}\n`);
       return;
 
-    case "pending_created":
-    case "pending_merged":
+    case 'pending_created':
+    case 'pending_merged':
       return;
   }
 }
@@ -191,32 +190,32 @@ function logEvent(event: ChorusEvent): void {
 function printHelp(): void {
   process.stdout.write(
     [
-      "用法：",
-      "  oxnode ./src/cli/index.ts list-devices   列出输入/输出设备与设备 ID",
-      "  oxnode ./src/cli/index.ts start           启动 Chorus（读取 chorus.config.ts 与 XIAOMI_API_KEY）",
-      "",
-      "在 chorus.config.ts 中设置设备：省略 device 使用系统默认，或使用 index / 名称子串 / { id } 稳定 ID。",
-    ].join("\n") + "\n",
+      '用法：',
+      '  oxnode ./src/cli/index.ts list-devices   列出输入/输出设备与设备 ID',
+      '  oxnode ./src/cli/index.ts start           启动 Chorus（读取 chorus.config.ts 与 XIAOMI_API_KEY）',
+      '',
+      '在 chorus.config.ts 中设置设备：省略 device 使用系统默认，或使用 index / 名称子串 / { id } 稳定 ID。',
+    ].join('\n') + '\n',
   );
 }
 
 function describeSelector(selector: number | string | { id: string } | undefined): string {
   if (selector === undefined) {
-    return "默认";
+    return '默认';
   }
 
-  if (typeof selector === "number") {
+  if (typeof selector === 'number') {
     return `index=${selector}`;
   }
 
-  if (typeof selector === "string") {
+  if (typeof selector === 'string') {
     return `"${selector}"`;
   }
 
   return `id=${selector.id}`;
 }
 
-void main().catch((error) => {
+void main().catch(error => {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(1);
 });

@@ -1,24 +1,24 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import type { Perception } from "@cieljs/perception";
+import type { Perception } from '@cieljs/perception';
 import {
   fauxAssistantMessage,
   fauxToolCall,
   registerFauxProvider,
-} from "@earendil-works/pi-ai/compat";
-import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+} from '@earendil-works/pi-ai/compat';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 
-import type { AudioInput, AudioOutput } from "../src/audio/types.ts";
-import { defaultChorusConfig } from "../src/config.ts";
-import type { ChorusEvent } from "../src/conversation/scheduler.ts";
-import { createChorus } from "../src/runtime.ts";
-import type { SpeechAudio, TextToSpeech } from "../src/tts/types.ts";
+import type { AudioInput, AudioOutput } from '../src/audio/types.ts';
+import { defaultChorusConfig } from '../src/config.ts';
+import type { ChorusEvent } from '../src/conversation/scheduler.ts';
+import { createChorus } from '../src/runtime.ts';
+import type { SpeechAudio, TextToSpeech } from '../src/tts/types.ts';
 
 const { qwen } = vi.hoisted(() => ({
   qwen: vi.fn(() => ({
-    model: "test-embedding",
+    model: 'test-embedding',
     dimensions: 2,
     batchSize: 32,
     embed: async () => [1, 0],
@@ -26,18 +26,18 @@ const { qwen } = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("@cieljs/embed", () => ({ qwen }));
+vi.mock('@cieljs/embed', () => ({ qwen }));
 
-vi.mock("@cieljs/perception", () => ({
+vi.mock('@cieljs/perception', () => ({
   createPerception: () => {
-    throw new Error("createPerception 不应在测试中被调用");
+    throw new Error('createPerception 不应在测试中被调用');
   },
 }));
 
-vi.mock("decibri", () => ({
+vi.mock('decibri', () => ({
   Microphone: class {
     static open() {
-      throw new Error("decibri.Microphone 不应在测试中被调用");
+      throw new Error('decibri.Microphone 不应在测试中被调用');
     }
     static devices() {
       return [];
@@ -45,7 +45,7 @@ vi.mock("decibri", () => ({
   },
   Speaker: class {
     static open() {
-      throw new Error("decibri.Speaker 不应在测试中被调用");
+      throw new Error('decibri.Speaker 不应在测试中被调用');
     }
     static devices() {
       return [];
@@ -62,7 +62,7 @@ const testConfig = {
 };
 
 async function createDataDir(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "chorus-"));
+  const root = await mkdtemp(join(tmpdir(), 'chorus-'));
   temporaryDirectories.push(root);
 
   return root;
@@ -70,7 +70,7 @@ async function createDataDir(): Promise<string> {
 
 afterEach(async () => {
   await Promise.all(
-    temporaryDirectories.splice(0).map((directory) =>
+    temporaryDirectories.splice(0).map(directory =>
       rm(directory, {
         recursive: true,
         force: true,
@@ -94,15 +94,15 @@ function createFakePerception() {
       listeners.get(event)?.(payload);
     },
     snapshot: vi.fn(async (options?: { startAt?: Date; endAt?: Date }) => ({
-      id: "snapshot",
+      id: 'snapshot',
       startAt: options?.startAt ?? new Date(),
       endAt: options?.endAt ?? new Date(),
       transcripts: [],
       frames: [],
       compose: async () => [
         {
-          role: "user" as const,
-          content: "[2026-01-01T00:00:00.000Z][speaker_1] 你好",
+          role: 'user' as const,
+          content: '[2026-01-01T00:00:00.000Z][speaker_1] 你好',
           timestamp: Date.now(),
         },
       ],
@@ -118,8 +118,8 @@ function createFakeInput(): AudioInput {
     devices: vi.fn(async () => [
       {
         index: 0,
-        id: "wasapi:{test-input}",
-        name: "默认输入",
+        id: 'wasapi:{test-input}',
+        name: '默认输入',
         defaultSampleRate: 48_000,
         isDefault: true,
         maxInputChannels: 1,
@@ -136,8 +136,8 @@ function createFakeOutput() {
     devices: vi.fn(async () => [
       {
         index: 0,
-        id: "wasapi:{test-output}",
-        name: "默认输出",
+        id: 'wasapi:{test-output}',
+        name: '默认输出',
         defaultSampleRate: 48_000,
         isDefault: true,
         maxOutputChannels: 2,
@@ -152,12 +152,12 @@ function createFakeOutput() {
 function createFakeTts() {
   const synthesizeMock = vi.fn(async (): Promise<SpeechAudio> => ({
     data: Buffer.alloc(0),
-    format: "wav",
-    mimeType: "audio/wav",
+    format: 'wav',
+    mimeType: 'audio/wav',
   }));
 
   const tts: TextToSpeech = {
-    id: "fake",
+    id: 'fake',
     synthesize: synthesizeMock,
     close: vi.fn(async () => {}),
   };
@@ -165,14 +165,14 @@ function createFakeTts() {
   return { tts, synthesizeMock };
 }
 
-describe("createChorus", () => {
-  test("speechend 触发思考并通过 speak 工具完成播放", async () => {
+describe('createChorus', () => {
+  test('speechend 触发思考并通过 speak 工具完成播放', async () => {
     const dataDir = await createDataDir();
     const faux = registerFauxProvider();
 
     faux.setResponses([
-      fauxAssistantMessage([fauxToolCall("speak", { text: "你好，我是夏尔" })]),
-      fauxAssistantMessage("好的"),
+      fauxAssistantMessage([fauxToolCall('speak', { text: '你好，我是夏尔' })]),
+      fauxAssistantMessage('好的'),
     ]);
 
     const events: ChorusEvent[] = [];
@@ -190,16 +190,16 @@ describe("createChorus", () => {
       perception,
     });
 
-    chorus.onEvent((event) => events.push(event));
+    chorus.onEvent(event => events.push(event));
 
     await chorus.start();
-    expect(chorus.status).toBe("running");
+    expect(chorus.status).toBe('running');
 
-    const at = new Date("2026-01-01T00:00:01.000Z");
+    const at = new Date('2026-01-01T00:00:01.000Z');
 
-    perception.emit("speechend", {
+    perception.emit('speechend', {
       at,
-      result: { content: "你好", speaker: "speaker_1", startAt: at, endAt: at },
+      result: { content: '你好', speaker: 'speaker_1', startAt: at, endAt: at },
     });
 
     await vi.waitFor(() => {
@@ -207,19 +207,19 @@ describe("createChorus", () => {
     });
 
     expect(synthesizeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "你好，我是夏尔" }),
+      expect.objectContaining({ text: '你好，我是夏尔' }),
     );
-    expect(events.some((event) => event.type === "playback_finished")).toBe(true);
-    expect(events.some((event) => event.type === "think_finished" && event.spoke)).toBe(true);
+    expect(events.some(event => event.type === 'playback_finished')).toBe(true);
+    expect(events.some(event => event.type === 'think_finished' && event.spoke)).toBe(true);
 
     await chorus.close();
     await chorus.close();
-    expect(chorus.status).toBe("closed");
+    expect(chorus.status).toBe('closed');
 
     faux.unregister();
   }, 30_000);
 
-  test("缺少 XIAOMI_API_KEY 时启动失败", async () => {
+  test('缺少 XIAOMI_API_KEY 时启动失败', async () => {
     const dataDir = await createDataDir();
     const faux = registerFauxProvider();
     const previous = process.env.XIAOMI_API_KEY;
@@ -235,13 +235,13 @@ describe("createChorus", () => {
       perception: createFakePerception(),
     });
 
-    await expect(chorus.start()).rejects.toThrow("XIAOMI_API_KEY");
+    await expect(chorus.start()).rejects.toThrow('XIAOMI_API_KEY');
 
     process.env.XIAOMI_API_KEY = previous;
     faux.unregister();
   }, 30_000);
 
-  test("显式输入设备不存在时启动失败", async () => {
+  test('显式输入设备不存在时启动失败', async () => {
     const dataDir = await createDataDir();
     const faux = registerFauxProvider();
 
@@ -259,7 +259,7 @@ describe("createChorus", () => {
       perception: createFakePerception(),
     });
 
-    await expect(chorus.start()).rejects.toThrow("输入设备不存在");
+    await expect(chorus.start()).rejects.toThrow('输入设备不存在');
 
     faux.unregister();
   }, 30_000);

@@ -2,9 +2,8 @@ import type {
   AgentTool,
   AgentToolResult,
   AgentToolUpdateCallback,
-} from "@earendil-works/pi-agent-core";
-
-import { type Static, type TSchema } from "typebox";
+} from '@earendil-works/pi-agent-core';
+import { type Static, type TSchema } from 'typebox';
 
 export interface ToolExecuteContext<TDetails = unknown> {
   toolCallId: string;
@@ -16,7 +15,7 @@ export interface ToolExecuteContext<TDetails = unknown> {
 
 type ToolDefinition<TParameters extends TSchema, TDetails = unknown> = Omit<
   AgentTool<TParameters, TDetails>,
-  "parameters" | "execute"
+  'parameters' | 'execute'
 > & {
   execute: (
     params: Static<TParameters>,

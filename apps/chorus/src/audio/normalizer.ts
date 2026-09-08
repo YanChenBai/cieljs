@@ -1,4 +1,4 @@
-import type { AudioInputChunk } from "./types.ts";
+import type { AudioInputChunk } from './types.ts';
 
 const TARGET_SAMPLE_RATE = 16_000;
 
@@ -32,7 +32,7 @@ export class AudioNormalizer {
   }
 
   private toMonoFloat(chunk: AudioInputChunk): number[] {
-    const bytesPerSample = chunk.format === "f32le" ? 4 : 2;
+    const bytesPerSample = chunk.format === 'f32le' ? 4 : 2;
     const frameCount = Math.floor(chunk.data.length / (chunk.channels * bytesPerSample));
     const samples = Array.from({ length: frameCount }, () => 0);
 
@@ -43,7 +43,7 @@ export class AudioNormalizer {
         const offset = (frame * chunk.channels + channel) * bytesPerSample;
 
         sum +=
-          chunk.format === "f32le"
+          chunk.format === 'f32le'
             ? chunk.data.readFloatLE(offset)
             : chunk.data.readInt16LE(offset) / 32_768;
       }

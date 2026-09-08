@@ -1,13 +1,13 @@
-import { computed, onMounted, onUnmounted, shallowRef } from "vue";
+import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
 
-export function useSidebar(side: "left" | "right" = "left") {
+export function useSidebar(side: 'left' | 'right' = 'left') {
   const collapsed = shallowRef(false);
-  const width = shallowRef(side === "left" ? 280 : 420);
+  const width = shallowRef(side === 'left' ? 280 : 420);
   const viewportWidth = shallowRef(window.innerWidth);
   const maxWidth = computed(() =>
     Math.max(
       260,
-      Math.min(side === "left" ? 380 : 900, viewportWidth.value - (side === "right" ? 640 : 600)),
+      Math.min(side === 'left' ? 380 : 900, viewportWidth.value - (side === 'right' ? 640 : 600)),
     ),
   );
   const dragging = shallowRef(false);
@@ -30,7 +30,7 @@ export function useSidebar(side: "left" | "right" = "left") {
 
   function moveDrag(event: PointerEvent) {
     if (dragging.value)
-      resize(side === "left" ? event.clientX : viewportWidth.value - event.clientX);
+      resize(side === 'left' ? event.clientX : viewportWidth.value - event.clientX);
   }
 
   function endDrag() {
@@ -38,19 +38,19 @@ export function useSidebar(side: "left" | "right" = "left") {
   }
 
   function keyboardResize(event: KeyboardEvent) {
-    if (event.key === "ArrowLeft") resize(width.value + (side === "left" ? -16 : 16));
-    else if (event.key === "ArrowRight") resize(width.value + (side === "left" ? 16 : -16));
-    else if (event.key === "Home") resize(260);
-    else if (event.key === "End") resize(maxWidth.value);
+    if (event.key === 'ArrowLeft') resize(width.value + (side === 'left' ? -16 : 16));
+    else if (event.key === 'ArrowRight') resize(width.value + (side === 'left' ? 16 : -16));
+    else if (event.key === 'Home') resize(260);
+    else if (event.key === 'End') resize(maxWidth.value);
     else return;
     event.preventDefault();
   }
 
   onMounted(() => {
     updateViewport();
-    window.addEventListener("resize", updateViewport);
+    window.addEventListener('resize', updateViewport);
   });
-  onUnmounted(() => window.removeEventListener("resize", updateViewport));
+  onUnmounted(() => window.removeEventListener('resize', updateViewport));
 
   return { collapsed, width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyboardResize };
 }

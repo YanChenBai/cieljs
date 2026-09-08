@@ -1,7 +1,7 @@
 export type SessionSources = string[] | (() => string[]);
 
 export function createSourceResolver(sources: SessionSources = []) {
-  return () => normalizeSources(typeof sources === "function" ? sources() : sources);
+  return () => normalizeSources(typeof sources === 'function' ? sources() : sources);
 }
 
 export function normalizeSources(sources: string[]) {

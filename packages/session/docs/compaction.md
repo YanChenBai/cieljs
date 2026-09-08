@@ -38,9 +38,9 @@ contextTokens > contextWindow - reserveTokens
 下面使用仓库现有的 Pi AI。调用方需要安装 `@earendil-works/pi-ai`，并配置对应 Provider 所需的凭据，以及 `SESSION_COMPACTION_PROVIDER`、`SESSION_COMPACTION_MODEL`：
 
 ```ts
-import { createSummarizer } from "@cieljs/session/agent";
-import { createModels } from "@earendil-works/pi-ai";
-import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { createSummarizer } from '@cieljs/session/agent';
+import { createModels } from '@earendil-works/pi-ai';
+import { builtinProviders } from '@earendil-works/pi-ai/providers/all';
 
 const models = createModels();
 for (const provider of builtinProviders()) models.setProvider(provider);
@@ -49,30 +49,30 @@ const model = models.getModel(
   process.env.SESSION_COMPACTION_PROVIDER!,
   process.env.SESSION_COMPACTION_MODEL!,
 );
-if (!model) throw new Error("未找到会话压缩模型");
+if (!model) throw new Error('未找到会话压缩模型');
 const summaryModel = model;
 
 const summarize = createSummarizer({
-  instructions: "保留关键文件路径、用户约束和未完成事项。",
+  instructions: '保留关键文件路径、用户约束和未完成事项。',
   async generateText({ systemPrompt, prompt, signal }) {
     const response = await models.completeSimple(
       summaryModel,
       {
         systemPrompt,
-        messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
+        messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
       },
       { maxTokens: 2048, signal },
     );
 
     // 不使用失败或被截断的摘要替换历史。
-    if (response.stopReason !== "stop") {
+    if (response.stopReason !== 'stop') {
       throw new Error(response.errorMessage ?? `摘要未完整生成：${response.stopReason}`);
     }
 
     return response.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("\n");
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('\n');
   },
 });
 ```
@@ -86,12 +86,12 @@ const summarize = createSummarizer({
 接着上面的 `summarize` 示例：
 
 ```ts
-import { SessionManager } from "@cieljs/session";
+import { SessionManager } from '@cieljs/session';
 
-const manager = await SessionManager.open({ dataDir: ".ciel/sessions" });
+const manager = await SessionManager.open({ dataDir: '.ciel/sessions' });
 try {
-  const session = await manager.space("blive:room:21452505").session({
-    id: "conversation-1",
+  const session = await manager.space('blive:room:21452505').session({
+    id: 'conversation-1',
   });
   const result = await session.compact({
     summarize,

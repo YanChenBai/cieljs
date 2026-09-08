@@ -1,14 +1,14 @@
-import type { AgentEvent, AgentMessage, AgentTool } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
-import { streamSimple } from "@earendil-works/pi-ai/compat";
-import type { MemoryManager } from "@cieljs/memory";
-import type { SessionManager } from "@cieljs/session";
+import type { MemoryManager } from '@cieljs/memory';
+import type { SessionManager } from '@cieljs/session';
+import type { AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import { streamSimple } from '@earendil-works/pi-ai/compat';
 
-import type { InvestigationResult } from "../types.ts";
-import { createInvestigationContextTransformer } from "./context.ts";
-import { createInvestigationTools } from "./investigation-tools.ts";
-import { ManagedAgent } from "./managed-agent.ts";
-import { assertUniqueTools } from "./tools.ts";
+import type { InvestigationResult } from '../types.ts';
+import { createInvestigationContextTransformer } from './context.ts';
+import { createInvestigationTools } from './investigation-tools.ts';
+import { ManagedAgent } from './managed-agent.ts';
+import { assertUniqueTools } from './tools.ts';
 
 export async function runInvestigation(options: {
   model: Model<Api>;
@@ -83,9 +83,9 @@ export async function runInvestigation(options: {
   });
 
   const messages: AgentMessage[] = [];
-  const unsubscribe = agent.subscribe(async (event) => {
+  const unsubscribe = agent.subscribe(async event => {
     options.onEvent?.(event, { tools, model: options.model });
-    if (event.type !== "message_end") {
+    if (event.type !== 'message_end') {
       return;
     }
 
@@ -93,28 +93,28 @@ export async function runInvestigation(options: {
     await session.appendMessage(event.message);
   });
   const abort = () => agent.abort();
-  options.signal?.addEventListener("abort", abort, { once: true });
+  options.signal?.addEventListener('abort', abort, { once: true });
 
   try {
     options.signal?.throwIfAborted();
 
-    if (typeof options.question === "string") {
+    if (typeof options.question === 'string') {
       await agent.prompt(options.question);
     } else {
       await agent.prompt(options.question);
     }
   } finally {
-    options.signal?.removeEventListener("abort", abort);
+    options.signal?.removeEventListener('abort', abort);
     unsubscribe();
   }
 
-  const answer = messages.findLast((message) => message.role === "assistant");
+  const answer = messages.findLast(message => message.role === 'assistant');
 
   if (!answer) {
-    throw new Error("Investigation 没有产生最终回答");
+    throw new Error('Investigation 没有产生最终回答');
   }
 
-  if (answer.role === "assistant" && answer.errorMessage) {
+  if (answer.role === 'assistant' && answer.errorMessage) {
     throw new Error(`Investigation 失败：${answer.errorMessage}`);
   }
 

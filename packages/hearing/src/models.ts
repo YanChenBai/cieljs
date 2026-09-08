@@ -1,7 +1,7 @@
 // @env node
 
-import { access } from "node:fs/promises";
-import path from "node:path";
+import { access } from 'node:fs/promises';
+import path from 'node:path';
 
 import {
   ASR_CONV_FRONTEND,
@@ -12,8 +12,8 @@ import {
   TOKENIZER_FILES,
   resolveModelPaths,
   resolveModelsPath,
-} from "./constants.ts";
-import type { ModelConfig } from "./types.ts";
+} from './constants.ts';
+import type { ModelConfig } from './types.ts';
 
 export interface ConfigurationCheck {
   readonly modelsPath: string;
@@ -36,7 +36,7 @@ export function createModelConfig(): ModelConfig {
           encoder: path.join(paths.asr, ASR_ENCODER),
           decoder: path.join(paths.asr, ASR_DECODER),
           tokenizer: path.join(paths.asr, TOKENIZER_DIR),
-          hotwords: "",
+          hotwords: '',
           maxTotalLen: 512,
           // 在 sherpa 的 65-token 重复保护前触发现有退化重试
           maxNewTokens: 64,
@@ -44,9 +44,9 @@ export function createModelConfig(): ModelConfig {
           topP: 0.8,
           seed: 42,
         },
-        tokens: "",
+        tokens: '',
         numThreads: 2,
-        provider: "cpu",
+        provider: 'cpu',
       },
     },
     vad: {
@@ -60,12 +60,12 @@ export function createModelConfig(): ModelConfig {
       },
       sampleRate: SAMPLE_RATE,
       numThreads: 1,
-      provider: "cpu",
+      provider: 'cpu',
     },
     speaker: {
       model: paths.speaker,
       numThreads: 1,
-      provider: "cpu",
+      provider: 'cpu',
     },
   };
 }
@@ -78,10 +78,10 @@ export async function checkConfiguration(): Promise<ConfigurationCheck> {
     path.join(paths.asr, ASR_DECODER),
     paths.vad,
     paths.speaker,
-    ...TOKENIZER_FILES.map((file) => path.join(paths.asr, TOKENIZER_DIR, file)),
+    ...TOKENIZER_FILES.map(file => path.join(paths.asr, TOKENIZER_DIR, file)),
   ];
 
-  const fileStates = await Promise.all(requiredFiles.map((file) => exists(file)));
+  const fileStates = await Promise.all(requiredFiles.map(file => exists(file)));
 
   const missingFiles = requiredFiles.filter((_file, index) => !fileStates[index]);
 

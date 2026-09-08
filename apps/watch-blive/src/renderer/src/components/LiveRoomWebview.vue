@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { watchBridge } from "../rpc.ts";
+import { onMounted, onUnmounted, useTemplateRef } from 'vue';
 
-import { onMounted, onUnmounted, useTemplateRef } from "vue";
+import { watchBridge } from '../rpc.ts';
 
 interface LiveGuest extends HTMLElement {
   getWebContentsId(): number;
 }
 const emit = defineEmits<{ ready: []; error: [message: string] }>();
-const guest = useTemplateRef<LiveGuest>("guest");
+const guest = useTemplateRef<LiveGuest>('guest');
 let attachedId: number | undefined;
 
 async function attach() {
@@ -17,13 +17,13 @@ async function attach() {
   try {
     await watchBridge.attachLiveWebContents({ id });
     attachedId = id;
-    emit("ready");
+    emit('ready');
   } catch (error) {
-    emit("error", error instanceof Error ? error.message : String(error));
+    emit('error', error instanceof Error ? error.message : String(error));
   }
 }
-onMounted(() => guest.value!.addEventListener("dom-ready", attach));
-onUnmounted(() => guest.value?.removeEventListener("dom-ready", attach));
+onMounted(() => guest.value!.addEventListener('dom-ready', attach));
+onUnmounted(() => guest.value?.removeEventListener('dom-ready', attach));
 </script>
 
 <template>

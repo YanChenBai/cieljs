@@ -36,7 +36,7 @@ await ciel.start(); // 初始化三套存储，并按配置创建 MCP
 ## 状态
 
 ```ts
-export type CielStatus = "idle" | "starting" | "running" | "closing" | "closed";
+export type CielStatus = 'idle' | 'starting' | 'running' | 'closing' | 'closed';
 ```
 
 `session()` 与 `investigate()` 只能在 `running` 状态调用；开始关闭后不再允许创建新的 Session 或 Investigation。

@@ -1,20 +1,19 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 // packages/embedding/src/qwen.ts
-
-import { env, pipeline } from "@huggingface/transformers";
 
 import {
   resolveEmbeddingProvider,
   type EmbeddingOptions,
   type ResolvedEmbeddingProvider,
-} from "@cieljs/agent-kit";
+} from '@cieljs/agent-kit';
+import { env, pipeline } from '@huggingface/transformers';
 
-import type { QwenEmbeddingOptions } from "./types.ts";
+import type { QwenEmbeddingOptions } from './types.ts';
 
-export const QWEN_EMBEDDING_MODEL = "Qwen3-Embedding-0.6B";
+export const QWEN_EMBEDDING_MODEL = 'Qwen3-Embedding-0.6B';
 
-export const QWEN_EMBEDDING_SOURCE = "onnx-community/Qwen3-Embedding-0.6B-ONNX";
+export const QWEN_EMBEDDING_SOURCE = 'onnx-community/Qwen3-Embedding-0.6B-ONNX';
 
 const huggingFacePrefix = `https://huggingface.co/${QWEN_EMBEDDING_SOURCE}/resolve/main/`;
 const modelScopePrefix = `https://modelscope.cn/models/${QWEN_EMBEDDING_SOURCE}/resolve/master/`;
@@ -29,7 +28,7 @@ env.fetch = (input, init) => {
   }
 
   const headers = new Headers(init?.headers);
-  headers.delete("authorization");
+  headers.delete('authorization');
 
   return fetchModelFile(modelScopePrefix + url.slice(huggingFacePrefix.length), {
     ...init,
@@ -42,19 +41,19 @@ export const QWEN_EMBEDDING_DIMENSIONS = 1024;
 export const DEFAULT_QWEN_EMBEDDING_BATCH_SIZE = 32;
 
 export const DEFAULT_QWEN_QUERY_INSTRUCTION =
-  "Given a retrieval query, retrieve relevant documents that answer the query.";
+  'Given a retrieval query, retrieve relevant documents that answer the query.';
 
 export function qwen(options: QwenEmbeddingOptions = {}): ResolvedEmbeddingProvider {
   const dimensions = options.dimensions ?? QWEN_EMBEDDING_DIMENSIONS;
   const batchSize = options.batchSize ?? DEFAULT_QWEN_EMBEDDING_BATCH_SIZE;
-  const dtype = options.dtype ?? "q8";
+  const dtype = options.dtype ?? 'q8';
   const instruction = options.instruction ?? DEFAULT_QWEN_QUERY_INSTRUCTION;
 
   assertDimensions(dimensions);
 
   const loadExtractor = () =>
-    pipeline("feature-extraction", QWEN_EMBEDDING_SOURCE, {
-      cache_dir: options.cacheDir ?? join(homedir(), ".ciel", "cache", "embedding"),
+    pipeline('feature-extraction', QWEN_EMBEDDING_SOURCE, {
+      cache_dir: options.cacheDir ?? join(homedir(), '.ciel', 'cache', 'embedding'),
       dtype,
       device: options.device,
     });
@@ -84,10 +83,10 @@ export function qwen(options: QwenEmbeddingOptions = {}): ResolvedEmbeddingProvi
 
     embeddingOptions.signal?.throwIfAborted();
 
-    const inputs = texts.map((text) => formatInput(text, embeddingOptions.purpose, instruction));
+    const inputs = texts.map(text => formatInput(text, embeddingOptions.purpose, instruction));
 
     const output = await extractor(inputs, {
-      pooling: "last_token",
+      pooling: 'last_token',
       normalize: true,
     });
 
@@ -99,7 +98,7 @@ export function qwen(options: QwenEmbeddingOptions = {}): ResolvedEmbeddingProvi
       return vectors;
     }
 
-    const res = vectors.map((vector) => truncateAndNormalize(vector, dimensions));
+    const res = vectors.map(vector => truncateAndNormalize(vector, dimensions));
     console.log(res);
 
     return res;
@@ -115,10 +114,10 @@ export function qwen(options: QwenEmbeddingOptions = {}): ResolvedEmbeddingProvi
 
 function formatInput(
   text: string,
-  purpose: EmbeddingOptions["purpose"],
+  purpose: EmbeddingOptions['purpose'],
   instruction: string,
 ): string {
-  if (purpose === "document") {
+  if (purpose === 'document') {
     return text;
   }
 

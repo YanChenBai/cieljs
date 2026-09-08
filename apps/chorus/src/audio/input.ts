@@ -1,6 +1,6 @@
-import { Microphone, type MicrophoneInfo } from "decibri";
+import { Microphone, type MicrophoneInfo } from 'decibri';
 
-import type { AudioInput, AudioInputChunk, AudioInputDevice, DeviceSelector } from "./types.ts";
+import type { AudioInput, AudioInputChunk, AudioInputDevice, DeviceSelector } from './types.ts';
 
 const BYTES_PER_SAMPLE = 2;
 
@@ -24,9 +24,9 @@ class DecibriAudioInput implements AudioInput {
     const mic = await Microphone.open({
       sampleRate: this.options.sampleRate,
       channels: this.options.channels,
-      dtype: "int16",
+      dtype: 'int16',
       device: options.device,
-      aec: "tau",
+      aec: 'tau',
     });
 
     this.active = mic;
@@ -38,7 +38,7 @@ class DecibriAudioInput implements AudioInput {
 
     const onAbort = () => mic.stop();
 
-    options.signal?.addEventListener("abort", onAbort, { once: true });
+    options.signal?.addEventListener('abort', onAbort, { once: true });
 
     try {
       for await (const data of mic) {
@@ -58,11 +58,11 @@ class DecibriAudioInput implements AudioInput {
           capturedAt,
           sampleRate,
           channels: this.options.channels,
-          format: "s16le",
+          format: 's16le',
         };
       }
     } finally {
-      options.signal?.removeEventListener("abort", onAbort);
+      options.signal?.removeEventListener('abort', onAbort);
       mic.stop();
       if (this.active === mic) {
         this.active = undefined;

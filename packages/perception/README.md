@@ -11,33 +11,33 @@
 
 `@cieljs/perception` 复用 `@cieljs/hearing` 完成语音感知，并叠加图片采样、差异过滤、多帧合成与快照冻结：
 
-| 能力 | 实现               | 职责                     |
-| ---- | ------------------ | ------------------------ |
+| 能力 | 实现              | 职责                     |
+| ---- | ----------------- | ------------------------ |
 | 听觉 | `@cieljs/hearing` | VAD、ASR 与说话人识别    |
-| 视觉 | `sharp`            | 采样、差异过滤与多帧合成 |
-| 快照 | `compose()`        | 冻结为 `AgentMessage[]`  |
+| 视觉 | `sharp`           | 采样、差异过滤与多帧合成 |
+| 快照 | `compose()`       | 冻结为 `AgentMessage[]`  |
 
 音频固定为 16 kHz、单声道、16 位有符号小端 PCM。图片能力通过省略 `vision` 或传入 `vision: false` 完全关闭。
 
 ## 基本使用
 
 ```ts
-import { createPerception } from "@cieljs/perception";
+import { createPerception } from '@cieljs/perception';
 
 const perception = createPerception({
   asr: {
-    speaker: [{ name: "主播", file: "./voiceprints/streamer.voiceprint" }],
+    speaker: [{ name: '主播', file: './voiceprints/streamer.voiceprint' }],
   },
   vision: {
     sampleIntervalMs: 5_000,
     differenceThreshold: 0.03,
     maxFrames: 9,
   },
-  hearingPrompt: "一段语音刚刚结束，请结合以下听觉转写作出判断。",
-  visionPrompt: "以下画面按采集时间排列，请结合画面变化理解现场。",
+  hearingPrompt: '一段语音刚刚结束，请结合以下听觉转写作出判断。',
+  visionPrompt: '以下画面按采集时间排列，请结合画面变化理解现场。',
 });
 
-const unsubscribe = perception.on("speechend", async ({ snapshot }) => {
+const unsubscribe = perception.on('speechend', async ({ snapshot }) => {
   const messages = await snapshot.compose();
 
   await agent.prompt(messages);
@@ -45,7 +45,7 @@ const unsubscribe = perception.on("speechend", async ({ snapshot }) => {
 
 perception.asr.write({ data: pcm16le, startAt: new Date() });
 
-await perception.image?.write({ source: "livestream", data: image, at: new Date() });
+await perception.image?.write({ source: 'livestream', data: image, at: new Date() });
 
 unsubscribe();
 await perception.close();

@@ -5,8 +5,8 @@
 `search()` 只检索当前 revision 的正文：
 
 ```ts
-const hits = await space.search("独立游戏", {
-  mode: "hybrid",
+const hits = await space.search('独立游戏', {
+  mode: 'hybrid',
   limit: 8,
 });
 ```
@@ -25,12 +25,12 @@ const hits = await space.search("独立游戏", {
 来源检索只搜索 `sources`，不搜索正文：
 
 ```ts
-const exact = await manager.searchBySource("bilibili:room:21452505", {
-  mode: "exact",
+const exact = await manager.searchBySource('bilibili:room:21452505', {
+  mode: 'exact',
 });
 
-const text = await manager.searchBySource("主播昵称", {
-  mode: "text",
+const text = await manager.searchBySource('主播昵称', {
+  mode: 'text',
 });
 ```
 
@@ -45,7 +45,7 @@ const text = await manager.searchBySource("主播昵称", {
 `findSpacesBySource()` 复用来源检索并按 `spaceId` 聚合：
 
 ```ts
-const spaces = await manager.findSpacesBySource("主播昵称");
+const spaces = await manager.findSpacesBySource('主播昵称');
 ```
 
 结果同时包含匹配来源和具体记忆引用。没有任何记忆的空 space 不会出现。

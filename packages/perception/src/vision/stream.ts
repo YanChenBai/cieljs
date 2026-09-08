@@ -1,9 +1,9 @@
 // @env node
 
-import sharp from "sharp";
+import sharp from 'sharp';
 
-import type { ImageInput, ImageStream, PerceptionFrame } from "../types.ts";
-import { VisionDiffer } from "./differ.ts";
+import type { ImageInput, ImageStream, PerceptionFrame } from '../types.ts';
+import { VisionDiffer } from './differ.ts';
 
 export interface StoredPerceptionFrame extends PerceptionFrame {
   readonly sequence: number;
@@ -31,12 +31,12 @@ export class PerceptionImageStream implements ImageStream {
 
   write(input: ImageInput): Promise<void> {
     if (this.closed) {
-      return Promise.reject(new Error("Perception image stream is closed"));
+      return Promise.reject(new Error('Perception image stream is closed'));
     }
 
     validateImageInput(input);
 
-    const source = input.source ?? "default";
+    const source = input.source ?? 'default';
     const state = this.getSource(source);
     const sequence = this.options.nextSequence();
     const accepted = {
@@ -58,7 +58,7 @@ export class PerceptionImageStream implements ImageStream {
   }
 
   barriers(): readonly Promise<void>[] {
-    return Array.from(this.sources.values(), (state) => state.processing);
+    return Array.from(this.sources.values(), state => state.processing);
   }
 
   async close(): Promise<void> {
@@ -112,7 +112,7 @@ export class PerceptionImageStream implements ImageStream {
       source: input.source,
       at: new Date(input.at),
       data,
-      mimeType: "image/jpeg",
+      mimeType: 'image/jpeg',
       sequence: input.sequence,
     });
   }
@@ -120,15 +120,15 @@ export class PerceptionImageStream implements ImageStream {
 
 function validateImageInput(input: ImageInput) {
   if (!Buffer.isBuffer(input.data) || input.data.length === 0) {
-    throw new Error("Image data must be a non-empty Buffer");
+    throw new Error('Image data must be a non-empty Buffer');
   }
 
   if (!Number.isFinite(input.at.getTime())) {
-    throw new Error("Image at must be a valid Date");
+    throw new Error('Image at must be a valid Date');
   }
 
   if (input.source !== undefined && input.source.length === 0) {
-    throw new Error("Image source must not be empty");
+    throw new Error('Image source must not be empty');
   }
 }
 

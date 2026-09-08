@@ -1,6 +1,6 @@
-import type { WebContents } from "electron";
-import type { Static, TSchema } from "typebox";
-import { Value } from "typebox/value";
+import type { WebContents } from 'electron';
+import type { Static, TSchema } from 'typebox';
+import { Value } from 'typebox/value';
 
 export interface ExecutePageOptions {
   action?: string;
@@ -16,7 +16,7 @@ export async function executePage<T extends TSchema>(
   schema: T,
   options: ExecutePageOptions = {},
 ): Promise<Static<T>> {
-  const action = options.action ?? "执行页面脚本";
+  const action = options.action ?? '执行页面脚本';
 
   assertAvailable(contents, options, action);
 
@@ -34,7 +34,7 @@ export async function executePage<T extends TSchema>(
 }
 
 function assertAvailable(
-  contents: Pick<WebContents, "isDestroyed" | "getURL">,
+  contents: Pick<WebContents, 'isDestroyed' | 'getURL'>,
   options: ExecutePageOptions,
   action: string,
 ): void {
@@ -72,25 +72,25 @@ async function withCancellation<T>(
     const abort = () =>
       reject(new Error(`${action}在 ${timeoutMs}ms 内未完成`, { cause: signal.reason }));
 
-    signal.addEventListener("abort", abort, { once: true });
-    void execution.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    signal.addEventListener('abort', abort, { once: true });
+    void execution.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
   });
 }
 
 export function isAllowedPageUrl(value: string): boolean {
-  if (value === "" || value === "about:blank") {
+  if (value === '' || value === 'about:blank') {
     return true;
   }
 
   try {
     const url = new URL(value);
 
-    return url.protocol === "https:" && isBilibiliHost(url.hostname);
+    return url.protocol === 'https:' && isBilibiliHost(url.hostname);
   } catch {
     return false;
   }
 }
 
 function isBilibiliHost(hostname: string): boolean {
-  return hostname === "bilibili.com" || hostname.endsWith(".bilibili.com");
+  return hostname === 'bilibili.com' || hostname.endsWith('.bilibili.com');
 }

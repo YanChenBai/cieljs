@@ -22,7 +22,7 @@
 ## 基本使用
 
 ```ts
-import { ASR } from "@cieljs/hearing";
+import { ASR } from '@cieljs/hearing';
 
 const asr = new ASR({
   bufferSeconds: 30,
@@ -30,7 +30,7 @@ const asr = new ASR({
   maxSpeakers: 8,
 });
 
-asr.on("result", (result) => {
+asr.on('result', result => {
   console.log(result.content, result.speaker, result.startAt, result.endAt);
 });
 
@@ -59,7 +59,7 @@ asr.flush();
 
 ```ts
 const asr = new ASR({
-  speaker: [{ name: "alice", file: "alice.voiceprint" }],
+  speaker: [{ name: 'alice', file: 'alice.voiceprint' }],
   speakerThreshold: 0.6,
   maxSpeakers: 8,
 });

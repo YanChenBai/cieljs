@@ -1,22 +1,18 @@
-import { resolve } from "node:path";
+import { resolve } from 'node:path';
 
-import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
+import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
+import { Client, type Tool } from '@modelcontextprotocol/client';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
-import { Client, type Tool } from "@modelcontextprotocol/client";
-
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-
-import { convertMcpContent, mcpErrorMessage } from "./content.ts";
-
-import { loadMcpConfig } from "./config.ts";
-
+import { loadMcpConfig } from './config.ts';
+import { convertMcpContent, mcpErrorMessage } from './content.ts';
 import type {
   McpOptions,
   McpRuntime,
   McpServer,
   McpServerConfig,
   McpToolDetails,
-} from "./types.ts";
+} from './types.ts';
 
 export class Mcp implements McpRuntime {
   readonly servers = new Map<string, McpServer>();
@@ -40,12 +36,12 @@ export class Mcp implements McpRuntime {
   }
 
   async close(): Promise<void> {
-    const clients = [...this.servers.values()].map((server) => server.client);
+    const clients = [...this.servers.values()].map(server => server.client);
 
     this.servers.clear();
     this.tools.length = 0;
 
-    await Promise.allSettled(clients.map((client) => client.close()));
+    await Promise.allSettled(clients.map(client => client.close()));
   }
 
   private async connectServers(configs: Record<string, McpServerConfig>): Promise<void> {
@@ -63,7 +59,7 @@ export class Mcp implements McpRuntime {
   private async connectServer(name: string, config: McpServerConfig): Promise<void> {
     const client = new Client({
       name: `ciel:${name}`,
-      version: "0.0.1",
+      version: '0.0.1',
     });
 
     const transport = new StdioClientTransport({
@@ -118,7 +114,7 @@ function createAgentTool(server: McpServer, tool: Tool): AgentTool {
      * pi-agent-core / TypeBox 运行时同样使用 JSON Schema，
      * 所以这里无需重新构建 schema。
      */
-    parameters: tool.inputSchema as AgentTool["parameters"],
+    parameters: tool.inputSchema as AgentTool['parameters'],
 
     async execute(_toolCallId, params, signal): Promise<AgentToolResult<McpToolDetails>> {
       const result = await server.client.callTool(
@@ -176,7 +172,7 @@ function resolveToolName(
     return toolName;
   }
 
-  const namespace = typeof prefix === "string" ? prefix : serverName;
+  const namespace = typeof prefix === 'string' ? prefix : serverName;
 
   return `${namespace}__${toolName}`;
 }
@@ -197,7 +193,7 @@ function assertUniqueToolNames(tools: AgentTool[]): void {
 
     if (duplicated) {
       throw new Error(
-        [`MCP tool name 冲突: "${tool.name}"`, "", "请为对应 MCP Server 配置 prefix。"].join("\n"),
+        [`MCP tool name 冲突: "${tool.name}"`, '', '请为对应 MCP Server 配置 prefix。'].join('\n'),
       );
     }
 

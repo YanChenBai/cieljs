@@ -10,10 +10,10 @@
 业务层可以创建一个 Provider，同时交给会话与记忆模块使用：
 
 ```ts
-import type { EmbeddingProvider } from "@cieljs/agent-kit";
+import type { EmbeddingProvider } from '@cieljs/agent-kit';
 
 const embedding: EmbeddingProvider = {
-  model: "provider/model-version",
+  model: 'provider/model-version',
   dimensions: 1_024,
   batchSize: 32,
   async embedBatch(texts, { purpose, signal }) {
@@ -30,9 +30,9 @@ const embedding: EmbeddingProvider = {
 和非零向量：
 
 ```ts
-import { assertEmbeddingVectors } from "@cieljs/agent-kit";
+import { assertEmbeddingVectors } from '@cieljs/agent-kit';
 
-const vectors = await embedding.embedBatch(texts, { purpose: "document" });
+const vectors = await embedding.embedBatch(texts, { purpose: 'document' });
 assertEmbeddingVectors(vectors, texts.length, embedding.dimensions);
 ```
 
@@ -41,7 +41,7 @@ assertEmbeddingVectors(vectors, texts.length, embedding.dimensions);
 `prompt` 保留模板字符串的原始转义，并提供三种常用整理方式：
 
 ```ts
-import { prompt } from "@cieljs/agent-kit";
+import { prompt } from '@cieljs/agent-kit';
 
 const systemPrompt = prompt.dedent`
   你是一个耐心的助手。
@@ -64,20 +64,20 @@ const description = prompt.inline`
 `ToolExecuteContext`：
 
 ```ts
-import { defineTool } from "@cieljs/agent-kit";
-import { Type } from "typebox";
+import { defineTool } from '@cieljs/agent-kit';
+import { Type } from 'typebox';
 
 const createSearchTool = defineTool(
   Type.Object({ query: Type.String() }),
   (search: (query: string) => Promise<string>) => ({
-    name: "search",
-    label: "搜索",
-    description: "搜索相关内容",
+    name: 'search',
+    label: '搜索',
+    description: '搜索相关内容',
     async execute({ query }, { signal }) {
       signal?.throwIfAborted();
 
       return {
-        content: [{ type: "text", text: await search(query) }],
+        content: [{ type: 'text', text: await search(query) }],
       };
     },
   }),

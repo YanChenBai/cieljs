@@ -1,5 +1,5 @@
-@import "markstream-vue/index.css";
-@import "vue-json-pretty/lib/styles.css";
+@import 'markstream-vue/index.css';
+@import 'vue-json-pretty/lib/styles.css';
 
 .ciel-devtools {
   --dt-accent: var(--accent, #fb7299);
@@ -17,8 +17,8 @@
   background: var(--dt-background);
   color: var(--dt-text);
   font:
-    12px/1.55 "Segoe UI",
-    "Microsoft YaHei",
+    12px/1.55 'Segoe UI',
+    'Microsoft YaHei',
     sans-serif;
 }
 .ciel-devtools * {
@@ -153,7 +153,7 @@
   color: #f28c59;
   flex-shrink: 0;
 }
-.dt-step-icon[data-kind="message"] {
+.dt-step-icon[data-kind='message'] {
   color: var(--dt-accent);
 }
 .dt-step-name {
@@ -204,7 +204,7 @@
   transform: rotate(0);
   font-size: 17px;
 }
-.dt-cue[data-state="open"] {
+.dt-cue[data-state='open'] {
   transform: rotate(90deg);
 }
 .dt-section-content {

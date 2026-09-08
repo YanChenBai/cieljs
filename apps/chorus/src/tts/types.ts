@@ -1,4 +1,4 @@
-export type SpeechAudioFormat = "wav" | "pcm_s16le";
+export type SpeechAudioFormat = 'wav' | 'pcm_s16le';
 
 export interface SpeechSynthesisRequest {
   text: string;

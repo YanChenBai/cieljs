@@ -1,9 +1,9 @@
-import { Speaker, type SpeakerInfo } from "decibri";
+import { Speaker, type SpeakerInfo } from 'decibri';
 
-import type { SpeechAudio } from "../tts/types.ts";
-import { resampleS16le } from "./resample.ts";
-import type { AudioOutput, AudioOutputDevice, DeviceSelector } from "./types.ts";
-import { decodeWavToPcm16 } from "./wav.ts";
+import type { SpeechAudio } from '../tts/types.ts';
+import { resampleS16le } from './resample.ts';
+import type { AudioOutput, AudioOutputDevice, DeviceSelector } from './types.ts';
+import { decodeWavToPcm16 } from './wav.ts';
 
 const WRITE_CHUNK_BYTES = 16_384;
 
@@ -39,7 +39,7 @@ class DecibriAudioOutput implements AudioOutput {
     const speaker = await Speaker.open({
       sampleRate: this.options.sampleRate,
       channels: decoded.channels,
-      dtype: "int16",
+      dtype: 'int16',
       device: options.device,
     });
 
@@ -78,12 +78,12 @@ class DecibriAudioOutput implements AudioOutput {
 }
 
 function decodeAudio(audio: SpeechAudio): { sampleRate: number; channels: number; pcm: Buffer } {
-  if (audio.format === "wav") {
+  if (audio.format === 'wav') {
     return decodeWavToPcm16(audio.data);
   }
 
   if (audio.sampleRate === undefined) {
-    throw new Error("pcm_s16le 音频必须提供 sampleRate");
+    throw new Error('pcm_s16le 音频必须提供 sampleRate');
   }
 
   return {

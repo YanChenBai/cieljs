@@ -1,11 +1,11 @@
-import type { EmbeddingProvider } from "@cieljs/agent-kit";
+import type { EmbeddingProvider } from '@cieljs/agent-kit';
 
-export type { EmbeddingOptions, EmbeddingProvider } from "@cieljs/agent-kit";
+export type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/agent-kit';
 
-export type MemoryLayer = "global.long_term" | "space.long_term" | "space.daily";
-export type SpaceMemoryLayer = "space.long_term" | "space.daily";
-export type MemoryKind = "event" | "fact" | "preference" | "summary";
-export type MemoryStatus = "active" | "archived";
+export type MemoryLayer = 'global.long_term' | 'space.long_term' | 'space.daily';
+export type SpaceMemoryLayer = 'space.long_term' | 'space.daily';
+export type MemoryKind = 'event' | 'fact' | 'preference' | 'summary';
+export type MemoryStatus = 'active' | 'archived';
 export type MemorySource = string;
 
 interface MemoryEntryFields {
@@ -23,9 +23,9 @@ interface MemoryEntryFields {
 
 export type MemoryEntry = MemoryEntryFields &
   (
-    | { layer: "global.long_term"; spaceId: null; date: null }
-    | { layer: "space.long_term"; spaceId: string; date: null }
-    | { layer: "space.daily"; spaceId: string; date: string }
+    | { layer: 'global.long_term'; spaceId: null; date: null }
+    | { layer: 'space.long_term'; spaceId: string; date: null }
+    | { layer: 'space.daily'; spaceId: string; date: string }
   );
 
 export type MemoryEntryFor<Layer extends MemoryLayer> = Extract<MemoryEntry, { layer: Layer }>;
@@ -97,8 +97,8 @@ export interface SpaceMemoryListOptions extends MemoryListOptions {
   dateTo?: string;
 }
 
-export type MemorySearchMode = "hybrid" | "full_text" | "trigram" | "vector";
-export type MemorySearchMatch = "full_text" | "trigram" | "vector";
+export type MemorySearchMode = 'hybrid' | 'full_text' | 'trigram' | 'vector';
+export type MemorySearchMatch = 'full_text' | 'trigram' | 'vector';
 
 export interface MemorySearchOptions extends MemoryReadOptions {
   mode?: MemorySearchMode;
@@ -130,7 +130,7 @@ export interface MemorySearchHit<Layer extends MemoryLayer = MemoryLayer> {
   matches: MemorySearchMatch[];
 }
 
-export type MemorySourceSearchMode = "auto" | "exact" | "text";
+export type MemorySourceSearchMode = 'auto' | 'exact' | 'text';
 
 export interface MemorySourceSearchOptions extends MemoryReadOptions {
   mode?: MemorySourceSearchMode;
@@ -141,16 +141,16 @@ export interface MemorySourceSearchOptions extends MemoryReadOptions {
   signal?: AbortSignal;
 }
 
-export interface SpaceMemorySourceSearchOptions extends Omit<MemorySourceSearchOptions, "layers"> {
+export interface SpaceMemorySourceSearchOptions extends Omit<MemorySourceSearchOptions, 'layers'> {
   layers?: SpaceMemoryLayer[];
 }
 
 export interface MemorySourceSearchHit<Layer extends MemoryLayer = MemoryLayer> {
   memoryId: string;
   revision: number;
-  spaceId: MemoryEntryFor<Layer>["spaceId"];
+  spaceId: MemoryEntryFor<Layer>['spaceId'];
   layer: Layer;
-  date: MemoryEntryFor<Layer>["date"];
+  date: MemoryEntryFor<Layer>['date'];
   matchedSources: MemorySource[];
   excerpt: string;
   score: number;

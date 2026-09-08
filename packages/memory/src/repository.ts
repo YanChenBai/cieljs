@@ -1,17 +1,17 @@
-import { and, asc, desc, eq, lt } from "drizzle-orm";
+import { and, asc, desc, eq, lt } from 'drizzle-orm';
 
-import type { Database, Transaction } from "./database.ts";
+import type { Database, Transaction } from './database.ts';
+import type { MemoryEmbeddingIndex } from './embedding-index.ts';
 import {
   MemoryAccessError,
   MemoryArchivedError,
   MemoryConflictError,
   MemoryNotFoundError,
   MemoryValidationError,
-} from "./errors.ts";
-import type { MemoryEmbeddingIndex } from "./embedding-index.ts";
-import { filterCondition, type MemorySelector } from "./query.ts";
-import { memories, memoryChunks, memoryRevisions } from "./schema.ts";
-import { chunkText, normalizeSearchText } from "./search.ts";
+} from './errors.ts';
+import { filterCondition, type MemorySelector } from './query.ts';
+import { memories, memoryChunks, memoryRevisions } from './schema.ts';
+import { chunkText, normalizeSearchText } from './search.ts';
 import type {
   MemoryEntry,
   MemoryHistoryOptions,
@@ -20,7 +20,7 @@ import type {
   MemoryRevision,
   ScopedRememberInput,
   UpdateMemoryInput,
-} from "./types.ts";
+} from './types.ts';
 import {
   assertContent,
   assertDate,
@@ -28,7 +28,7 @@ import {
   assertTimestamp,
   integerOption,
   normalizeSources,
-} from "./validation.ts";
+} from './validation.ts';
 
 type MemoryRow = typeof memories.$inferSelect;
 type RevisionRow = typeof memoryRevisions.$inferSelect;
@@ -43,28 +43,28 @@ export class MemoryRepository {
 
   getDate(at = new Date()): string {
     assertTimestamp(at);
-    const parts = new Intl.DateTimeFormat("en", {
+    const parts = new Intl.DateTimeFormat('en', {
       timeZone: this.timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
     }).formatToParts(at);
-    const part = (type: string) => parts.find((item) => item.type === type)!.value;
+    const part = (type: string) => parts.find(item => item.type === type)!.value;
 
-    return `${part("year")}-${part("month")}-${part("day")}`;
+    return `${part('year')}-${part('month')}-${part('day')}`;
   }
 
   async remember(selector: MemorySelector, input: ScopedRememberInput): Promise<MemoryEntry> {
     this.validateRemember(selector, input);
 
     const occurredAt = input.occurredAt ?? new Date();
-    const date = input.layer === "space.daily" ? (input.date ?? this.getDate(occurredAt)) : null;
-    const kind = input.kind ?? (input.layer === "space.daily" ? "event" : "fact");
+    const date = input.layer === 'space.daily' ? (input.date ?? this.getDate(occurredAt)) : null;
+    const kind = input.kind ?? (input.layer === 'space.daily' ? 'event' : 'fact');
     const sources = normalizeSources(input.sources ?? []);
     const id = crypto.randomUUID();
     const createdAt = new Date();
 
-    const result = await this.db.transaction(async (transaction) => {
+    const result = await this.db.transaction(async transaction => {
       const [memory] = await transaction
         .insert(memories)
         .values({
@@ -84,8 +84,8 @@ export class MemoryRepository {
           kind,
           content: input.content,
           sources,
-          sourceSearchText: normalizeSearchText(sources.join("\n")),
-          sourceTokenText: this.toTokenText(sources.join("\n")),
+          sourceSearchText: normalizeSearchText(sources.join('\n')),
+          sourceTokenText: this.toTokenText(sources.join('\n')),
           occurredAt,
           expiresAt: input.expiresAt,
           createdAt,
@@ -116,8 +116,8 @@ export class MemoryRepository {
     selector: MemorySelector,
     options: MemoryListOptions & { dateFrom?: string; dateTo?: string } = {},
   ): Promise<MemoryEntry[]> {
-    const limit = integerOption(options.limit ?? 50, "limit");
-    const offset = integerOption(options.offset ?? 0, "offset", 0, Number.MAX_SAFE_INTEGER);
+    const limit = integerOption(options.limit ?? 50, 'limit');
+    const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
     const rows = await this.db
       .select({ memory: memories, revision: memoryRevisions })
       .from(memories)
@@ -133,7 +133,7 @@ export class MemoryRepository {
       .limit(limit)
       .offset(offset);
 
-    return rows.map((row) => materializeMemory(row.memory, row.revision));
+    return rows.map(row => materializeMemory(row.memory, row.revision));
   }
 
   async update(
@@ -143,7 +143,7 @@ export class MemoryRepository {
   ): Promise<MemoryEntry> {
     this.validateUpdate(input);
 
-    const result = await this.db.transaction(async (transaction) => {
+    const result = await this.db.transaction(async transaction => {
       const current = await this.getCurrentForMutation(transaction, selector, id);
       this.assertMutable(current.memory, input.expectedRevision);
 
@@ -159,7 +159,7 @@ export class MemoryRepository {
         .where(
           and(
             eq(memories.id, id),
-            eq(memories.status, "active"),
+            eq(memories.status, 'active'),
             eq(memories.currentRevision, input.expectedRevision),
           ),
         )
@@ -177,8 +177,8 @@ export class MemoryRepository {
           kind: input.kind ?? current.revision.kind,
           content,
           sources,
-          sourceSearchText: normalizeSearchText(sources.join("\n")),
-          sourceTokenText: this.toTokenText(sources.join("\n")),
+          sourceSearchText: normalizeSearchText(sources.join('\n')),
+          sourceTokenText: this.toTokenText(sources.join('\n')),
           occurredAt: current.revision.occurredAt,
           expiresAt: input.expiresAt === undefined ? current.revision.expiresAt : input.expiresAt,
           createdAt: updatedAt,
@@ -196,19 +196,19 @@ export class MemoryRepository {
   }
 
   async forget(selector: MemorySelector, id: string, expectedRevision: number): Promise<void> {
-    integerOption(expectedRevision, "expectedRevision", 1, 2147483646);
+    integerOption(expectedRevision, 'expectedRevision', 1, 2147483646);
 
-    await this.db.transaction(async (transaction) => {
+    await this.db.transaction(async transaction => {
       const current = await this.getCurrentForMutation(transaction, selector, id);
       this.assertMutable(current.memory, expectedRevision);
 
       const [archived] = await transaction
         .update(memories)
-        .set({ status: "archived", archivedAt: new Date(), updatedAt: new Date() })
+        .set({ status: 'archived', archivedAt: new Date(), updatedAt: new Date() })
         .where(
           and(
             eq(memories.id, id),
-            eq(memories.status, "active"),
+            eq(memories.status, 'active'),
             eq(memories.currentRevision, expectedRevision),
           ),
         )
@@ -226,10 +226,10 @@ export class MemoryRepository {
     options: MemoryHistoryOptions = {},
   ): Promise<MemoryRevision[]> {
     await this.assertReadableIdentity(selector, id);
-    const limit = integerOption(options.limit ?? 20, "limit");
+    const limit = integerOption(options.limit ?? 20, 'limit');
 
     if (options.beforeRevision !== undefined) {
-      integerOption(options.beforeRevision, "beforeRevision", 1, 2147483647);
+      integerOption(options.beforeRevision, 'beforeRevision', 1, 2147483647);
     }
 
     const rows = await this.db
@@ -254,7 +254,7 @@ export class MemoryRepository {
     id: string,
     revision: number,
   ): Promise<MemoryRevision | null> {
-    integerOption(revision, "revision", 1, 2147483647);
+    integerOption(revision, 'revision', 1, 2147483647);
     await this.assertReadableIdentity(selector, id);
 
     const [row] = await this.db
@@ -266,7 +266,7 @@ export class MemoryRepository {
   }
 
   async rebuildChunks(): Promise<void> {
-    await this.db.transaction(async (transaction) => {
+    await this.db.transaction(async transaction => {
       await transaction.delete(memoryChunks);
       const rows = await transaction
         .select({ memory: memories, revision: memoryRevisions })
@@ -283,7 +283,7 @@ export class MemoryRepository {
       for (const revision of revisions) {
         await transaction
           .update(memoryRevisions)
-          .set({ sourceTokenText: this.toTokenText(revision.sources.join("\n")) })
+          .set({ sourceTokenText: this.toTokenText(revision.sources.join('\n')) })
           .where(
             and(
               eq(memoryRevisions.memoryId, revision.memoryId),
@@ -309,7 +309,7 @@ export class MemoryRepository {
     return this.tokenize(normalizeSearchText(text))
       .map(normalizeSearchText)
       .filter(Boolean)
-      .join(" ");
+      .join(' ');
   }
 
   private currentRows(
@@ -356,7 +356,7 @@ export class MemoryRepository {
       );
 
     if (!revision) {
-      throw new MemoryNotFoundError("记忆当前版本不存在");
+      throw new MemoryNotFoundError('记忆当前版本不存在');
     }
 
     return { memory: identity, revision };
@@ -375,7 +375,7 @@ export class MemoryRepository {
   }
 
   private assertMutable(memory: MemoryRow, expectedRevision: number): void {
-    if (memory.status === "archived") {
+    if (memory.status === 'archived') {
       throw new MemoryArchivedError();
     }
 
@@ -393,11 +393,11 @@ export class MemoryRepository {
     }
 
     if (!selector.layers.includes(input.layer)) {
-      throw new MemoryAccessError("记忆层级不属于当前入口");
+      throw new MemoryAccessError('记忆层级不属于当前入口');
     }
 
-    if (input.layer !== "space.daily" && input.date !== undefined) {
-      throw new MemoryValidationError("长期记忆不能设置日期");
+    if (input.layer !== 'space.daily' && input.date !== undefined) {
+      throw new MemoryValidationError('长期记忆不能设置日期');
     }
 
     if (input.date !== undefined) {
@@ -412,14 +412,14 @@ export class MemoryRepository {
   }
 
   private validateUpdate(input: UpdateMemoryInput): void {
-    integerOption(input.expectedRevision, "expectedRevision", 1, 2147483646);
+    integerOption(input.expectedRevision, 'expectedRevision', 1, 2147483646);
 
     const hasPatch = [input.content, input.kind, input.expiresAt, input.sources].some(
-      (value) => value !== undefined,
+      value => value !== undefined,
     );
 
     if (!hasPatch) {
-      throw new MemoryValidationError("至少提供一个要更新的字段");
+      throw new MemoryValidationError('至少提供一个要更新的字段');
     }
 
     if (input.content !== undefined) assertContent(input.content);
@@ -446,13 +446,13 @@ export class MemoryRepository {
       tokenText: this.tokenize(normalizeSearchText(chunk))
         .map(normalizeSearchText)
         .filter(Boolean)
-        .join(" "),
+        .join(' '),
     }));
 
     await transaction.insert(memoryChunks).values(chunks);
     await this.embeddingIndex.addPending(
       transaction,
-      chunks.map((chunk) => chunk.id),
+      chunks.map(chunk => chunk.id),
     );
   }
 }

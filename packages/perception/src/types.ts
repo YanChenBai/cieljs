@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ASR, ASROptions, ASRResult, Unsubscribe } from "@cieljs/hearing";
+import type { ASR, ASROptions, ASRResult, Unsubscribe } from '@cieljs/hearing';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export interface PerceptionOptions {
   readonly asr?: ASROptions;

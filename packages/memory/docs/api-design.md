@@ -31,7 +31,7 @@
 ## 术语与层级
 
 ```ts
-export type MemoryLayer = "global.long_term" | "space.long_term" | "space.daily";
+export type MemoryLayer = 'global.long_term' | 'space.long_term' | 'space.daily';
 ```
 
 三个层级的合法数据组合固定为：
@@ -68,13 +68,13 @@ import {
   type MemoryEntry,
   type MemorySearchHit,
   type MemorySource,
-} from "@cieljs/memory";
+} from '@cieljs/memory';
 ```
 
 Agent 入口包含工具和上下文准备 API：
 
 ```ts
-import { globalMemoryTools, loadMemoryContext, memoryTools } from "@cieljs/memory/agent";
+import { globalMemoryTools, loadMemoryContext, memoryTools } from '@cieljs/memory/agent';
 ```
 
 Schema、数据库连接、检索实现、索引任务和内部校验器不作为公开子路径导出。
@@ -99,8 +99,8 @@ Memory 包不定义 session、事件、主播或直播间等业务类型。业�
 
 ```ts
 await space.daily.remember({
-  content: "今天讨论了新的游戏模式",
-  sources: ["bilibili:room:21452505", "主播昵称", "主播旧昵称", "今晚第一次挑战新模式"],
+  content: '今天讨论了新的游戏模式',
+  sources: ['bilibili:room:21452505', '主播昵称', '主播旧昵称', '今晚第一次挑战新模式'],
 });
 ```
 
@@ -139,9 +139,9 @@ const MAX_MEMORY_SOURCES_BYTES = 32 * 1024;
 ## 记忆类型
 
 ```ts
-export type MemoryKind = "event" | "fact" | "preference" | "summary";
+export type MemoryKind = 'event' | 'fact' | 'preference' | 'summary';
 
-export type MemoryStatus = "active" | "archived";
+export type MemoryStatus = 'active' | 'archived';
 ```
 
 一条公开记忆表示某个逻辑记忆的当前 revision：
@@ -166,17 +166,17 @@ interface MemoryEntryFields {
 export type MemoryEntry = MemoryEntryFields &
   (
     | {
-        layer: "global.long_term";
+        layer: 'global.long_term';
         spaceId: null;
         date: null;
       }
     | {
-        layer: "space.long_term";
+        layer: 'space.long_term';
         spaceId: string;
         date: null;
       }
     | {
-        layer: "space.daily";
+        layer: 'space.daily';
         spaceId: string;
         date: string;
       }
@@ -265,12 +265,12 @@ memory-1 / revision 2 / 新内容
 调用者只传当前看到的 revision 和新字段：
 
 ```ts
-const memory = await space.get("memory-1");
+const memory = await space.get('memory-1');
 
 if (memory) {
   const updated = await space.update(memory.id, {
     expectedRevision: memory.revision,
-    content: "修正后的完整内容",
+    content: '修正后的完整内容',
   });
 
   console.log(updated.revision);
@@ -332,11 +332,11 @@ export interface MemoryHistoryOptions {
 正常的 `get()`、`list()`、`search()` 和上下文准备只使用当前 revision。读取旧内容必须显式调用：
 
 ```ts
-const history = await space.history("memory-1", {
+const history = await space.history('memory-1', {
   limit: 20,
 });
 
-const oldRevision = await space.getRevision("memory-1", 1);
+const oldRevision = await space.getRevision('memory-1', 1);
 ```
 
 历史内容默认不参与语义检索，避免模型同时召回相互冲突的新旧事实。
@@ -414,7 +414,7 @@ export interface MemoryListOptions extends MemoryReadOptions {
 }
 
 export interface SpaceMemoryListOptions extends MemoryListOptions {
-  layers?: Array<"space.long_term" | "space.daily">;
+  layers?: Array<'space.long_term' | 'space.daily'>;
   dateFrom?: string;
   dateTo?: string;
 }
@@ -432,7 +432,7 @@ export interface MemoryLayerStore<Layer extends MemoryLayer, RememberInput> {
 
   searchBySource(
     query: string,
-    options?: Omit<MemorySourceSearchOptions, "layers">,
+    options?: Omit<MemorySourceSearchOptions, 'layers'>,
   ): Promise<MemorySourceSearchHit<Layer>[]>;
 
   update(id: string, input: UpdateMemoryInput): Promise<MemoryEntryFor<Layer>>;
@@ -451,15 +451,15 @@ export interface MemoryLayerStore<Layer extends MemoryLayer, RememberInput> {
 
 ```ts
 export interface GlobalLongTermMemory extends MemoryLayerStore<
-  "global.long_term",
+  'global.long_term',
   LongTermRememberInput
 > {}
 ```
 
 ```ts
 await manager.global.remember({
-  content: "用户偏好简洁且直接的回答",
-  sources: ["session:conversation-1"],
+  content: '用户偏好简洁且直接的回答',
+  sources: ['session:conversation-1'],
 });
 ```
 
@@ -469,9 +469,9 @@ await manager.global.remember({
 export interface SpaceMemory {
   readonly spaceId: string;
 
-  readonly longTerm: MemoryLayerStore<"space.long_term", LongTermRememberInput>;
+  readonly longTerm: MemoryLayerStore<'space.long_term', LongTermRememberInput>;
 
-  readonly daily: MemoryLayerStore<"space.daily", DailyRememberInput>;
+  readonly daily: MemoryLayerStore<'space.daily', DailyRememberInput>;
 
   get(id: string, options?: MemoryReadOptions): Promise<SpaceMemoryEntry | null>;
 
@@ -480,12 +480,12 @@ export interface SpaceMemory {
   search(
     query: string,
     options?: SpaceMemorySearchOptions,
-  ): Promise<MemorySearchHit<"space.long_term" | "space.daily">[]>;
+  ): Promise<MemorySearchHit<'space.long_term' | 'space.daily'>[]>;
 
   searchBySource(
     query: string,
     options?: SpaceMemorySourceSearchOptions,
-  ): Promise<MemorySourceSearchHit<"space.long_term" | "space.daily">[]>;
+  ): Promise<MemorySourceSearchHit<'space.long_term' | 'space.daily'>[]>;
 
   update(id: string, input: UpdateMemoryInput): Promise<SpaceMemoryEntry>;
 
@@ -501,11 +501,11 @@ export interface SpaceMemory {
 
 ```ts
 await space.daily.remember({
-  content: "今天发生的事情",
+  content: '今天发生的事情',
 });
 
 await space.longTerm.remember({
-  content: "这个空间长期成立的事实",
+  content: '这个空间长期成立的事实',
 });
 ```
 
@@ -516,9 +516,9 @@ await space.longTerm.remember({
 对外只提供一个 `search()`，用 `mode` 选择检索方式，不公开四组平行方法。
 
 ```ts
-export type MemorySearchMode = "hybrid" | "full_text" | "trigram" | "vector";
+export type MemorySearchMode = 'hybrid' | 'full_text' | 'trigram' | 'vector';
 
-export type MemorySearchMatch = "full_text" | "trigram" | "vector";
+export type MemorySearchMatch = 'full_text' | 'trigram' | 'vector';
 
 export interface MemorySearchOptions extends MemoryReadOptions {
   mode?: MemorySearchMode;
@@ -533,7 +533,7 @@ export interface MemorySearchOptions extends MemoryReadOptions {
 }
 
 export interface SpaceMemorySearchOptions extends MemorySearchOptions {
-  layers?: Array<"space.long_term" | "space.daily">;
+  layers?: Array<'space.long_term' | 'space.daily'>;
   dateFrom?: string;
   dateTo?: string;
 }
@@ -566,7 +566,7 @@ export interface MemorySearchHit<Layer extends MemoryLayer = MemoryLayer> {
 来源搜索与正文搜索是两个独立入口。它搜索 `sources`，而不是正文 `content`。
 
 ```ts
-export type MemorySourceSearchMode = "auto" | "exact" | "text";
+export type MemorySourceSearchMode = 'auto' | 'exact' | 'text';
 
 export interface MemorySourceSearchOptions extends MemoryReadOptions {
   mode?: MemorySourceSearchMode;
@@ -582,17 +582,17 @@ export interface MemorySourceSearchOptions extends MemoryReadOptions {
   signal?: AbortSignal;
 }
 
-export interface SpaceMemorySourceSearchOptions extends Omit<MemorySourceSearchOptions, "layers"> {
-  layers?: Array<"space.long_term" | "space.daily">;
+export interface SpaceMemorySourceSearchOptions extends Omit<MemorySourceSearchOptions, 'layers'> {
+  layers?: Array<'space.long_term' | 'space.daily'>;
 }
 
 export interface MemorySourceSearchHit<Layer extends MemoryLayer = MemoryLayer> {
   memoryId: string;
   revision: number;
 
-  spaceId: MemoryEntryFor<Layer>["spaceId"];
+  spaceId: MemoryEntryFor<Layer>['spaceId'];
   layer: Layer;
-  date: MemoryEntryFor<Layer>["date"];
+  date: MemoryEntryFor<Layer>['date'];
 
   matchedSources: MemorySource[];
   excerpt: string;
@@ -611,8 +611,8 @@ export interface MemorySourceSearchHit<Layer extends MemoryLayer = MemoryLayer> 
 ### 从来源读取具体记忆
 
 ```ts
-const hits = await manager.searchBySource("主播昵称", {
-  mode: "text",
+const hits = await manager.searchBySource('主播昵称', {
+  mode: 'text',
 });
 
 const hit = hits[0];
@@ -629,7 +629,7 @@ if (hit?.spaceId) {
 ```ts
 export interface FindMemorySpacesOptions {
   mode?: MemorySourceSearchMode;
-  layers?: Array<"space.long_term" | "space.daily">;
+  layers?: Array<'space.long_term' | 'space.daily'>;
   limit?: number;
   signal?: AbortSignal;
 }
@@ -642,17 +642,17 @@ export interface MemorySpaceSourceHit {
   memories: Array<{
     id: string;
     revision: number;
-    layer: "space.long_term" | "space.daily";
+    layer: 'space.long_term' | 'space.daily';
     excerpt: string;
   }>;
 }
 ```
 
 ```ts
-const relatedSpaces = await manager.findSpacesBySource("bilibili:room:21452505", { mode: "exact" });
+const relatedSpaces = await manager.findSpacesBySource('bilibili:room:21452505', { mode: 'exact' });
 
 for (const related of relatedSpaces) {
-  const hits = await manager.space(related.spaceId).search("之前对这个游戏有什么看法");
+  const hits = await manager.space(related.spaceId).search('之前对这个游戏有什么看法');
 }
 ```
 
@@ -667,7 +667,7 @@ Agent 工具必须由宿主绑定 `SpaceMemory`，工具参数不能包含 `spac
 ```ts
 export interface MemorySourceProviderContext {
   toolCallId: string;
-  action: "remember" | "update";
+  action: 'remember' | 'update';
   signal?: AbortSignal;
 }
 
@@ -685,7 +685,7 @@ export interface MemoryToolsOptions {
    *
    * @default "append"
    */
-  sourcesMode?: "append" | "replace";
+  sourcesMode?: 'append' | 'replace';
 
   rememberDaily?: boolean;
   rememberLongTerm?: boolean;
@@ -771,7 +771,7 @@ Agent 不传 `sources`。工具通过静态 sources 或 `MemorySourceProvider` �
 跨 space 权限分成两级：
 
 ```ts
-export type CrossSpaceMemoryAccess = "related" | "all";
+export type CrossSpaceMemoryAccess = 'related' | 'all';
 
 export interface CrossSpaceMemoryOptions {
   manager: MemoryManager;
@@ -810,7 +810,7 @@ read_any_memory
 export interface GlobalMemoryToolsOptions {
   memory: GlobalLongTermMemory;
   sources?: MemorySource[] | MemorySourceProvider;
-  sourcesMode?: "append" | "replace";
+  sourcesMode?: 'append' | 'replace';
 
   remember?: boolean;
   update?: boolean;
@@ -882,19 +882,19 @@ export function loadMemoryContext(options: LoadMemoryContextOptions): Promise<Lo
 保存逻辑记忆身份和当前状态：
 
 ```ts
-export const memories = pgTable("memories", {
-  id: text("id").primaryKey(),
+export const memories = pgTable('memories', {
+  id: text('id').primaryKey(),
 
-  layer: text("layer").$type<MemoryLayer>().notNull(),
-  spaceId: text("space_id"),
-  date: date("date"),
+  layer: text('layer').$type<MemoryLayer>().notNull(),
+  spaceId: text('space_id'),
+  date: date('date'),
 
-  status: text("status").$type<MemoryStatus>().notNull().default("active"),
-  currentRevision: integer("current_revision").notNull().default(1),
+  status: text('status').$type<MemoryStatus>().notNull().default('active'),
+  currentRevision: integer('current_revision').notNull().default(1),
 
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
 });
 ```
 
@@ -904,29 +904,29 @@ export const memories = pgTable("memories", {
 
 ```ts
 export const memoryRevisions = pgTable(
-  "memory_revisions",
+  'memory_revisions',
   {
-    memoryId: text("memory_id")
+    memoryId: text('memory_id')
       .notNull()
-      .references(() => memories.id, { onDelete: "cascade" }),
+      .references(() => memories.id, { onDelete: 'cascade' }),
 
-    revision: integer("revision").notNull(),
+    revision: integer('revision').notNull(),
 
-    kind: text("kind").$type<MemoryKind>().notNull(),
-    content: text("content").notNull(),
+    kind: text('kind').$type<MemoryKind>().notNull(),
+    content: text('content').notNull(),
 
-    sources: text("sources")
+    sources: text('sources')
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
 
-    sourceSearchText: text("source_search_text").notNull().default(""),
+    sourceSearchText: text('source_search_text').notNull().default(''),
 
-    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.memoryId, table.revision] })],
+  table => [primaryKey({ columns: [table.memoryId, table.revision] })],
 );
 ```
 
@@ -958,12 +958,12 @@ export const memoryRevisions = pgTable(
 
 ```ts
 export type MemoryErrorCode =
-  | "MEMORY_NOT_FOUND"
-  | "MEMORY_ACCESS_DENIED"
-  | "MEMORY_REVISION_CONFLICT"
-  | "MEMORY_ARCHIVED"
-  | "MEMORY_CLOSED"
-  | "MEMORY_VALIDATION_FAILED";
+  | 'MEMORY_NOT_FOUND'
+  | 'MEMORY_ACCESS_DENIED'
+  | 'MEMORY_REVISION_CONFLICT'
+  | 'MEMORY_ARCHIVED'
+  | 'MEMORY_CLOSED'
+  | 'MEMORY_VALIDATION_FAILED';
 
 export class MemoryError extends Error {
   readonly code: MemoryErrorCode;
@@ -987,13 +987,13 @@ export class MemoryValidationError extends MemoryError {}
 
 ```ts
 await space.longTerm.remember({
-  content: "新的长期记忆",
+  content: '新的长期记忆',
 });
 
 await manager.flushIndexes();
 
-const hits = await space.longTerm.search("相关查询", {
-  mode: "vector",
+const hits = await space.longTerm.search('相关查询', {
+  mode: 'vector',
 });
 ```
 
@@ -1009,42 +1009,42 @@ const hits = await space.longTerm.search("相关查询", {
 ## 完整使用示例
 
 ```ts
-import { MemoryManager } from "@cieljs/memory";
-import { memoryTools } from "@cieljs/memory/agent";
+import { MemoryManager } from '@cieljs/memory';
+import { memoryTools } from '@cieljs/memory/agent';
 
 await using memories = await MemoryManager.open({
-  dataDir: ".ciel/memory",
-  timeZone: "Asia/Shanghai",
+  dataDir: '.ciel/memory',
+  timeZone: 'Asia/Shanghai',
   embedding,
 });
 
-const space = memories.space("blive:room:21452505");
+const space = memories.space('blive:room:21452505');
 
 await memories.global.remember({
-  content: "用户偏好简洁且自然的表达",
-  sources: ["session:conversation-1"],
+  content: '用户偏好简洁且自然的表达',
+  sources: ['session:conversation-1'],
 });
 
 await space.longTerm.remember({
-  content: "这个直播间经常讨论独立游戏",
-  sources: ["bilibili:room:21452505", "主播昵称"],
+  content: '这个直播间经常讨论独立游戏',
+  sources: ['bilibili:room:21452505', '主播昵称'],
 });
 
 await space.daily.remember({
-  content: "今天主播开始体验新的独立游戏",
-  sources: ["bilibili:room:21452505", "主播昵称", "今晚第一次挑战新模式"],
+  content: '今天主播开始体验新的独立游戏',
+  sources: ['bilibili:room:21452505', '主播昵称', '今晚第一次挑战新模式'],
 });
 
-const relatedSpaces = await memories.findSpacesBySource("主播昵称");
+const relatedSpaces = await memories.findSpacesBySource('主播昵称');
 
-const relatedMemories = await memories.searchBySource("今晚第一次挑战新模式");
+const relatedMemories = await memories.searchBySource('今晚第一次挑战新模式');
 
 const tools = memoryTools({
   space,
-  sources: ["session:conversation-1", "bilibili:room:21452505"],
+  sources: ['session:conversation-1', 'bilibili:room:21452505'],
   crossSpace: {
     manager: memories,
-    access: "related",
+    access: 'related',
   },
 });
 ```

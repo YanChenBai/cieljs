@@ -6,12 +6,12 @@
 
 ```ts
 const session = await ciel.session({
-  sessionId: "conversation:1", // 省略时创建新 ID
-  spaceId: "livestream",
+  sessionId: 'conversation:1', // 省略时创建新 ID
+  spaceId: 'livestream',
   sources: () => [currentRoomId],
 });
 
-await session.agent.prompt("总结当前直播间的情况");
+await session.agent.prompt('总结当前直播间的情况');
 ```
 
 - 传入 `sessionId` 时打开或恢复指定 Session。

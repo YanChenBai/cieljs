@@ -20,15 +20,15 @@ export type CielEmbeddingOptions = EmbeddingProvider;
 export interface DefineCielOptions {
   model: Model<Api>;
   systemPrompt: string;
-  session: Omit<SessionStorageOptions, "embedding">;
-  memory: Omit<MemoryStorageOptions, "embedding">;
+  session: Omit<SessionStorageOptions, 'embedding'>;
+  memory: Omit<MemoryStorageOptions, 'embedding'>;
   embedding?: CielEmbeddingOptions;
   tools?: AgentTool[];
   mcp?: CielMcpOptions;
   investigation?: {
     systemPrompt?: string;
     tools?: AgentTool[];
-  } & Omit<SessionManagerOptions, "embedding">;
+  } & Omit<SessionManagerOptions, 'embedding'>;
 }
 ```
 

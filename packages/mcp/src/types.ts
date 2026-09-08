@@ -1,11 +1,11 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { Client } from "@modelcontextprotocol/client";
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+import type { Client } from '@modelcontextprotocol/client';
 
 export interface McpStdioServerConfig {
   /**
    * 当前 v0 只支持 stdio。
    */
-  type?: "stdio";
+  type?: 'stdio';
 
   /**
    * 是否启用当前 MCP Server。

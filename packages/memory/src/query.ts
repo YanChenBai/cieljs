@@ -1,13 +1,13 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
-import { memories, memoryRevisions } from "./schema.ts";
+import { memories, memoryRevisions } from './schema.ts';
 import type {
   MemoryLayer,
   MemoryListOptions,
   MemoryReadOptions,
   MemorySearchOptions,
-} from "./types.ts";
-import { assertDate, assertKind, assertLayers } from "./validation.ts";
+} from './types.ts';
+import { assertDate, assertKind, assertLayers } from './validation.ts';
 
 export interface MemorySelector {
   layers: MemoryLayer[];
@@ -15,7 +15,7 @@ export interface MemorySelector {
 }
 
 export interface MemoryQueryFilter extends MemoryReadOptions {
-  kind?: MemoryListOptions["kind"];
+  kind?: MemoryListOptions['kind'];
   dateFrom?: string;
   dateTo?: string;
 }
@@ -46,12 +46,12 @@ export function filterCondition(selector: MemorySelector, options: MemoryQueryFi
   }
 
   if (options.dateFrom && options.dateTo && options.dateFrom > options.dateTo) {
-    throw new TypeError("日期范围起点不能晚于终点");
+    throw new TypeError('日期范围起点不能晚于终点');
   }
 
   return and(
     selectorCondition(selector),
-    options.includeArchived ? undefined : eq(memories.status, "active"),
+    options.includeArchived ? undefined : eq(memories.status, 'active'),
     options.includeExpired
       ? undefined
       : sql`(${memoryRevisions.expiresAt} IS NULL OR ${memoryRevisions.expiresAt} > now())`,

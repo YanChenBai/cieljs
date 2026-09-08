@@ -6,9 +6,9 @@
 
 ```ts
 const result = await ciel.investigate({
-  spaceId: "livestream",
+  spaceId: 'livestream',
   sources: () => [currentRoomId],
-  question: "主播以前提到过喜欢什么类型的游戏？",
+  question: '主播以前提到过喜欢什么类型的游戏？',
 });
 ```
 
@@ -20,17 +20,17 @@ const result = await ciel.investigate({
 
 ```ts
 const first = await ciel.investigate({
-  sessionId: "preference-query:1",
-  spaceId: "livestream",
+  sessionId: 'preference-query:1',
+  spaceId: 'livestream',
   sources: () => [currentRoomId],
-  question: "主播提到过哪些明确的游戏偏好？",
+  question: '主播提到过哪些明确的游戏偏好？',
 });
 
 const second = await ciel.investigate({
-  sessionId: "preference-query:1",
-  spaceId: "livestream",
+  sessionId: 'preference-query:1',
+  spaceId: 'livestream',
   sources: () => [currentRoomId],
-  question: "再核对一次。",
+  question: '再核对一次。',
 });
 ```
 
@@ -65,7 +65,7 @@ export interface InvestigationResult {
 
 ```ts
 await session.agent.prompt([
-  { role: "user", content: "请结合以下调查结果继续判断" },
+  { role: 'user', content: '请结合以下调查结果继续判断' },
   result.answer,
 ]);
 ```

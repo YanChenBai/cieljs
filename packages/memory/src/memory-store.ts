@@ -1,6 +1,6 @@
-import type { MemoryRepository } from "./repository.ts";
-import type { MemoryRetrieval } from "./retrieval.ts";
-import type { MemorySelector } from "./query.ts";
+import type { MemorySelector } from './query.ts';
+import type { MemoryRepository } from './repository.ts';
+import type { MemoryRetrieval } from './retrieval.ts';
 import type {
   DailyRememberInput,
   ForgetMemoryOptions,
@@ -20,7 +20,7 @@ import type {
   SpaceMemorySearchOptions,
   SpaceMemorySourceSearchOptions,
   UpdateMemoryInput,
-} from "./types.ts";
+} from './types.ts';
 
 export interface MemoryLayerStore<Layer extends MemoryLayer, RememberInput> {
   readonly layer: Layer;
@@ -31,7 +31,7 @@ export interface MemoryLayerStore<Layer extends MemoryLayer, RememberInput> {
   search(query: string, options?: MemorySearchOptions): Promise<MemorySearchHit<Layer>[]>;
   searchBySource(
     query: string,
-    options?: Omit<MemorySourceSearchOptions, "layers">,
+    options?: Omit<MemorySourceSearchOptions, 'layers'>,
   ): Promise<MemorySourceSearchHit<Layer>[]>;
   update(id: string, input: UpdateMemoryInput): Promise<MemoryEntryFor<Layer>>;
   forget(id: string, options: ForgetMemoryOptions): Promise<void>;
@@ -40,25 +40,25 @@ export interface MemoryLayerStore<Layer extends MemoryLayer, RememberInput> {
 }
 
 export interface GlobalLongTermMemory extends MemoryLayerStore<
-  "global.long_term",
+  'global.long_term',
   LongTermRememberInput
 > {}
 
 export interface SpaceMemory {
   readonly spaceId: string;
-  readonly longTerm: MemoryLayerStore<"space.long_term", LongTermRememberInput>;
-  readonly daily: MemoryLayerStore<"space.daily", DailyRememberInput>;
+  readonly longTerm: MemoryLayerStore<'space.long_term', LongTermRememberInput>;
+  readonly daily: MemoryLayerStore<'space.daily', DailyRememberInput>;
 
   get(id: string, options?: MemoryReadOptions): Promise<SpaceMemoryEntry | null>;
   list(options?: SpaceMemoryListOptions): Promise<SpaceMemoryEntry[]>;
   search(
     query: string,
     options?: SpaceMemorySearchOptions,
-  ): Promise<MemorySearchHit<"space.long_term" | "space.daily">[]>;
+  ): Promise<MemorySearchHit<'space.long_term' | 'space.daily'>[]>;
   searchBySource(
     query: string,
     options?: SpaceMemorySourceSearchOptions,
-  ): Promise<MemorySourceSearchHit<"space.long_term" | "space.daily">[]>;
+  ): Promise<MemorySourceSearchHit<'space.long_term' | 'space.daily'>[]>;
   update(id: string, input: UpdateMemoryInput): Promise<SpaceMemoryEntry>;
   forget(id: string, options: ForgetMemoryOptions): Promise<void>;
   history(id: string, options?: MemoryHistoryOptions): Promise<MemoryRevision[]>;
@@ -111,7 +111,7 @@ class MemoryLayerStoreImplementation<
 
   searchBySource(
     query: string,
-    options?: Omit<MemorySourceSearchOptions, "layers">,
+    options?: Omit<MemorySourceSearchOptions, 'layers'>,
   ): Promise<MemorySourceSearchHit<Layer>[]> {
     return this.services.operate(() =>
       this.services.retrieval.searchBySource(this.selector, query, options),
@@ -144,19 +144,19 @@ class MemoryLayerStoreImplementation<
 }
 
 export function createGlobalMemory(services: MemoryStoreServices): GlobalLongTermMemory {
-  return new MemoryLayerStoreImplementation(services, "global.long_term");
+  return new MemoryLayerStoreImplementation(services, 'global.long_term');
 }
 
 export function createSpaceMemory(services: MemoryStoreServices, spaceId: string): SpaceMemory {
   const selector: MemorySelector = {
-    layers: ["space.long_term", "space.daily"],
+    layers: ['space.long_term', 'space.daily'],
     spaceId,
   };
 
   return {
     spaceId,
-    longTerm: new MemoryLayerStoreImplementation(services, "space.long_term", spaceId),
-    daily: new MemoryLayerStoreImplementation(services, "space.daily", spaceId),
+    longTerm: new MemoryLayerStoreImplementation(services, 'space.long_term', spaceId),
+    daily: new MemoryLayerStoreImplementation(services, 'space.daily', spaceId),
     get: (id, options) =>
       services.operate(() =>
         services.repository.get(selector, id, options),
@@ -173,14 +173,14 @@ export function createSpaceMemory(services: MemoryStoreServices, spaceId: string
 
       return services.operate(() =>
         services.retrieval.search({ ...selector, layers }, query, filter),
-      ) as Promise<MemorySearchHit<"space.long_term" | "space.daily">[]>;
+      ) as Promise<MemorySearchHit<'space.long_term' | 'space.daily'>[]>;
     },
     searchBySource: (query, options = {}) => {
       const { layers = selector.layers, ...filter } = options;
 
       return services.operate(() =>
         services.retrieval.searchBySource({ ...selector, layers }, query, filter),
-      ) as Promise<MemorySourceSearchHit<"space.long_term" | "space.daily">[]>;
+      ) as Promise<MemorySourceSearchHit<'space.long_term' | 'space.daily'>[]>;
     },
     update: (id, input) =>
       services.operate(() =>

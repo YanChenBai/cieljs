@@ -1,11 +1,11 @@
-import type { CielSession } from "@cieljs/core";
-import type { Perception } from "@cieljs/perception";
+import type { CielSession } from '@cieljs/core';
+import type { DevtoolsHost } from '@cieljs/devtools/host';
+import type { Perception } from '@cieljs/perception';
 
-import type { RoomInfo, WatchEvent } from "../shared/types.ts";
-import type { LiveMedia } from "./media/live-media.ts";
-import { createRoomContext, type SentDanmaku } from "./prompts.ts";
-import { ThoughtScheduler } from "./scheduling/thought-scheduler.ts";
-import type { DevtoolsHost } from "@cieljs/devtools/host";
+import type { RoomInfo, WatchEvent } from '../shared/types.ts';
+import type { LiveMedia } from './media/live-media.ts';
+import { createRoomContext, type SentDanmaku } from './prompts.ts';
+import { ThoughtScheduler } from './scheduling/thought-scheduler.ts';
 
 interface RoomVisitOptions {
   devtools?: DevtoolsHost;
@@ -39,7 +39,7 @@ export class RoomVisit {
       minimumIntervalMs: options.minimumThinkIntervalMs,
       startedAt: new Date(options.startedAt),
       context: () => ({
-        role: "user",
+        role: 'user',
         content: createRoomContext({
           room: options.room,
           startedAt: options.startedAt,
@@ -50,9 +50,9 @@ export class RoomVisit {
       }),
       beforeRun: options.beforeRun,
       afterRun: options.afterRun,
-      onRunStarted: (triggerCount) => options.emit({ type: "thought_started", triggerCount }),
-      onRunFinished: (durationMs) => options.emit({ type: "thought_finished", durationMs }),
-      onError: (error) => options.emit({ type: "error", stage: "thought", error }),
+      onRunStarted: triggerCount => options.emit({ type: 'thought_started', triggerCount }),
+      onRunFinished: durationMs => options.emit({ type: 'thought_finished', durationMs }),
+      onError: error => options.emit({ type: 'error', stage: 'thought', error }),
     });
   }
 
@@ -72,7 +72,7 @@ export class RoomVisit {
   start() {
     this.unsubscribeAgent = this.options.devtools?.observe(this.session.agent, this.session.id);
     this.options.media.start();
-    this.unsubscribeSpeechEnd = this.options.perception.on("speechend", ({ at }) =>
+    this.unsubscribeSpeechEnd = this.options.perception.on('speechend', ({ at }) =>
       this.scheduler.trigger(at),
     );
     this.periodicTimer = setInterval(
@@ -99,8 +99,8 @@ export class RoomVisit {
       this.options.session.close(),
     ]);
     const failures = [...media, ...remaining]
-      .filter((result) => result.status === "rejected")
-      .map((result) => result.reason);
+      .filter(result => result.status === 'rejected')
+      .map(result => result.reason);
 
     if (failures.length) {
       throw new AggregateError(failures, `直播间 ${this.room.roomId} 关闭失败`);

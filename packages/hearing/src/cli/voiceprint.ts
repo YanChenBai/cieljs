@@ -1,13 +1,13 @@
-import { access } from "node:fs/promises";
-import { parseArgs } from "node:util";
+import { access } from 'node:fs/promises';
+import { parseArgs } from 'node:util';
 
-import sherpaOnnx from "sherpa-onnx-node";
-import type { SpeakerEmbeddingExtractor as SpeakerEmbeddingExtractorInstance } from "sherpa-onnx-node";
+import sherpaOnnx from 'sherpa-onnx-node';
+import type { SpeakerEmbeddingExtractor as SpeakerEmbeddingExtractorInstance } from 'sherpa-onnx-node';
 
-import { SAMPLE_RATE } from "../constants.ts";
-import { createModelConfig } from "../models.ts";
-import { averageEmbeddings, writeVoiceprint } from "../voiceprint.ts";
-import { loading } from "./utils/index.ts";
+import { SAMPLE_RATE } from '../constants.ts';
+import { createModelConfig } from '../models.ts';
+import { averageEmbeddings, writeVoiceprint } from '../voiceprint.ts';
+import { loading } from './utils/index.ts';
 
 const { SpeakerEmbeddingExtractor, readWave } = sherpaOnnx;
 
@@ -16,8 +16,8 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
     args,
     allowPositionals: true,
     options: {
-      output: { type: "string", short: "o" },
-      help: { type: "boolean", short: "h", default: false },
+      output: { type: 'string', short: 'o' },
+      help: { type: 'boolean', short: 'h', default: false },
     },
     strict: true,
   });
@@ -28,23 +28,23 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
   }
 
   const output = values.output;
-  if (!output) fail("--output is required");
-  if (positionals.length === 0) fail("at least one WAV sample is required");
-  await Promise.all(positionals.map((file) => access(file)));
+  if (!output) fail('--output is required');
+  if (positionals.length === 0) fail('at least one WAV sample is required');
+  await Promise.all(positionals.map(file => access(file)));
 
-  const stop = loading("Creating voiceprint");
+  const stop = loading('Creating voiceprint');
   let result: {
     dimensions: number;
     output: string;
     samples: number;
-    type: "voiceprint";
+    type: 'voiceprint';
   };
   try {
     const extractor = new SpeakerEmbeddingExtractor(createModelConfig().speaker);
-    const embeddings = positionals.map((file) => computeEmbedding(extractor, file));
+    const embeddings = positionals.map(file => computeEmbedding(extractor, file));
     const target = writeVoiceprint(output, averageEmbeddings(embeddings));
     result = {
-      type: "voiceprint",
+      type: 'voiceprint',
       output: target,
       samples: positionals.length,
       dimensions: extractor.dim,
@@ -52,7 +52,7 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
   } finally {
     stop();
   }
-  process.stdout.write(JSON.stringify(result) + "\n");
+  process.stdout.write(JSON.stringify(result) + '\n');
 }
 
 function computeEmbedding(
@@ -73,12 +73,12 @@ function computeEmbedding(
 
 function printHelp(): void {
   process.stdout.write(
-    "Usage: vp run @cieljs/hearing#voiceprint -- --output <file> <sample.wav...>\n\n" +
+    'Usage: vp run @cieljs/hearing#voiceprint -- --output <file> <sample.wav...>\n\n' +
       "The voiceprint is written into the package's voiceprints/ directory.\n",
   );
 }
 
 function fail(message: string): never {
-  process.stderr.write(message + "\n");
+  process.stderr.write(message + '\n');
   process.exit(2);
 }

@@ -1,9 +1,8 @@
-import { Type } from "typebox";
+import { defineTool, prompt } from '@cieljs/agent-kit';
+import { Type } from 'typebox';
 
-import { defineTool, prompt } from "@cieljs/agent-kit";
-
-import type { FindSessionsBySourceOptions, SessionSourceHit } from "../types.ts";
-import { sessionResult } from "./helpers.ts";
+import type { FindSessionsBySourceOptions, SessionSourceHit } from '../types.ts';
+import { sessionResult } from './helpers.ts';
 
 interface SessionSourceFinder {
   findSessionsBySource(
@@ -23,13 +22,13 @@ export const findSessionsBySourceTool = defineTool(
   Type.Object({
     query: Type.String({
       minLength: 1,
-      description: "要匹配的 Session 来源，例如业务 ID、用户或房间名称、昵称、标题或别名。",
+      description: '要匹配的 Session 来源，例如业务 ID、用户或房间名称、昵称、标题或别名。',
     }),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
   }),
   (options: FindSessionsBySourceToolOptions) => ({
-    name: "find_sessions_by_source",
-    label: "按来源发现会话",
+    name: 'find_sessions_by_source',
+    label: '按来源发现会话',
     description: prompt.inline`
       在${options.scopeDescription}中，按 sources 查找相关会话。
       sources 是宿主记录的业务 ID、用户或房间名称、昵称、标题和别名；只匹配来源，不搜索消息正文。

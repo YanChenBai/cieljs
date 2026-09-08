@@ -1,2 +1,2 @@
-export * from "./loading.ts";
-export * from "./progress.ts";
+export * from './loading.ts';
+export * from './progress.ts';

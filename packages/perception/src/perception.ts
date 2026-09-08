@@ -1,11 +1,11 @@
 // @env node
 
-import { EventEmitter } from "node:events";
+import { EventEmitter } from 'node:events';
 
-import { ASR } from "@cieljs/hearing";
-import type { ASRResult, Unsubscribe } from "@cieljs/hearing";
+import { ASR } from '@cieljs/hearing';
+import type { ASRResult, Unsubscribe } from '@cieljs/hearing';
 
-import { createPerceptionSnapshot } from "./snapshot.ts";
+import { createPerceptionSnapshot } from './snapshot.ts';
 import type {
   Perception,
   PerceptionEventMap,
@@ -13,16 +13,16 @@ import type {
   PerceptionSnapshot,
   SnapshotOptions,
   SpeechEndEvent,
-} from "./types.ts";
-import { PerceptionImageStream } from "./vision/stream.ts";
-import type { StoredPerceptionFrame } from "./vision/stream.ts";
+} from './types.ts';
+import { PerceptionImageStream } from './vision/stream.ts';
+import type { StoredPerceptionFrame } from './vision/stream.ts';
 
 const DEFAULT_RETENTION_MS = 60_000;
 const DEFAULT_SAMPLE_INTERVAL_MS = 6_666;
 const DEFAULT_DIFFERENCE_THRESHOLD = 0.03;
 const DEFAULT_MAX_FRAMES = 9;
-const DEFAULT_HEARING_PROMPT = "以下是按时间排列的听觉转写，请结合说话人理解。";
-const DEFAULT_VISION_PROMPT = "以下画面按来源合并，编号顺序与采集时间一致。";
+const DEFAULT_HEARING_PROMPT = '以下是按时间排列的听觉转写，请结合说话人理解。';
+const DEFAULT_VISION_PROMPT = '以下画面按来源合并，编号顺序与采集时间一致。';
 
 export function createPerception(options: PerceptionOptions = {}): Perception {
   return new PerceptionRuntime(options);
@@ -65,16 +65,16 @@ class PerceptionRuntime implements Perception {
 
           return this.imageSequence;
         },
-        onFrame: (frame) => this.addFrame(frame),
-        onError: (error) => this.emitError(error),
+        onFrame: frame => this.addFrame(frame),
+        onError: error => this.emitError(error),
       });
     }
 
     this.asr = new ASR(options.asr);
     this.unsubscribers.push(
-      this.asr.on("result", (result) => this.addTranscript(result)),
-      this.asr.on("speechend", (at) => this.handleSpeechEnd(at)),
-      this.asr.on("error", (error) => this.emitError(error)),
+      this.asr.on('result', result => this.addTranscript(result)),
+      this.asr.on('speechend', at => this.handleSpeechEnd(at)),
+      this.asr.on('error', error => this.emitError(error)),
     );
   }
 
@@ -85,14 +85,14 @@ class PerceptionRuntime implements Perception {
   }
 
   async snapshot(options: SnapshotOptions = {}): Promise<PerceptionSnapshot> {
-    const endAt = cloneValidDate(options.endAt ?? new Date(), "snapshot.endAt");
+    const endAt = cloneValidDate(options.endAt ?? new Date(), 'snapshot.endAt');
     const startAt = cloneValidDate(
       options.startAt ?? new Date(endAt.getTime() - this.retentionMs),
-      "snapshot.startAt",
+      'snapshot.startAt',
     );
 
     if (startAt.getTime() > endAt.getTime()) {
-      throw new Error("Snapshot startAt must not be after endAt");
+      throw new Error('Snapshot startAt must not be after endAt');
     }
 
     const sequence = this.imageSequence;
@@ -181,11 +181,11 @@ class PerceptionRuntime implements Perception {
     const end = endAt.getTime();
     const transcripts = this.transcripts
       .filter(
-        (transcript) => transcript.endAt.getTime() >= start && transcript.endAt.getTime() <= end,
+        transcript => transcript.endAt.getTime() >= start && transcript.endAt.getTime() <= end,
       )
       .sort(compareTranscripts);
     const frames = this.frames
-      .filter((frame) => {
+      .filter(frame => {
         const at = frame.at.getTime();
 
         return frame.sequence <= sequence && at >= start && at <= end;
@@ -216,31 +216,31 @@ class PerceptionRuntime implements Perception {
       cutoff = Math.min(cutoff, window.startAt);
     }
 
-    removeBefore(this.transcripts, (transcript) => transcript.endAt.getTime() < cutoff);
-    removeBefore(this.frames, (frame) => frame.at.getTime() < cutoff);
+    removeBefore(this.transcripts, transcript => transcript.endAt.getTime() < cutoff);
+    removeBefore(this.frames, frame => frame.at.getTime() < cutoff);
   }
 
   private emitSpeechEnd(event: SpeechEndEvent) {
     try {
-      this.emitter.emit("speechend", event);
+      this.emitter.emit('speechend', event);
     } catch (error) {
       this.emitError(toError(error));
     }
   }
 
   private emitError(error: Error) {
-    if (this.emitter.listenerCount("error") === 0) {
+    if (this.emitter.listenerCount('error') === 0) {
       return;
     }
 
-    this.emitter.emit("error", error);
+    this.emitter.emit('error', error);
   }
 }
 
 function normalizeOptions(options: PerceptionOptions) {
   const retentionMs = options.retentionMs ?? DEFAULT_RETENTION_MS;
 
-  assertNonNegativeFinite(retentionMs, "retentionMs");
+  assertNonNegativeFinite(retentionMs, 'retentionMs');
 
   if (!options.vision) {
     return {
@@ -256,14 +256,14 @@ function normalizeOptions(options: PerceptionOptions) {
   const differenceThreshold = options.vision.differenceThreshold ?? DEFAULT_DIFFERENCE_THRESHOLD;
   const maxFrames = options.vision.maxFrames ?? DEFAULT_MAX_FRAMES;
 
-  assertNonNegativeFinite(sampleIntervalMs, "vision.sampleIntervalMs");
+  assertNonNegativeFinite(sampleIntervalMs, 'vision.sampleIntervalMs');
 
   if (!Number.isFinite(differenceThreshold) || differenceThreshold < 0 || differenceThreshold > 1) {
-    throw new Error("vision.differenceThreshold must be a finite number between 0 and 1");
+    throw new Error('vision.differenceThreshold must be a finite number between 0 and 1');
   }
 
   if (!Number.isSafeInteger(maxFrames) || maxFrames < 1 || maxFrames > 9) {
-    throw new Error("vision.maxFrames must be an integer between 1 and 9");
+    throw new Error('vision.maxFrames must be an integer between 1 and 9');
   }
 
   return {
@@ -299,7 +299,7 @@ function cloneTranscript(transcript: ASRResult): ASRResult {
     ...transcript,
     startAt: new Date(transcript.startAt),
     endAt: new Date(transcript.endAt),
-    tokens: transcript.tokens?.map((token) => ({
+    tokens: transcript.tokens?.map(token => ({
       ...token,
       startAt: new Date(token.startAt),
       endAt: new Date(token.endAt),

@@ -1,15 +1,15 @@
-import type { ASROptions } from "./types.ts";
+import type { ASROptions } from './types.ts';
 
 export type ASRWorkerCommand =
-  | { type: "init"; options: ASROptions }
-  | { type: "write"; data: string; startAt: string }
-  | { type: "flush" }
-  | { type: "close" };
+  | { type: 'init'; options: ASROptions }
+  | { type: 'write'; data: string; startAt: string }
+  | { type: 'flush' }
+  | { type: 'close' };
 
 export type ASRWorkerEvent =
-  | { type: "ready" }
+  | { type: 'ready' }
   | {
-      type: "result";
+      type: 'result';
       data: {
         content: string;
         speaker?: string;
@@ -19,5 +19,5 @@ export type ASRWorkerEvent =
         tokens?: readonly { content: string; startAt: string; endAt: string }[];
       };
     }
-  | { type: "speechstart" | "speechend"; at: string }
-  | { type: "error"; message: string; fatal?: boolean };
+  | { type: 'speechstart' | 'speechend'; at: string }
+  | { type: 'error'; message: string; fatal?: boolean };

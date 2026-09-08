@@ -1,8 +1,8 @@
 // packages/embedding/src/types.ts
 
-export type QwenEmbeddingDType = "fp32" | "fp16" | "q8";
+export type QwenEmbeddingDType = 'fp32' | 'fp16' | 'q8';
 
-export type QwenEmbeddingDevice = "wasm" | "webgpu";
+export type QwenEmbeddingDevice = 'wasm' | 'webgpu';
 
 export interface QwenEmbeddingOptions {
   /**

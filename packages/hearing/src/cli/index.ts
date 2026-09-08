@@ -1,32 +1,32 @@
-import { installModel } from "./model.ts";
-import { createVoiceprint } from "./voiceprint.ts";
+import { installModel } from './model.ts';
+import { createVoiceprint } from './voiceprint.ts';
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  if (args[0] === "--") {
+  if (args[0] === '--') {
     args.shift();
   }
 
   const command = args.shift();
 
-  if (args[0] === "--") {
+  if (args[0] === '--') {
     args.shift();
   }
 
   switch (command) {
-    case "install-model":
+    case 'install-model':
       await installModel(args);
       return;
 
-    case "voiceprint":
+    case 'voiceprint':
       await createVoiceprint(args);
       return;
 
     case undefined:
-    case "help":
-    case "--help":
-    case "-h":
+    case 'help':
+    case '--help':
+    case '-h':
       printHelp();
       return;
 
@@ -39,13 +39,13 @@ async function main(): Promise<void> {
 function printHelp(): void {
   process.stdout.write(
     [
-      "Usage: vp run @cieljs/hearing#dev -- <command> [options]",
-      "",
-      "Commands:",
-      "  install-model  Install speech models",
-      "  voiceprint     Create a voiceprint from WAV samples",
-      "",
-    ].join("\n"),
+      'Usage: vp run @cieljs/hearing#dev -- <command> [options]',
+      '',
+      'Commands:',
+      '  install-model  Install speech models',
+      '  voiceprint     Create a voiceprint from WAV samples',
+      '',
+    ].join('\n'),
   );
 }
 

@@ -1,23 +1,23 @@
-import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Perception, PerceptionSnapshot } from "@cieljs/perception";
+import type { Perception, PerceptionSnapshot } from '@cieljs/perception';
+import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 
-import type { DeviceSelector } from "../audio/types.ts";
-import type { SpeakController, ThinkRunGate } from "./speak-tool.ts";
+import type { DeviceSelector } from '../audio/types.ts';
+import type { SpeakController, ThinkRunGate } from './speak-tool.ts';
 
 export type ChorusEvent =
-  | { type: "speech_end"; at: Date; speaker?: string; content?: string }
-  | { type: "pending_created"; window: PendingWindow }
-  | { type: "pending_merged"; window: PendingWindow }
-  | { type: "think_started"; window: PendingWindow }
-  | { type: "think_finished"; spoke: boolean; durationMs: number }
-  | { type: "tts_started"; text: string; characterCount: number }
-  | { type: "tts_finished"; durationMs: number }
-  | { type: "playback_started"; device?: DeviceSelector }
-  | { type: "playback_finished"; durationMs: number }
-  | { type: "tool_call_started"; name: string; args?: unknown }
-  | { type: "tool_call_finished"; name: string; isError: boolean }
-  | { type: "self_echo_ignored"; at: Date }
-  | { type: "error"; stage: string; error: Error };
+  | { type: 'speech_end'; at: Date; speaker?: string; content?: string }
+  | { type: 'pending_created'; window: PendingWindow }
+  | { type: 'pending_merged'; window: PendingWindow }
+  | { type: 'think_started'; window: PendingWindow }
+  | { type: 'think_finished'; spoke: boolean; durationMs: number }
+  | { type: 'tts_started'; text: string; characterCount: number }
+  | { type: 'tts_finished'; durationMs: number }
+  | { type: 'playback_started'; device?: DeviceSelector }
+  | { type: 'playback_finished'; durationMs: number }
+  | { type: 'tool_call_started'; name: string; args?: unknown }
+  | { type: 'tool_call_finished'; name: string; isError: boolean }
+  | { type: 'self_echo_ignored'; at: Date }
+  | { type: 'error'; stage: string; error: Error };
 
 export interface PendingWindow {
   startInclusive: Date;
@@ -27,10 +27,10 @@ export interface PendingWindow {
 }
 
 export type SchedulerState =
-  | { status: "idle" }
-  | { status: "waiting"; pending: PendingWindow; eligibleAt: Date }
-  | { status: "thinking"; run: ThinkRun; pending?: PendingWindow }
-  | { status: "closed" };
+  | { status: 'idle' }
+  | { status: 'waiting'; pending: PendingWindow; eligibleAt: Date }
+  | { status: 'thinking'; run: ThinkRun; pending?: PendingWindow }
+  | { status: 'closed' };
 
 interface ThinkRun {
   window: PendingWindow;
@@ -39,8 +39,8 @@ interface ThinkRun {
 }
 
 export interface ConversationSchedulerOptions {
-  perception: Pick<Perception, "snapshot">;
-  agent: Pick<Agent, "prompt">;
+  perception: Pick<Perception, 'snapshot'>;
+  agent: Pick<Agent, 'prompt'>;
   speak: SpeakController;
   minimumThinkIntervalMs: number;
   startedAt: Date;
@@ -57,7 +57,7 @@ export class ConversationScheduler {
   private retryDelayMs = INITIAL_RETRY_DELAY_MS;
   private thinkTimer: ReturnType<typeof setTimeout> | undefined;
   private activeRun: Promise<void> | undefined;
-  private stateValue: SchedulerState = { status: "idle" };
+  private stateValue: SchedulerState = { status: 'idle' };
   private closed = false;
 
   constructor(private readonly options: ConversationSchedulerOptions) {
@@ -107,41 +107,41 @@ export class ConversationScheduler {
 
     this.closed = true;
     this.clearThinkTimer();
-    this.stateValue = { status: "closed" };
+    this.stateValue = { status: 'closed' };
 
     await this.activeRun;
   }
 
   private mergeSpeechEnd(startAt: Date, at: Date, snapshot: Promise<PerceptionSnapshot>): void {
-    if (this.stateValue.status === "idle") {
+    if (this.stateValue.status === 'idle') {
       const window = this.createWindow(startAt, at, snapshot);
 
       if (this.isEligibleNow()) {
         this.startThink(window);
       } else {
-        this.options.emit({ type: "pending_created", window });
+        this.options.emit({ type: 'pending_created', window });
         this.enterWaiting(window, this.nextEligibleAt());
       }
 
       return;
     }
 
-    if (this.stateValue.status === "waiting") {
+    if (this.stateValue.status === 'waiting') {
       this.stateValue.pending = this.extendWindow(this.stateValue.pending, at, snapshot);
-      this.options.emit({ type: "pending_merged", window: this.stateValue.pending });
+      this.options.emit({ type: 'pending_merged', window: this.stateValue.pending });
 
       return;
     }
 
-    if (this.stateValue.status === "thinking") {
+    if (this.stateValue.status === 'thinking') {
       if (this.stateValue.pending) {
         this.stateValue.pending = this.extendWindow(this.stateValue.pending, at, snapshot);
-        this.options.emit({ type: "pending_merged", window: this.stateValue.pending });
+        this.options.emit({ type: 'pending_merged', window: this.stateValue.pending });
       } else {
         const window = this.createWindow(startAt, at, snapshot);
 
         this.stateValue.pending = window;
-        this.options.emit({ type: "pending_created", window });
+        this.options.emit({ type: 'pending_created', window });
       }
     }
   }
@@ -177,9 +177,9 @@ export class ConversationScheduler {
     const run: ThinkRun = { window, gate, startedAt: new Date() };
 
     this.lastThinkStartedAt = run.startedAt.getTime();
-    this.stateValue = { status: "thinking", run };
+    this.stateValue = { status: 'thinking', run };
 
-    this.options.emit({ type: "think_started", window });
+    this.options.emit({ type: 'think_started', window });
 
     this.activeRun = this.runThink(run);
   }
@@ -200,7 +200,7 @@ export class ConversationScheduler {
       const { delivered } = this.options.speak.endRun();
 
       this.options.emit({
-        type: "think_finished",
+        type: 'think_finished',
         spoke: delivered,
         durationMs: Date.now() - startedAt,
       });
@@ -208,7 +208,7 @@ export class ConversationScheduler {
       this.afterThinkComplete();
     } catch (error) {
       this.options.speak.endRun();
-      this.options.emit({ type: "error", stage: "agent", error: toError(error) });
+      this.options.emit({ type: 'error', stage: 'agent', error: toError(error) });
       this.requeueAndRetry(run);
     }
   }
@@ -229,7 +229,7 @@ export class ConversationScheduler {
 
     this.retryDelayMs = Math.min(this.retryDelayMs * 2, MAX_RETRY_DELAY_MS);
 
-    const existing = this.stateValue.status === "thinking" ? this.stateValue.pending : undefined;
+    const existing = this.stateValue.status === 'thinking' ? this.stateValue.pending : undefined;
     const merged: PendingWindow = existing
       ? {
           startInclusive: run.window.startInclusive,
@@ -239,7 +239,7 @@ export class ConversationScheduler {
         }
       : run.window;
 
-    this.options.emit({ type: "pending_created", window: merged });
+    this.options.emit({ type: 'pending_created', window: merged });
     this.enterWaiting(merged, new Date(Date.now() + backoffMs));
   }
 
@@ -248,10 +248,10 @@ export class ConversationScheduler {
       return;
     }
 
-    const pending = this.stateValue.status === "thinking" ? this.stateValue.pending : undefined;
+    const pending = this.stateValue.status === 'thinking' ? this.stateValue.pending : undefined;
 
     if (!pending) {
-      this.stateValue = { status: "idle" };
+      this.stateValue = { status: 'idle' };
 
       return;
     }
@@ -264,7 +264,7 @@ export class ConversationScheduler {
   }
 
   private enterWaiting(window: PendingWindow, eligibleAt: Date): void {
-    this.stateValue = { status: "waiting", pending: window, eligibleAt };
+    this.stateValue = { status: 'waiting', pending: window, eligibleAt };
     this.scheduleThinkTimer(eligibleAt);
   }
 
@@ -280,7 +280,7 @@ export class ConversationScheduler {
   }
 
   private onThinkEligible(): void {
-    if (this.closed || this.stateValue.status !== "waiting") {
+    if (this.closed || this.stateValue.status !== 'waiting') {
       return;
     }
 
