@@ -1,11 +1,6 @@
-import { fileURLToPath } from 'node:url';
+import { VectorIndex } from '@cieljs/vector';
 
-import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from '@cieljs/model-kit';
-import type { PGlite } from '@electric-sql/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
-
-import { createDatabase, type Database } from './database.ts';
-import { MemoryEmbeddingIndex } from './embedding-index.ts';
+import type { Database } from './database.ts';
 import { MemoryClosedError, MemoryValidationError } from './errors.ts';
 import {
   createGlobalMemory,
@@ -16,7 +11,9 @@ import {
 } from './memory-store.ts';
 import { MemoryRepository } from './repository.ts';
 import { MemoryRetrieval } from './retrieval.ts';
+import { memoryChunks } from './schema.ts';
 import { tokenizeSearchText } from './search.ts';
+import { memoryStorage } from './storage-module.ts';
 import type {
   FindMemorySpacesOptions,
   MemoryEntry,
@@ -31,32 +28,33 @@ import type {
 } from './types.ts';
 import { integerOption } from './validation.ts';
 
-const MIGRATIONS_FOLDER = fileURLToPath(new URL('../migrations/', import.meta.url));
 const ALL_LAYERS = ['global.long_term', 'space.long_term', 'space.daily'] as const;
-
-type ResolvedMemoryManagerOptions = Omit<MemoryManagerOptions, 'embedding'> & {
-  embedding?: ResolvedEmbeddingProvider;
-};
 
 export class MemoryManager implements AsyncDisposable {
   readonly timeZone: string;
   readonly global: GlobalLongTermMemory;
 
-  private readonly embeddingIndex: MemoryEmbeddingIndex;
+  private readonly embeddingIndex: VectorIndex;
   private readonly repository: MemoryRepository;
   private readonly retrieval: MemoryRetrieval;
   private readonly services: MemoryStoreServices;
   private readonly operations = new Set<Promise<unknown>>();
   private closing: Promise<void> | undefined;
 
-  private constructor(
-    private readonly client: PGlite,
-    db: Database,
-    options: ResolvedMemoryManagerOptions,
-  ) {
+  private constructor(db: Database, options: MemoryManagerOptions) {
     this.timeZone = options.timeZone ?? 'Asia/Shanghai';
     const tokenize = options.tokenize ?? tokenizeSearchText;
-    this.embeddingIndex = new MemoryEmbeddingIndex(db, options.embedding, options.onIndexError);
+    this.embeddingIndex = new VectorIndex(
+      db,
+      options.vectors,
+      {
+        namespace: 'memory',
+        table: memoryChunks,
+        id: memoryChunks.id,
+        content: memoryChunks.content,
+      },
+      options.onIndexError,
+    );
     this.repository = new MemoryRepository(db, this.embeddingIndex, this.timeZone, tokenize);
     this.retrieval = new MemoryRetrieval(db, this.embeddingIndex, tokenize);
     this.services = {
@@ -68,10 +66,7 @@ export class MemoryManager implements AsyncDisposable {
   }
 
   static async open(options: MemoryManagerOptions): Promise<MemoryManager> {
-    if (!options.dataDir?.trim()) {
-      throw new MemoryValidationError('dataDir 不能为空');
-    }
-
+    options.storage.require(memoryStorage);
     const timeZone = options.timeZone ?? 'Asia/Shanghai';
 
     try {
@@ -79,29 +74,9 @@ export class MemoryManager implements AsyncDisposable {
     } catch (error) {
       throw new MemoryValidationError('timeZone 必须是有效的 IANA 时区', { cause: error });
     }
-
-    const resolvedOptions: ResolvedMemoryManagerOptions = {
-      ...options,
-      timeZone,
-      embedding: resolveEmbeddingProvider(options.embedding),
-    };
-    const { client, db } = createDatabase(options.dataDir);
-
-    await using disposables = new AsyncDisposableStack();
-    disposables.defer(() => client.close());
-
-    await client.waitReady;
-    await client.exec(
-      'CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;',
-    );
-    await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
-
-    const manager = new MemoryManager(client, db, resolvedOptions);
+    const manager = new MemoryManager(options.storage.db, options);
     await manager.embeddingIndex.prepare();
     manager.embeddingIndex.enqueue();
-
-    // 初始化完成后由 Manager 接管数据库，取消局部作用域的回收。
-    disposables.move();
 
     return manager;
   }
@@ -216,9 +191,6 @@ export class MemoryManager implements AsyncDisposable {
   }
 
   private async closeResources(): Promise<void> {
-    await using disposables = new AsyncDisposableStack();
-    disposables.defer(() => this.client.close());
-
     await Promise.allSettled(this.operations);
     await this.embeddingIndex.flush();
   }

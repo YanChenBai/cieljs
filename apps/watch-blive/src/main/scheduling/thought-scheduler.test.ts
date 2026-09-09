@@ -5,6 +5,37 @@ import { describe, expect, it, vi } from 'vite-plus/test';
 import { ThoughtScheduler } from './thought-scheduler.ts';
 
 describe('ThoughtScheduler', () => {
+  it.each([true, false])('主动取消=%s 时正确区分请求中止和运行失败', async cancelled => {
+    let rejectPrompt!: (error: Error) => void;
+    const prompt = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectPrompt = reject;
+        }),
+    );
+    const onError = vi.fn();
+    const scheduler = new ThoughtScheduler({
+      perception: { snapshot: vi.fn().mockResolvedValue({ compose: async () => [] }) },
+      agent: { prompt },
+      minimumIntervalMs: 0,
+      startedAt: new Date(0),
+      context: () => ({ role: 'user', content: '观察', timestamp: 0 }),
+      onError,
+    });
+
+    scheduler.trigger(new Date(1));
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    if (cancelled) {
+      scheduler.cancel();
+    }
+    rejectPrompt(new Error('Agent 运行失败：Request was aborted'));
+    if (!cancelled) {
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
+    }
+    await scheduler.close();
+    expect(onError).toHaveBeenCalledTimes(cancelled ? 0 : 1);
+  });
+
   it('忽略迟到和重复时间，后续快照边界保持递增', async () => {
     const prompt = vi.fn().mockResolvedValue(undefined);
     const snapshot = vi.fn().mockResolvedValue({ compose: async () => [] });

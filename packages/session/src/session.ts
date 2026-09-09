@@ -1,7 +1,9 @@
+import type { AgentEvent, RuntimeMetadata } from '@cieljs/runtime-protocol';
+import type { Storage } from '@cieljs/storage';
+import type { VectorIndex } from '@cieljs/vector';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { findCompactionBoundary } from './compaction.ts';
-import type { EmbeddingIndex } from './embedding-index.ts';
 import { SessionNotFoundError } from './errors.ts';
 import type { SessionRepository } from './repository.ts';
 import type { SessionRetrieval } from './retrieval.ts';
@@ -15,9 +17,11 @@ import type {
 } from './types.ts';
 
 export interface SessionServices {
+  namespace: string;
+  storage: Storage;
   repository: SessionRepository;
   retrieval: SessionRetrieval;
-  embeddingIndex: EmbeddingIndex;
+  embeddingIndex: VectorIndex;
   compactions: Map<string, Promise<void>>;
   operate<T>(operation: () => Promise<T>): Promise<T>;
 }
@@ -49,6 +53,24 @@ export class Session {
     return this.services.operate(async () => {
       await this.services.embeddingIndex.flush();
       await this.services.repository.delete(this.selector);
+    });
+  }
+
+  record(event: AgentEvent, metadata?: RuntimeMetadata) {
+    return this.services.operate(async () => {
+      const record = await this.services.storage.journal.record(
+        this.id,
+        event,
+        metadata,
+        async (transaction, record) => {
+          if (record.event.type === 'message_end') {
+            await this.services.repository.projectMessage(transaction, this.selector, record);
+          }
+        },
+      );
+
+      this.services.embeddingIndex.enqueue();
+      return record;
     });
   }
 
@@ -137,7 +159,7 @@ export class Session {
   }
 
   private get selector() {
-    return { spaceId: this.spaceId, sessionId: this.id };
+    return { namespace: this.services.namespace, spaceId: this.spaceId, sessionId: this.id };
   }
 
   private async compactInternal(options: CompactionOptions) {

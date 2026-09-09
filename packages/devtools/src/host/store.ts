@@ -1,42 +1,78 @@
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { serialize, deserialize } from 'node:v8';
 
-/** 二进制快照保留图片、循环对象和原始类型，不执行 getter。 */
+import type { Storage, StorageModule } from '@cieljs/storage';
+import { sql } from 'drizzle-orm';
+
+export const devtoolsStorage: StorageModule = {
+  id: 'devtools',
+  migrations: [
+    {
+      id: '0001',
+      sql: `
+ CREATE TABLE devtools.records (
+   id text PRIMARY KEY,
+   category text NOT NULL,
+   sequence bigint NOT NULL,
+   run_id text,
+   value bytea NOT NULL
+ );
+ CREATE INDEX records_order ON devtools.records(category, sequence);
+ CREATE INDEX records_run ON devtools.records(run_id, category, sequence);
+`,
+    },
+  ],
+};
+
 export class TraceStore {
-  private readonly db: DatabaseSync;
-  private readonly writeRecord: StatementSync;
-  private readonly readRecord: StatementSync;
-
-  constructor(directory?: string) {
-    if (directory) mkdirSync(directory, { recursive: true });
-    this.db = new DatabaseSync(directory ? join(directory, 'trace.sqlite') : ':memory:');
-    this.db.exec(`
-      PRAGMA journal_mode = WAL;
-      CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, category TEXT NOT NULL, sequence INTEGER NOT NULL, run_id TEXT, value BLOB NOT NULL);
-      CREATE INDEX IF NOT EXISTS records_order ON records(category, sequence);
-      CREATE INDEX IF NOT EXISTS records_run ON records(run_id, category, sequence);
-    `);
-    // token 事件会频繁写入同一条消息，复用 SQL 语句避免反复编译。
-    this.writeRecord = this.db.prepare('INSERT OR REPLACE INTO records VALUES (?, ?, ?, ?, ?)');
-    this.readRecord = this.db.prepare('SELECT value FROM records WHERE id = ?');
+  private pending = Promise.resolve();
+  private error: unknown;
+  constructor(private readonly storage: Storage) {
+    storage.require(devtoolsStorage);
   }
-
-  get sequence() {
-    return Number(this.db.prepare('SELECT COALESCE(MAX(sequence), 0) AS n FROM records').get()!.n);
+  async sequence() {
+    const result = await this.storage.db.execute<{ n: string }>(
+      sql`SELECT COALESCE(MAX(sequence), 0) AS n FROM devtools.records`,
+    );
+    return Number(result.rows[0]!.n);
   }
-
   put(id: string, category: string, sequence: number, value: unknown, runId?: string) {
-    this.writeRecord.run(id, category, sequence, runId ?? null, serialize(snapshot(value)));
+    const bytes = serialize(snapshot(value));
+    this.pending = this.pending
+      .then(async () => {
+        await this.storage.db.execute(
+          sql`INSERT INTO devtools.records
+              VALUES (${id}, ${category}, ${sequence}, ${runId ?? null}, ${bytes})
+              ON CONFLICT (id) DO UPDATE SET
+                category = EXCLUDED.category,
+                sequence = EXCLUDED.sequence,
+                run_id = EXCLUDED.run_id,
+                value = EXCLUDED.value`,
+        );
+      })
+      .catch(error => {
+        this.error = error;
+      });
   }
+  async get<T>(id: string): Promise<T | undefined> {
+    await this.flush();
+    const result = await this.storage.db.execute<{ value: Uint8Array; category: string }>(
+      sql`SELECT category, value FROM devtools.records WHERE id = ${id}`,
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return undefined;
+    }
 
-  get<T>(id: string): T | undefined {
-    const row = this.readRecord.get(id);
-    return row ? (deserialize(row.value as Uint8Array) as T) : undefined;
+    const value = deserialize(row.value);
+    if (row.category === 'message_reference') {
+      const message = await this.storage.db.execute<{ message: T }>(
+        sql`SELECT record->'event'->'message' AS message FROM storage.events WHERE id = ${value}`,
+      );
+      return message.rows[0]?.message;
+    }
+    return value as T;
   }
-
-  list<T>(
+  async list<T>(
     category: string,
     options: {
       after?: number;
@@ -45,26 +81,30 @@ export class TraceStore {
       runId?: string;
       ascending?: boolean;
     } = {},
-  ): T[] {
-    const rows = this.db
-      .prepare(
-        `SELECT value FROM records WHERE category = ? AND sequence > ? AND sequence < ? AND (? IS NULL OR run_id = ?) ORDER BY sequence ${options.ascending ? 'ASC' : 'DESC'} LIMIT ?`,
-      )
-      .all(
-        category,
-        options.after ?? 0,
-        options.before ?? Number.MAX_SAFE_INTEGER,
-        options.runId ?? null,
-        options.runId ?? null,
-        options.limit ?? 100,
-      );
-    return (options.ascending ? rows : rows.reverse()).map(
-      row => deserialize(row.value as Uint8Array) as T,
+  ): Promise<T[]> {
+    await this.flush();
+    const result = await this.storage.db.execute<{ value: Uint8Array }>(
+      sql`SELECT value FROM devtools.records
+          WHERE category = ${category}
+            AND sequence > ${options.after ?? 0}
+            AND sequence < ${options.before ?? Number.MAX_SAFE_INTEGER}
+            AND (${options.runId ?? null}::text IS NULL OR run_id = ${options.runId ?? null})
+          ORDER BY sequence ${sql.raw(options.ascending ? 'ASC' : 'DESC')}
+          LIMIT ${options.limit ?? 100}`,
     );
+    const rows = options.ascending ? result.rows : result.rows.reverse();
+    return rows.map(row => deserialize(row.value) as T);
   }
-
+  async flush() {
+    await this.pending;
+    if (this.error) {
+      const error = this.error;
+      this.error = undefined;
+      throw error;
+    }
+  }
   close() {
-    this.db.close();
+    return this.flush();
   }
 }
 

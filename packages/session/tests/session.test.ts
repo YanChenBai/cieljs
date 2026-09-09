@@ -1,3 +1,4 @@
+import { Storage } from '@cieljs/storage';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vite-plus/test';
 
@@ -8,6 +9,7 @@ import {
   SessionManager,
   type SessionSpace,
 } from '../src/index.ts';
+import { sessionStorage } from '../src/storage-module.ts';
 import type { GenerateSummaryInput } from '../src/types.ts';
 
 const user = (content: string, timestamp = 1): AgentMessage => ({
@@ -16,16 +18,23 @@ const user = (content: string, timestamp = 1): AgentMessage => ({
   timestamp,
 });
 
+const storages: Storage[] = [];
+async function openStorage() {
+  const storage = await Storage.open({ dataDir: 'memory://', modules: [sessionStorage] });
+  storages.push(storage);
+  return storage;
+}
 let manager: SessionManager;
 let space: SessionSpace;
 
 beforeAll(async () => {
-  manager = await SessionManager.open({ dataDir: 'memory://' });
+  manager = await SessionManager.open({ storage: await openStorage(), namespace: 'test' });
   space = manager.space('room:42');
 }, 30_000);
 
 afterAll(async () => {
   await manager.close();
+  for (const storage of storages.splice(0)) await storage.close();
 });
 
 describe('SessionManager', () => {
@@ -131,7 +140,10 @@ describe('SessionManager', () => {
   });
 
   test('独立目录不会让全局查询 Agent 的自身 Session 混入普通 Session', async () => {
-    const globalManager = await SessionManager.open({ dataDir: 'memory://' });
+    const globalManager = await SessionManager.open({
+      storage: await openStorage(),
+      namespace: 'test',
+    });
 
     try {
       const privateSession = await globalManager
@@ -274,7 +286,10 @@ test('摘要适配器不会重新暴露 thinking', async () => {
 });
 
 test('关闭后拒绝新操作', async () => {
-  const localManager = await SessionManager.open({ dataDir: 'memory://' });
+  const localManager = await SessionManager.open({
+    storage: await openStorage(),
+    namespace: 'test',
+  });
   await localManager.close();
   await expect(localManager.list()).rejects.toBeInstanceOf(SessionClosedError);
 });

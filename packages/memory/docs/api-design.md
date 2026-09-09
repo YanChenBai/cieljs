@@ -345,9 +345,9 @@ const oldRevision = await space.getRevision('memory-1', 1);
 
 ```ts
 export interface MemoryManagerOptions {
-  dataDir: string;
+  storage: Storage;
   timeZone?: string;
-  embedding?: EmbeddingProvider;
+  vectors?: VectorService;
 
   /**
    * 正文与查询共享的分词规则
@@ -1013,9 +1013,8 @@ import { MemoryManager } from '@cieljs/memory';
 import { memoryTools } from '@cieljs/memory/agent';
 
 await using memories = await MemoryManager.open({
-  dataDir: '.ciel/memory',
+  storage,
   timeZone: 'Asia/Shanghai',
-  embedding,
 });
 
 const space = memories.space('blive:room:21452505');

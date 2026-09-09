@@ -5,7 +5,7 @@ import type { TraceEntry, TraceEvent } from '../protocol/index.ts';
 /** 每个原始事件对应一个不可变步骤，sequence 同时用于分页与客户端去重。 */
 export function createTraceStep(
   trace: TraceEvent,
-  tools?: Agent['state']['tools'],
+  tools?: Array<Omit<Agent['state']['tools'][number], 'execute'>>,
   model?: Agent['state']['model'],
 ): TraceEntry {
   const step: TraceEntry = {
@@ -51,7 +51,7 @@ function attachContentReferences(step: TraceEntry, trace: TraceEvent) {
 function attachDisplayMetadata(
   step: TraceEntry,
   event: AgentEvent,
-  tools?: Agent['state']['tools'],
+  tools?: Array<Omit<Agent['state']['tools'][number], 'execute'>>,
   model?: Agent['state']['model'],
 ) {
   if ('toolName' in event) {

@@ -121,9 +121,7 @@ export async function createCielSessionAgent(options: {
   });
 
   const unsubscribe = agent.subscribe(async event => {
-    if (event.type === 'message_end') {
-      await session.appendMessage(event.message);
-    }
+    await session.record(event, { tools, model: options.model });
   });
 
   return new SessionAgentHandle(

@@ -21,8 +21,8 @@ export function createValueRoutes(host: DevtoolsHost) {
 }
 
 /** 检查器只能访问快照自有的数据属性，不能借路径触发 getter 或进入原型链。 */
-function readValue(host: DevtoolsHost, reference: z.infer<typeof valueReferenceSchema>): unknown {
-  let value = host.store.get<unknown>(reference.id);
+async function readValue(host: DevtoolsHost, reference: z.infer<typeof valueReferenceSchema>) {
+  let value = await host.store.get<unknown>(reference.id);
   for (const key of reference.path ?? []) {
     if (!value || typeof value !== 'object') throw new ORPCError('NOT_FOUND');
     const descriptor = Object.getOwnPropertyDescriptor(value, key);

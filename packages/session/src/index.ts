@@ -33,3 +33,5 @@ export type {
   SummarizeInput,
   UpdateSessionInput,
 } from './types.ts';
+
+export { sessionStorage } from './storage-module.ts';

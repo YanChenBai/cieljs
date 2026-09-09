@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { defineTool } from '@cieljs/agent-kit';
+import { memoryStorage } from '@cieljs/memory';
+import { sessionStorage } from '@cieljs/session';
+import { Storage } from '@cieljs/storage';
+import { VectorService, vectorStorage } from '@cieljs/vector';
 import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, registerFauxProvider } from '@earendil-works/pi-ai/compat';
 import { Type } from 'typebox';
@@ -33,19 +37,22 @@ const { closeMcp, createMcp } = vi.hoisted(() => ({
 vi.mock('@cieljs/mcp', () => ({ createMcp }));
 
 const temporaryDirectories: string[] = [];
+const storages: Storage[] = [];
 
 async function createStorage() {
   const root = await mkdtemp(join(tmpdir(), 'ciel-core-'));
   temporaryDirectories.push(root);
 
-  return {
-    session: { dataDir: join(root, 'session') },
-    memory: { dataDir: join(root, 'memory') },
-    investigation: { dataDir: join(root, 'investigation') },
-  };
+  const storage = await Storage.open({
+    dataDir: root,
+    modules: [sessionStorage, memoryStorage, vectorStorage],
+  });
+  storages.push(storage);
+  return { storage };
 }
 
 afterEach(async () => {
+  for (const storage of storages.splice(0)) await storage.close();
   await Promise.all(
     temporaryDirectories.splice(0).map(directory =>
       rm(directory, {
@@ -71,22 +78,6 @@ describe('defineCiel', () => {
     expect(() => assertUniqueTools([tool, tool])).toThrow('工具名称重复：search_memory');
   });
 
-  test('同步拒绝共用存储目录', async () => {
-    const storage = await createStorage();
-    const faux = registerFauxProvider();
-
-    expect(() =>
-      defineCiel({
-        model: faux.getModel(),
-        systemPrompt: 'Ciel',
-        ...storage,
-        investigation: storage.session,
-      }),
-    ).toThrow('必须使用不同的 dataDir');
-
-    faux.unregister();
-  });
-
   test('按配置创建 MCP、向普通 Session 注入工具并统一关闭', async () => {
     const storage = await createStorage();
     const faux = registerFauxProvider();
@@ -107,7 +98,14 @@ describe('defineCiel', () => {
       model: faux.getModel(),
       systemPrompt: 'Ciel',
       ...storage,
-      embedding: qwen(),
+      vectors: new VectorService({
+        storage: storage.storage,
+        provider: qwen(),
+        providerId: 'test',
+        revision: '1',
+        granularity: 'chunk',
+        inputConfig: 'raw',
+      }),
       mcp: {
         enabled: true,
         configFile: '.ciel/test-mcp.json',

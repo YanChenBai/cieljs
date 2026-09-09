@@ -9,7 +9,7 @@
   <a href="./docs/lifecycle.md">存储与生命周期</a>
 </p>
 
-`@cieljs/core` 定义一个 Ciel 运行时，内部管理三套相互独立的存储：
+`@cieljs/core` 定义一个 Ciel 运行时，在共享 Storage 上管理三个业务入口：
 
 | 概念          | 存储             | 职责                       |
 | ------------- | ---------------- | -------------------------- |
@@ -17,27 +17,29 @@
 | Memory        | 长期记忆         | 按需召回稳定事实与偏好     |
 | Investigation | 隔离调查 Session | 只读检索并整理带来源的答案 |
 
-`defineCiel()` 只做定义，`start()` 完成存储初始化，`close()` 统一释放资源。
+`defineCiel()` 只做定义，`start()` 打开业务 Manager，`close()` 释放运行任务；宿主负责最后关闭共享 Storage。
 
 ## 基本使用
 
 ```ts
+import { Storage } from '@cieljs/storage';
+import { sessionStorage } from '@cieljs/session';
+import { memoryStorage } from '@cieljs/memory';
+import { VectorService, vectorStorage } from '@cieljs/vector';
 import { defineCiel } from '@cieljs/core';
+
+await using storage = await Storage.open({
+  dataDir: '.ciel/storage',
+  modules: [sessionStorage, memoryStorage, vectorStorage],
+});
 
 const ciel = defineCiel({
   model,
   systemPrompt: '你是 Ciel。',
-  embedding: {
-    cacheDir: '.cache',
-  },
   mcp: {
     enabled: true,
   },
-  storage: {
-    session: { dataDir: '.ciel/session' },
-    memory: { dataDir: '.ciel/memory' },
-    investigation: { dataDir: '.ciel/investigation' },
-  },
+  storage,
 });
 
 await ciel.start();
@@ -79,9 +81,9 @@ await ciel.close();
 
 ## 存储与生命周期
 
-三套存储必须使用不同的 `dataDir`。`start()` 幂等，`close()` 等待进行中的 Agent 与 Investigation 完成后再释放。详见[存储与生命周期](./docs/lifecycle.md)。
+Session、Memory 和 Vector 使用一个 PGlite 的不同 schema；Investigation 使用 session schema 中的独立 namespace。`start()` 幂等，`close()` 等待进行中的 Agent 与 Investigation 完成后再释放。详见[存储与生命周期](./docs/lifecycle.md)。
 
-Core 默认创建一个共享的 `@cieljs/embed` Qwen embedding provider，并注入普通 Session 与 Memory。`embedding.cacheDir` 可以指定本地模型缓存目录；宿主仍可分别通过 `storage.session.embedding` 和 `storage.memory.embedding` 覆盖默认 provider。Investigation Session 不建立可检索索引，因此不使用该默认 provider。
+向量服务由宿主显式创建并通过 `vectors` 注入。Session 和 Memory 共用计算缓存，Investigation 默认不建立向量索引。详见 [`@cieljs/vector`](../vector/README.md)。
 
 完整类型定义与设计决策见 [API 设计](./docs/api-design.md)。
 

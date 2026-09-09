@@ -16,7 +16,7 @@
 - Investigation 没有自己的 Memory，默认不恢复历史上下文。
 - 显式传入 `sessionId` 时，可以恢复对应的 Investigation Session。
 - Investigation 可以只读检索目标 Ciel 的 Memory、Session 和宿主数据。
-- Investigation Session 使用独立目录保存，不与普通 Session 混合。
+- Investigation Session 使用独立 namespace 保存，不与普通 Session 混合。
 - Core 统一管理内部资源的启动和关闭顺序。
 
 ## 核心概念
@@ -74,16 +74,7 @@ Memory         ── 长期记忆，会按需召回
 Investigation  ── 隔离调查 Session，默认新建并可显式恢复
 ```
 
-推荐目录：
-
-```text
-.ciel/
-├── session/
-├── memory/
-└── investigation/
-```
-
-三个目录必须不同。`defineCiel()` 不允许普通 Session 与 Investigation 共用同一套消息存储。
+宿主创建一个 Storage，各模块使用独立 schema。普通 Session 与 Investigation 使用不同 namespace，Memory 独立维护业务规则。
 
 Investigation 不获得搜索自身或其他 Investigation Session 的工具。只有宿主显式传入 `sessionId` 时，Core 才会恢复指定历史；这些消息不会自动进入普通 Session 或 Memory。
 
@@ -96,13 +87,8 @@ export interface DefineCielOptions {
   model: Model;
   systemPrompt: string;
 
-  storage: {
-    session: SessionStorageOptions;
-    memory: MemoryStorageOptions;
-    investigation: InvestigationStorageOptions;
-  };
-
-  embedding?: QwenEmbeddingOptions;
+  storage: Storage;
+  vectors?: VectorService;
 
   tools?: AgentTool[];
 
@@ -125,7 +111,7 @@ export function defineCiel(options: DefineCielOptions): Ciel;
 
 `defineCiel()` 本身只完成定义，不执行异步 I/O。存储初始化由显式生命周期方法负责：
 
-Core 在 `start()` 时创建一个共享的 `@cieljs/embed` Qwen embedding provider，并将其作为普通 Session 与 Memory 的默认 embedding。`embedding` 透传 Qwen 配置，其中 `cacheDir` 控制 Transformers.js 的本地模型缓存目录。宿主显式传入 `storage.session.embedding` 或 `storage.memory.embedding` 时，分别覆盖对应默认值。Investigation Session 不提供自身检索工具，因此不注入默认 embedding。
+宿主显式创建 VectorService，通过 `vectors` 注入。普通 Session 与 Memory 共享向量缓存，Investigation 默认不建立向量索引。`embedding` 透传 Qwen 配置，其中 `cacheDir` 控制 Transformers.js 的本地模型缓存目录。宿主显式传入 `storage.session.embedding` 或 `storage.memory.embedding` 时，分别覆盖对应默认值。Investigation Session 不提供自身检索工具，因此不注入默认 embedding。
 
 `mcp.enabled` 为 `true` 时，Core 在 `start()` 中创建 MCP，将发现的工具注入普通 Session，并在 `close()` 中统一释放。未配置或设为 `false` 时不会读取 MCP 配置或启动外部进程。`cwd`、`configFile` 与 `required` 直接沿用 `@cieljs/mcp` 的配置语义。
 
@@ -161,7 +147,7 @@ export interface Ciel {
 
 - `start()` 可以重复调用，但只执行一次初始化。
 - `session()` 和 `investigate()` 只能在运行状态调用。
-- `close()` 等待正在执行的 Agent 和 Investigation 完成，再关闭三套存储。
+- `close()` 等待正在执行的 Agent 和 Investigation 完成，再关闭业务 Manager；共享 Storage 由宿主最后关闭。
 - 开始关闭后不再允许创建新的 Session 或 Investigation。
 
 ## Session 身份与动态来源
@@ -443,17 +429,7 @@ Core 不静默吞掉错误。后续实现需要提供统一的错误观察接口
 const ciel = defineCiel({
   model,
   systemPrompt: '你是 Ciel。',
-  storage: {
-    session: {
-      dataDir: '.ciel/session',
-    },
-    memory: {
-      dataDir: '.ciel/memory',
-    },
-    investigation: {
-      dataDir: '.ciel/investigation',
-    },
-  },
+  storage,
   investigation: {
     systemPrompt: '根据检索结果回答问题，并说明信息来源。',
     tools: [searchPerceptionTimeline],

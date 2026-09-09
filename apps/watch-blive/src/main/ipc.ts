@@ -1,6 +1,10 @@
 import { join } from 'node:path';
 
-import { DevtoolsHost } from '@cieljs/devtools/host';
+import { DevtoolsHost, devtoolsStorage } from '@cieljs/devtools/host';
+import { memoryStorage } from '@cieljs/memory';
+import { sessionStorage } from '@cieljs/session';
+import { Storage } from '@cieljs/storage';
+import { vectorStorage } from '@cieljs/vector';
 import { RPCHandler } from '@orpc/server/message-port';
 import { ipcMain, type BrowserWindow, type IpcMainEvent, type MessagePortMain } from 'electron';
 
@@ -10,8 +14,15 @@ import { createWatchRouter } from './router.ts';
 
 export const WATCH_RPC_CHANNEL = 'watch-blive:rpc';
 
-export function registerWatchBliveIpc(mainWindow: BrowserWindow, livePage: LivePage) {
-  const devtools = new DevtoolsHost(300, join(watchDataDirectory(), 'devtools'));
+export async function registerWatchBliveIpc(mainWindow: BrowserWindow, livePage: LivePage) {
+  await using resources = new AsyncDisposableStack();
+  const storage = resources.use(
+    await Storage.open({
+      dataDir: join(watchDataDirectory(), 'storage'),
+      modules: [sessionStorage, memoryStorage, vectorStorage, devtoolsStorage],
+    }),
+  );
+  const devtools = resources.use(await DevtoolsHost.open({ storage }));
   const runtime = createWatchRouter(mainWindow, livePage, devtools);
   const handler = new RPCHandler(runtime.router);
   const ports = new Set<MessagePortMain>();
@@ -46,6 +57,7 @@ export function registerWatchBliveIpc(mainWindow: BrowserWindow, livePage: LiveP
     if (isMainFrame) release();
   };
   mainWindow.webContents.on('did-start-navigation', navigation);
+  const lifetime = resources.move();
   return async () => {
     ipcMain.removeListener(WATCH_RPC_CHANNEL, connect);
     mainWindow.webContents.removeListener('did-start-navigation', navigation);
@@ -53,7 +65,7 @@ export function registerWatchBliveIpc(mainWindow: BrowserWindow, livePage: LiveP
     try {
       await runtime.close();
     } finally {
-      devtools.close();
+      await lifetime.disposeAsync();
     }
   };
 }

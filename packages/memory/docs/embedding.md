@@ -3,14 +3,23 @@
 Embedding 配置与 `@cieljs/model-kit` 共用：
 
 ```ts
-const manager = await MemoryManager.open({
-  dataDir: '.ciel/memory',
-  embedding: {
-    model: 'text-embedding-model',
-    dimensions: 1024,
-    embedBatch,
-  },
+import { Storage } from '@cieljs/storage';
+import { MemoryManager, memoryStorage } from '@cieljs/memory';
+import { VectorService, vectorStorage } from '@cieljs/vector';
+
+await using storage = await Storage.open({
+  dataDir: '.ciel/storage',
+  modules: [memoryStorage, vectorStorage],
 });
+await using vectors = new VectorService({
+  storage,
+  provider: { model: 'text-embedding-model', dimensions: 1024, embedBatch },
+  providerId: 'provider',
+  revision: '1',
+  granularity: 'chunk',
+  inputConfig: 'raw',
+});
+await using manager = await MemoryManager.open({ storage, vectors });
 ```
 
 正文写入和 revision 更新在事务提交后即可被普通读取、全文检索和来源检索看到。向量任务异步执行：

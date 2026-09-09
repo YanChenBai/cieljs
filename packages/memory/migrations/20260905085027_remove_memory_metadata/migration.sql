@@ -1,1 +1,0 @@
-ALTER TABLE "memory_revisions" DROP COLUMN "metadata";

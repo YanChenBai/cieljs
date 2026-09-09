@@ -49,12 +49,27 @@ export function createEmbeddingProvider(
 
 ```ts
 import type { EmbeddingProvider } from '@cieljs/model-kit';
-import { SessionManager } from '@cieljs/session';
+import { Storage } from '@cieljs/storage';
+import { VectorService, vectorStorage } from '@cieljs/vector';
+import { SessionManager, sessionStorage } from '@cieljs/session';
 
 export async function verifyEmbedding(embedding: EmbeddingProvider) {
+  await using storage = await Storage.open({
+    dataDir: '.ciel/storage',
+    modules: [sessionStorage, vectorStorage],
+  });
+  await using vectors = new VectorService({
+    storage,
+    provider: embedding,
+    providerId: 'provider',
+    revision: '1',
+    granularity: 'chunk',
+    inputConfig: 'raw',
+  });
   const manager = await SessionManager.open({
-    dataDir: '.ciel/sessions',
-    embedding,
+    storage,
+    namespace: 'session',
+    vectors,
     onIndexError: error => console.error('向量索引失败', error),
   });
 

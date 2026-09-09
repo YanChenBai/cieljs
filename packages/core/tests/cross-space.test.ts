@@ -2,8 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { memoryStorage } from '@cieljs/memory';
 import { MemoryManager } from '@cieljs/memory';
+import { sessionStorage } from '@cieljs/session';
 import { SessionManager } from '@cieljs/session';
+import { Storage } from '@cieljs/storage';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
 import { expect, test } from 'vite-plus/test';
 
@@ -12,8 +15,9 @@ import { createCielSessionAgent } from '../src/agents/session-agent.ts';
 
 test('跨 Space 读取需要授权，读取不会扩大房间写入权限', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ciel-cross-space-'));
-  const sessions = await SessionManager.open({ dataDir: join(root, 'session') });
-  const memory = await MemoryManager.open({ dataDir: join(root, 'memory') });
+  const storage = await Storage.open({ dataDir: root, modules: [sessionStorage, memoryStorage] });
+  const sessions = await SessionManager.open({ storage, namespace: 'session' });
+  const memory = await MemoryManager.open({ storage });
   const faux = registerFauxProvider();
 
   try {
@@ -109,6 +113,7 @@ test('跨 Space 读取需要授权，读取不会扩大房间写入权限', asyn
     await shared.close();
   } finally {
     await Promise.all([sessions.close(), memory.close()]);
+    await storage.close();
     faux.unregister();
     await rm(root, { recursive: true, force: true });
   }

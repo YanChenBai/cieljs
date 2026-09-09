@@ -1,11 +1,10 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
-  customType,
   date,
   index,
   integer,
-  pgTable,
+  pgSchema,
   primaryKey,
   text,
   timestamp,
@@ -14,13 +13,7 @@ import {
 
 import type { MemoryKind, MemoryLayer, MemoryStatus } from './types.ts';
 
-const vector = customType<{ data: number[]; driverData: string }>({
-  dataType: () => 'vector',
-  toDriver: value => JSON.stringify(value),
-  fromDriver: value => JSON.parse(value) as number[],
-});
-
-export const memories = pgTable(
+export const memories = pgSchema('memory').table(
   'memories',
   {
     id: text('id').primaryKey(),
@@ -48,7 +41,7 @@ export const memories = pgTable(
   ],
 );
 
-export const memoryRevisions = pgTable(
+export const memoryRevisions = pgSchema('memory').table(
   'memory_revisions',
   {
     memoryId: text('memory_id')
@@ -87,7 +80,7 @@ export const memoryRevisions = pgTable(
   ],
 );
 
-export const memoryChunks = pgTable(
+export const memoryChunks = pgSchema('memory').table(
   'memory_chunks',
   {
     id: text('id').primaryKey(),
@@ -108,31 +101,5 @@ export const memoryChunks = pgTable(
     ),
     index('memory_chunks_fts_idx').using('gin', sql`to_tsvector('simple', ${table.tokenText})`),
     index('memory_chunks_trgm_idx').using('gin', sql`${table.searchText} gin_trgm_ops`),
-  ],
-);
-
-export const memoryEmbeddings = pgTable(
-  'memory_embeddings',
-  {
-    chunkId: text('chunk_id')
-      .notNull()
-      .references(() => memoryChunks.id, { onDelete: 'cascade' }),
-    model: text('model').notNull(),
-    dimensions: integer('dimensions').notNull(),
-    embedding: vector('embedding'),
-    status: text('status').$type<'pending' | 'ready' | 'failed'>().notNull().default('pending'),
-    error: text('error'),
-  },
-  table => [
-    primaryKey({ columns: [table.chunkId, table.model, table.dimensions] }),
-    index('memory_embeddings_jobs_idx').on(table.model, table.dimensions, table.status),
-    check(
-      'memory_embeddings_dimensions_check',
-      sql`${table.dimensions} BETWEEN 1 AND 16000 AND (${table.embedding} IS NULL OR vector_dims(${table.embedding}) = ${table.dimensions})`,
-    ),
-    check(
-      'memory_embeddings_status_check',
-      sql`(${table.status} = 'ready' AND ${table.embedding} IS NOT NULL) OR (${table.status} IN ('pending', 'failed') AND ${table.embedding} IS NULL)`,
-    ),
   ],
 );

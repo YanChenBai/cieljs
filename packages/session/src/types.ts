@@ -1,4 +1,5 @@
-import type { EmbeddingProvider } from '@cieljs/model-kit';
+import type { Storage } from '@cieljs/storage';
+import type { VectorService } from '@cieljs/vector';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/model-kit';
@@ -122,8 +123,9 @@ export interface SessionSourceHit {
 }
 
 export interface SessionManagerOptions {
-  dataDir: string;
-  embedding?: EmbeddingProvider;
+  storage: Storage;
+  namespace: string;
+  vectors?: VectorService;
   tokenize?: (text: string) => string[];
   onIndexError?: (error: unknown) => void;
 }

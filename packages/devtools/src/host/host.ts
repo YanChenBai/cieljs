@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import type { RuntimeReader, RuntimeWriter } from '@cieljs/runtime-protocol';
+import type { Storage } from '@cieljs/storage';
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 
 import type { DevtoolsUpdate, TraceEntry, TraceEvent, ValueRef } from '../protocol/index.ts';
@@ -9,7 +11,13 @@ import { preview } from './trace-content.ts';
 import { createTraceStep } from './trace-step.ts';
 
 /** 宿主保存独立的完整快照；内存列表淘汰不删除磁盘记录。 */
-export class DevtoolsHost {
+export class DevtoolsHost implements AsyncDisposable {
+  private readonly observers = new Map<string, AgentTrace>();
+  private projection = Promise.resolve();
+  private cursor = 0;
+  private unsubscribe?: () => void;
+  private currentTrace?: TraceEvent;
+  private entryOrdinal = 0;
   private readonly entries = new Map<string, TraceEntry>();
   private readonly listeners = new Set<(update: DevtoolsUpdate) => void>();
   private readonly dirty = new Set<string>();
@@ -19,6 +27,7 @@ export class DevtoolsHost {
   private eventSequence = 0;
   private readonly wakeListeners = new Set<() => void>();
   private closed = false;
+  private closing?: Promise<void>;
   private readonly lifetime = new AbortController();
   private timer?: ReturnType<typeof setTimeout>;
 
@@ -26,15 +35,70 @@ export class DevtoolsHost {
     return this.lifetime.signal;
   }
 
-  constructor(
+  private constructor(
+    readonly storage: Storage,
+    private readonly source: RuntimeReader,
+    private readonly writer: RuntimeWriter,
     private readonly capacity = 300,
-    directory?: string,
   ) {
     if (!Number.isSafeInteger(capacity) || capacity < 1) throw new Error('capacity 必须是正整数');
+    this.store = new TraceStore(storage);
+  }
 
-    this.store = new TraceStore(directory);
-    this.eventSequence = this.store.sequence;
-    this.sequence = this.eventSequence;
+  static async open(options: {
+    storage: Storage;
+    source?: RuntimeReader;
+    writer?: RuntimeWriter;
+    capacity?: number;
+  }) {
+    const host = new DevtoolsHost(
+      options.storage,
+      options.source ?? options.storage.journal,
+      options.writer ?? options.storage.journal,
+      options.capacity,
+    );
+    host.sequence = await host.store.sequence();
+    host.unsubscribe = host.source.subscribe(() => {
+      // 失败保留在 projection 中，由 flushRecords/close 向调用者报告。
+      void host.catchUp().catch(() => {});
+    });
+    await host.catchUp();
+    return host;
+  }
+
+  private catchUp() {
+    this.projection = this.projection.then(async () => {
+      while (!this.closed) {
+        const records = await this.source.read(this.cursor);
+        if (!records.length) return;
+        for (const trace of records) {
+          let observer = this.observers.get(trace.sessionId);
+          if (!observer) {
+            observer = new AgentTrace(trace.sessionId, {
+              createEntry: (id, kind, name) => this.createEntry(id, kind, name),
+              saveEntry: entry => this.saveEntry(entry),
+              storeValue: (id, value) => this.storeValue(id, value),
+            });
+            this.observers.set(trace.sessionId, observer);
+          }
+          this.currentTrace = trace;
+          this.entryOrdinal = 0;
+          this.eventSequence = trace.sequence;
+          observer.receive(trace);
+          this.saveEvent(trace, trace.metadata);
+          await this.store.flush();
+          this.cursor = trace.sequence;
+          this.currentTrace = undefined;
+        }
+      }
+    });
+    return this.projection;
+  }
+
+  async flushRecords() {
+    await this.writer.flush();
+    await this.catchUp();
+    await this.store.flush();
   }
 
   subscribe(listener: (update: DevtoolsUpdate) => void) {
@@ -57,29 +121,20 @@ export class DevtoolsHost {
       tools: agent.state.tools,
       model: agent.state.model,
     }));
-    return agent.subscribe(event => receive(event));
+    return agent.subscribe(async event => {
+      await receive(event);
+    });
   }
 
   /** 创建独立的 Agent 事件归并器；宿主只分配序号并保存归并结果。 */
   agentListener(sessionId: string, metadata?: () => AgentTraceMetadata) {
-    const observer = new AgentTrace(sessionId, {
-      createEntry: (sessionId, kind, name) => this.createEntry(sessionId, kind, name),
-      saveEntry: entry => this.saveEntry(entry),
-      storeValue: (id, value) => this.storeValue(id, value),
-    });
-
     return (event: AgentEvent, context?: AgentTraceMetadata) => {
       if (this.closed) return;
-
-      const meta = { ...metadata?.(), ...context };
-      const trace = observer.receive(event, meta, ++this.eventSequence);
-      this.saveEvent(trace, meta);
+      return this.writer.record(sessionId, event, { ...metadata?.(), ...context });
     };
   }
 
   private saveEvent(trace: TraceEvent, metadata: AgentTraceMetadata) {
-    this.store.put(trace.id, 'event', trace.sequence, trace, trace.runId);
-
     const step = createTraceStep(trace, metadata.tools, metadata.model);
     this.store.put(step.id, 'step', trace.sequence, step, trace.runId);
     this.stepChanges.set(step.id, step);
@@ -101,11 +156,7 @@ export class DevtoolsHost {
         });
 
         // 先安装唤醒器，再读水位，避免快照和订阅之间丢事件。
-        const events = this.store.list<TraceEvent>('event', {
-          after: afterSequence,
-          limit: 100,
-          ascending: true,
-        });
+        const events = await this.source.read(afterSequence, 100);
 
         for (const event of events) {
           if (this.closed || signal?.aborted) return;
@@ -121,34 +172,57 @@ export class DevtoolsHost {
     }
   }
 
-  close() {
-    if (this.closed) return;
+  close(): Promise<void> {
+    this.closing ??= this.closeResources();
+    return this.closing;
+  }
 
-    this.closed = true;
-    this.lifetime.abort();
-    this.stepChanges.clear();
-    for (const wake of this.wakeListeners) wake();
-    this.store.close();
-    clearTimeout(this.timer);
-    this.listeners.clear();
-    this.entries.clear();
-    this.dirty.clear();
+  private async closeResources() {
+    this.unsubscribe?.();
+    try {
+      await this.flushRecords();
+    } finally {
+      this.closed = true;
+      this.lifetime.abort();
+      this.stepChanges.clear();
+      for (const wake of this.wakeListeners) {
+        wake();
+      }
+      clearTimeout(this.timer);
+      this.listeners.clear();
+      this.entries.clear();
+      this.dirty.clear();
+    }
+  }
+
+  [Symbol.asyncDispose]() {
+    return this.close();
   }
 
   private createEntry(sessionId: string, kind: TraceEntry['kind'], name: string): TraceEntry {
     return {
-      id: randomUUID(),
-      sequence: ++this.sequence,
+      id: this.currentTrace ? `${this.currentTrace.id}:${this.entryOrdinal++}` : randomUUID(),
+      sequence: this.currentTrace?.sequence ?? ++this.sequence,
       sessionId,
       kind,
       name,
       status: 'running',
-      startedAt: Date.now(),
+      startedAt: this.currentTrace?.timestamp ?? Date.now(),
     };
   }
 
   private storeValue(id: string, value: unknown): ValueRef {
-    this.store.put(id, 'value', this.eventSequence, value);
+    const trace = this.currentTrace;
+    const sharedMessage =
+      this.source === this.storage.journal &&
+      trace?.event.type.startsWith('message_') &&
+      id === `${trace.messageId}:output`;
+
+    if (sharedMessage && trace) {
+      this.store.put(id, 'message_reference', this.eventSequence, trace.id);
+    } else {
+      this.store.put(id, 'value', this.eventSequence, value);
+    }
     return { id, preview: preview(value) };
   }
 

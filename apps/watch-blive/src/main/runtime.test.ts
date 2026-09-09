@@ -1,3 +1,7 @@
+import { Storage } from '@cieljs/storage';
+import { afterAll } from 'vite-plus/test';
+const storage = await Storage.open({ dataDir: 'memory://' });
+afterAll(() => storage.close());
 import type { OpenSessionOptions } from '@cieljs/core';
 import type { Perception } from '@cieljs/perception';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
@@ -77,6 +81,7 @@ function setup() {
     streamerHistory: vi.fn().mockResolvedValue({ dynamics: [], videos: [] }),
   };
   runtime = createWatchBlive({
+    storage,
     model: faux.getModel(),
     livePage: page as unknown as LivePage,
     api: api as unknown as BilibiliApi,

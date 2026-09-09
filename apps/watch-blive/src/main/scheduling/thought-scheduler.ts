@@ -50,7 +50,7 @@ export class ThoughtScheduler {
     this.schedule();
   }
 
-  async close(): Promise<void> {
+  cancel(): void {
     this.closed = true;
     this.pending = undefined;
 
@@ -58,7 +58,10 @@ export class ThoughtScheduler {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
+  }
 
+  async close(): Promise<void> {
+    this.cancel();
     await this.active;
   }
 
@@ -136,6 +139,12 @@ export class ThoughtScheduler {
       await this.options.afterRun?.();
       this.options.onRunFinished?.(Date.now() - startedAt);
     } catch (error) {
+      const failure = toError(error);
+      const aborted =
+        failure.name === 'AbortError' || failure.message.includes('Request was aborted');
+      if (this.closed && aborted) {
+        return;
+      }
       if (toError(error).message.includes('content_filter')) {
         this.closed = true;
         this.pending = undefined;

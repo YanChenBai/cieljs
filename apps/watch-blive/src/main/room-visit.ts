@@ -90,6 +90,11 @@ export class RoomVisit {
     );
   }
 
+  cancel(): void {
+    this.scheduler.cancel();
+    this.session.agent.abort();
+  }
+
   close(): Promise<void> {
     this.closePromise ??= this.closeResources();
     return this.closePromise;

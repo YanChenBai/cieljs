@@ -1,17 +1,15 @@
-import { fileURLToPath } from 'node:url';
+import { VectorIndex } from '@cieljs/vector';
+import { and, eq, sql } from 'drizzle-orm';
 
-import { resolveEmbeddingProvider, type ResolvedEmbeddingProvider } from '@cieljs/model-kit';
-import type { PGlite } from '@electric-sql/pglite';
-import { migrate } from 'drizzle-orm/pglite/migrator';
-
-import { createDatabase, type Database } from './database.ts';
-import { EmbeddingIndex } from './embedding-index.ts';
+import type { Database } from './database.ts';
 import { SessionClosedError, SessionValidationError } from './errors.ts';
 import { SessionRepository } from './repository.ts';
 import { SessionRetrieval } from './retrieval.ts';
+import { retrievalChunks, sessions } from './schema.ts';
 import { tokenizeSearchText } from './search.ts';
 import { createSessionSpace, type SessionSpace } from './session-space.ts';
 import { Session, type SessionServices } from './session.ts';
+import { sessionStorage } from './storage-module.ts';
 import type {
   FindSessionsBySourceOptions,
   SearchAllSessionsOptions,
@@ -23,14 +21,9 @@ import type {
   SessionSourceHit,
 } from './types.ts';
 
-const MIGRATIONS_FOLDER = fileURLToPath(new URL('../migrations/', import.meta.url));
-
-type ResolvedSessionManagerOptions = Omit<SessionManagerOptions, 'embedding'> & {
-  embedding?: ResolvedEmbeddingProvider;
-};
-
 export class SessionManager implements AsyncDisposable {
-  private readonly embeddingIndex: EmbeddingIndex;
+  private readonly namespace: string;
+  private readonly embeddingIndex: VectorIndex;
   private readonly repository: SessionRepository;
   private readonly retrieval: SessionRetrieval;
   private readonly services: SessionServices;
@@ -38,16 +31,30 @@ export class SessionManager implements AsyncDisposable {
   private readonly operations = new Set<Promise<unknown>>();
   private closing: Promise<void> | undefined;
 
-  private constructor(
-    private readonly client: PGlite,
-    db: Database,
-    options: ResolvedSessionManagerOptions,
-  ) {
+  private constructor(db: Database, options: SessionManagerOptions) {
+    this.namespace = options.namespace;
     const tokenize = options.tokenize ?? tokenizeSearchText;
-    this.embeddingIndex = new EmbeddingIndex(db, options.embedding, options.onIndexError);
-    this.repository = new SessionRepository(db, this.embeddingIndex, tokenize);
+    this.embeddingIndex = new VectorIndex(
+      db,
+      options.vectors,
+      {
+        namespace: 'session:' + options.namespace,
+        table: retrievalChunks,
+        id: retrievalChunks.id,
+        content: retrievalChunks.content,
+        condition: sessionId =>
+          and(
+            sql`${retrievalChunks.sessionId} IN (SELECT ${sessions.id} FROM ${sessions} WHERE ${sessions.namespace} = ${options.namespace})`,
+            sessionId ? eq(retrievalChunks.sessionId, sessionId) : undefined,
+          ),
+      },
+      options.onIndexError,
+    );
+    this.repository = new SessionRepository(db, this.embeddingIndex, options.storage, tokenize);
     this.retrieval = new SessionRetrieval(db, this.embeddingIndex, tokenize);
     this.services = {
+      namespace: options.namespace,
+      storage: options.storage,
       repository: this.repository,
       retrieval: this.retrieval,
       embeddingIndex: this.embeddingIndex,
@@ -57,31 +64,11 @@ export class SessionManager implements AsyncDisposable {
   }
 
   static async open(options: SessionManagerOptions): Promise<SessionManager> {
-    if (!options.dataDir?.trim()) {
-      throw new SessionValidationError('dataDir 不能为空');
-    }
-
-    const resolvedOptions: ResolvedSessionManagerOptions = {
-      ...options,
-      embedding: resolveEmbeddingProvider(options.embedding),
-    };
-    const { client, db } = createDatabase(options.dataDir);
-
-    await using disposables = new AsyncDisposableStack();
-    disposables.defer(() => client.close());
-
-    await client.waitReady;
-    await client.exec(
-      'CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;',
-    );
-    await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
-
-    const manager = new SessionManager(client, db, resolvedOptions);
+    options.storage.require(sessionStorage);
+    if (!options.namespace?.trim()) throw new SessionValidationError('namespace 不能为空');
+    const manager = new SessionManager(options.storage.db, options);
     await manager.embeddingIndex.prepare();
     manager.embeddingIndex.enqueue();
-
-    // 初始化完成后由 Manager 接管数据库，取消局部作用域的回收。
-    disposables.move();
 
     return manager;
   }
@@ -98,24 +85,26 @@ export class SessionManager implements AsyncDisposable {
 
   getAnySession(id: string): Promise<Session | null> {
     return this.operate(async () => {
-      const info = await this.repository.getInfo({ sessionId: id });
+      const info = await this.repository.getInfo({ namespace: this.namespace, sessionId: id });
       return info ? new Session(this.services, info.id, info.spaceId) : null;
     });
   }
 
   list(options: SessionListOptions = {}): Promise<SessionInfo[]> {
-    return this.operate(() => this.repository.list({}, options));
+    return this.operate(() => this.repository.list({ namespace: this.namespace }, options));
   }
 
   searchAll(query: string, options: SearchAllSessionsOptions = {}): Promise<SessionSearchHit[]> {
-    return this.operate(() => this.retrieval.search({}, query, options));
+    return this.operate(() => this.retrieval.search({ namespace: this.namespace }, query, options));
   }
 
   findSessionsBySource(
     query: string,
     options: FindSessionsBySourceOptions = {},
   ): Promise<SessionSourceHit[]> {
-    return this.operate(() => this.retrieval.findBySource({}, query, options));
+    return this.operate(() =>
+      this.retrieval.findBySource({ namespace: this.namespace }, query, options),
+    );
   }
 
   getIndexStatus(): Promise<SessionIndexStatus> {
@@ -133,7 +122,7 @@ export class SessionManager implements AsyncDisposable {
   rebuildIndexes(): Promise<void> {
     return this.operate(async () => {
       await this.embeddingIndex.flush();
-      await this.repository.rebuildChunks();
+      await this.repository.rebuildChunks({ namespace: this.namespace });
       await this.embeddingIndex.flush();
     });
   }
@@ -149,9 +138,6 @@ export class SessionManager implements AsyncDisposable {
   }
 
   private async closeResources(): Promise<void> {
-    await using disposables = new AsyncDisposableStack();
-    disposables.defer(() => this.client.close());
-
     await Promise.allSettled(this.operations);
     await Promise.allSettled(this.compactions.values());
     await this.embeddingIndex.flush();

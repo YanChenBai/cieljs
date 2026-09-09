@@ -48,8 +48,8 @@ function listRecords(
   });
 }
 
-function readEntry(host: DevtoolsHost, id: string) {
-  const entry = host.store.get<TraceEntry>(id);
+async function readEntry(host: DevtoolsHost, id: string) {
+  const entry = await host.store.get<TraceEntry>(id);
   if (!entry) throw new ORPCError('NOT_FOUND');
   return entry;
 }

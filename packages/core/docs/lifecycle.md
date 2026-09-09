@@ -1,25 +1,10 @@
 # 存储与生命周期
 
-## 三套存储
+## 共享存储
 
-一个 Ciel 运行时管理三套相互独立的存储：
+宿主创建一个 Storage，注册 sessionStorage、memoryStorage 和可选的 vectorStorage、devtoolsStorage。每个模块在自己的 PostgreSQL schema 中维护迁移版本。普通会话和调查会话通过 namespace 隔离，Memory 独立维护业务规则。
 
-```text
-Session        ── 普通对话历史，会恢复到后续上下文
-Memory         ── 长期记忆，会按需召回
-Investigation  ── 隔离调查 Session，默认新建并可显式恢复
-```
-
-推荐目录：
-
-```text
-.ciel/
-├── session/
-├── memory/
-└── investigation/
-```
-
-三个 `dataDir` 必须不同。`defineCiel()` 会同步拒绝普通 Session 与 Investigation 共用同一套消息存储。
+关闭顺序为 Agent / Core、DevTools、VectorService，最后 Storage。Manager 只借用数据库，不负责关闭它。
 
 ## 启动
 
@@ -28,7 +13,7 @@ Investigation  ── 隔离调查 Session，默认新建并可显式恢复
 ```ts
 const ciel = defineCiel(options);
 
-await ciel.start(); // 初始化三套存储，并按配置创建 MCP
+await ciel.start(); // 打开业务 Manager，并按配置创建 MCP
 ```
 
 `start()` 幂等：运行中再次调用直接返回；重复的并发调用共享同一个启动 Promise。启动失败会逆序回收已打开的资源并回到 `idle`；如果回收也失败，`SuppressedError` 会保留初始化和清理错误。

@@ -1,7 +1,7 @@
+import type { VectorIndex } from '@cieljs/vector';
 import { and, asc, desc, eq, lt } from 'drizzle-orm';
 
 import type { Database, Transaction } from './database.ts';
-import type { MemoryEmbeddingIndex } from './embedding-index.ts';
 import {
   MemoryAccessError,
   MemoryArchivedError,
@@ -36,7 +36,7 @@ type RevisionRow = typeof memoryRevisions.$inferSelect;
 export class MemoryRepository {
   constructor(
     private readonly db: Database,
-    private readonly embeddingIndex: MemoryEmbeddingIndex,
+    private readonly embeddingIndex: VectorIndex,
     private readonly timeZone: string,
     private readonly tokenize: (text: string) => string[],
   ) {}

@@ -1,11 +1,12 @@
+import { vectorEntries as memoryEmbeddings, vectorCache } from '@cieljs/vector';
+import type { VectorIndex } from '@cieljs/vector';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { Database } from './database.ts';
-import type { MemoryEmbeddingIndex } from './embedding-index.ts';
 import { MemoryValidationError } from './errors.ts';
 import { filterCondition, type MemorySelector } from './query.ts';
 import { materializeMemory } from './repository.ts';
-import { memories, memoryChunks, memoryEmbeddings, memoryRevisions } from './schema.ts';
+import { memories, memoryChunks, memoryRevisions } from './schema.ts';
 import { normalizeSearchText } from './search.ts';
 import type {
   MemorySearchHit,
@@ -39,7 +40,7 @@ type SearchOptions = MemorySearchOptions & { dateFrom?: string; dateTo?: string 
 export class MemoryRetrieval {
   constructor(
     private readonly db: Database,
-    private readonly embeddingIndex: MemoryEmbeddingIndex,
+    private readonly embeddingIndex: VectorIndex,
     private readonly tokenize: (text: string) => string[],
   ) {}
 
@@ -249,7 +250,7 @@ export class MemoryRetrieval {
     const score = sql<number>`CASE WHEN ${memoryEmbeddings.model} = ${model.model}
       AND ${memoryEmbeddings.dimensions} = ${model.dimensions}
       AND ${memoryEmbeddings.status} = 'ready'
-      THEN 1 - (${memoryEmbeddings.embedding} <=> ${JSON.stringify(vector)}::vector) ELSE NULL END`;
+      THEN 1 - (${vectorCache.embedding} <=> ${JSON.stringify(vector)}::vector) ELSE NULL END`;
     const rows = await this.db
       .select({
         id: memories.id,
@@ -268,9 +269,11 @@ export class MemoryRetrieval {
         ),
       )
       .innerJoin(memoryEmbeddings, eq(memoryEmbeddings.chunkId, memoryChunks.id))
+      .innerJoin(vectorCache, eq(vectorCache.key, memoryEmbeddings.cacheKey))
       .where(
         and(
           filter,
+          eq(memoryEmbeddings.namespace, model.namespace),
           eq(memoryEmbeddings.model, model.model),
           eq(memoryEmbeddings.dimensions, model.dimensions),
           sql`${score} >= ${threshold}`,

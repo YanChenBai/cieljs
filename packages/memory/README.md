@@ -22,12 +22,13 @@ Space API 不会隐式合并全局记忆。跨空间访问只在管理端或显�
 ## 基本使用
 
 ```ts
-import { MemoryManager } from '@cieljs/memory';
+import { Storage } from '@cieljs/storage';
+import { MemoryManager, memoryStorage } from '@cieljs/memory';
 
+await using storage = await Storage.open({ dataDir: '.ciel/storage', modules: [memoryStorage] });
 await using memories = await MemoryManager.open({
-  dataDir: '.ciel/memory',
+  storage,
   timeZone: 'Asia/Shanghai',
-  embedding,
 });
 
 const space = memories.space('blive:room:21452505');

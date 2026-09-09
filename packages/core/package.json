@@ -25,12 +25,16 @@
     "@cieljs/mcp": "workspace:*",
     "@cieljs/memory": "workspace:*",
     "@cieljs/model-kit": "workspace:*",
+    "@cieljs/runtime-protocol": "workspace:*",
     "@cieljs/session": "workspace:*",
+    "@cieljs/storage": "workspace:*",
+    "@cieljs/vector": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@cieljs/devtools": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

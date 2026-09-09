@@ -1,7 +1,8 @@
 import type { McpOptions } from '@cieljs/mcp';
 import type { MemoryManagerOptions } from '@cieljs/memory';
-import type { EmbeddingProvider } from '@cieljs/model-kit';
 import type { SessionManagerOptions } from '@cieljs/session';
+import type { Storage } from '@cieljs/storage';
+import type { VectorService } from '@cieljs/vector';
 import type { Agent, AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
@@ -12,7 +13,6 @@ export type CielStatus = 'idle' | 'starting' | 'running' | 'closing' | 'closed';
 export type SessionStorageOptions = SessionManagerOptions;
 export type MemoryStorageOptions = MemoryManagerOptions;
 export type InvestigationStorageOptions = SessionManagerOptions;
-export type CielEmbeddingOptions = EmbeddingProvider;
 
 export interface CielMcpOptions extends McpOptions {
   enabled: boolean;
@@ -23,15 +23,16 @@ export interface DefineCielOptions {
   /** 请求级 API key，不写入全局环境变量或持久化存储。 */
   apiKey?: string;
   systemPrompt: string;
-  session: Omit<SessionStorageOptions, 'embedding'>;
-  memory: Omit<MemoryStorageOptions, 'embedding'>;
-  embedding?: CielEmbeddingOptions;
+  storage: Storage;
+  session?: Pick<SessionStorageOptions, 'tokenize' | 'onIndexError'>;
+  memory?: Pick<MemoryStorageOptions, 'timeZone' | 'tokenize' | 'onIndexError'>;
+  vectors?: VectorService;
   tools?: AgentTool[];
   mcp?: CielMcpOptions;
   investigation?: {
     systemPrompt?: string;
     tools?: AgentTool[];
-  } & Omit<SessionManagerOptions, 'embedding'>;
+  };
 }
 
 export interface OpenSessionOptions {

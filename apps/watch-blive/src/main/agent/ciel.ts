@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { defineCiel } from '@cieljs/core';
+import type { Storage } from '@cieljs/storage';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
@@ -11,8 +12,9 @@ import { createSystemPrompt } from '../prompts.ts';
 
 const EXPLORATION_SYSTEM_PROMPT = `你负责从宿主提供的真实 Bilibili 直播间候选中选择一个房间。可通过只读工具检索其他房间的 Session 与 Memory，结合来源判断；不编造候选，最终只返回指定 JSON。`;
 
-/** 三类存储独立落盘；工具闭包由宿主维护当前房间和发送权限。 */
+/** 共享数据库由宿主维护；工具闭包由宿主维护当前房间和发送权限。 */
 export function createWatchCiel(options: {
+  storage: Storage;
   model: Model<Api>;
   apiKey?: string;
   mode: StartWatchOptions['mode'];
@@ -26,10 +28,8 @@ export function createWatchCiel(options: {
     apiKey: options.apiKey,
     systemPrompt: createSystemPrompt(options.mode),
     tools: options.danmakuTool ? [options.danmakuTool] : [],
-    session: { dataDir: join(root, 'session') },
-    memory: { dataDir: join(root, 'memory') },
+    storage: options.storage,
     investigation: {
-      dataDir: join(root, 'investigation'),
       systemPrompt: EXPLORATION_SYSTEM_PROMPT,
     },
     mcp: { enabled: true, configFile: join(root, 'mcp.json') },

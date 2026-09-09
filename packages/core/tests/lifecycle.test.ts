@@ -1,4 +1,6 @@
+import { Storage } from '@cieljs/storage';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
+import { afterAll } from 'vite-plus/test';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 
 import { defineCiel } from '../src/index.ts';
@@ -21,19 +23,17 @@ function resource(name: string) {
   };
 }
 vi.mock('@cieljs/session', () => ({
-  SessionManager: { open: async (options: { dataDir: string }) => resource(options.dataDir) },
+  SessionManager: { open: async (options: { namespace: string }) => resource(options.namespace) },
 }));
 vi.mock('@cieljs/memory', () => ({
-  MemoryManager: { open: async (options: { dataDir: string }) => resource(options.dataDir) },
+  MemoryManager: { open: async () => resource('memory') },
 }));
 vi.mock('@cieljs/mcp', () => ({ createMcp: async () => resource('mcp') }));
 const faux = registerFauxProvider();
 const options = {
   model: faux.getModel(),
   systemPrompt: 'test',
-  session: { dataDir: 'session' },
-  investigation: { dataDir: 'investigation' },
-  memory: { dataDir: 'memory' },
+  storage: await Storage.open({ dataDir: 'memory://' }),
   mcp: { enabled: true },
 };
 afterEach(() => {
@@ -94,3 +94,5 @@ test('启动错误与回滚错误均保留，其他资源继续回收', async ()
   expect(closed).toEqual(['memory', 'investigation', 'session']);
   await ciel.close();
 });
+
+afterAll(() => options.storage.close());

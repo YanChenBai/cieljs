@@ -1,15 +1,10 @@
-import { randomUUID } from 'node:crypto';
-
-import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
+import type { AgentEvent } from '@earendil-works/pi-agent-core';
 
 import type { TraceEntry, TraceEvent, ValueRef } from '../protocol/index.ts';
 import { messageContent } from './trace-content.ts';
 
-export interface AgentTraceMetadata {
-  tools?: Agent['state']['tools'];
-  model?: Agent['state']['model'];
-  parentRunId?: string;
-}
+export type { RuntimeMetadata as AgentTraceMetadata } from '@cieljs/runtime-protocol';
+import type { RuntimeMetadata as AgentTraceMetadata } from '@cieljs/runtime-protocol';
 
 interface TraceRecorder {
   createEntry: (sessionId: string, kind: TraceEntry['kind'], name: string) => TraceEntry;
@@ -28,8 +23,6 @@ type ToolUpdateEvent = Extract<
 
 /** 每个观察对象独享关联状态，交错到达的不同 Agent 事件不会串到同一轮运行。 */
 export class AgentTrace {
-  private runId = randomUUID();
-  private turnId?: string;
   private run?: TraceEntry;
   private turn?: TraceEntry;
   private message?: TraceEntry;
@@ -41,38 +34,17 @@ export class AgentTrace {
     private readonly recorder: TraceRecorder,
   ) {}
 
-  receive(event: AgentEvent, metadata: AgentTraceMetadata, sequence: number): TraceEvent {
-    if (event.type === 'agent_start') this.resetRun();
-    if (event.type === 'turn_start') this.turnId = randomUUID();
-
-    const trace: TraceEvent = {
-      id: 'event:' + sequence,
-      sequence,
-      sessionId: this.sessionId,
-      runId: this.runId,
-      turnId: this.turnId,
-      parentRunId: metadata.parentRunId,
-      timestamp: Date.now(),
-      event,
-    };
-
-    this.handleEvent(trace, metadata);
-    this.attachMessageReferences(trace);
-
-    // message_end 本身仍需引用消息，关联完成后才释放当前消息槽位。
-    if (event.type === 'message_end') this.message = undefined;
-
+  receive(trace: TraceEvent): TraceEvent {
+    if (trace.event.type === 'agent_start') {
+      this.run = undefined;
+      this.turn = undefined;
+      this.message = undefined;
+      this.tools.clear();
+      this.callMessages.clear();
+    }
+    this.handleEvent(trace, trace.metadata);
+    if (trace.event.type === 'message_end') this.message = undefined;
     return trace;
-  }
-
-  private resetRun() {
-    this.runId = randomUUID();
-    this.turnId = undefined;
-    this.run = undefined;
-    this.turn = undefined;
-    this.message = undefined;
-    this.tools.clear();
-    this.callMessages.clear();
   }
 
   private handleEvent(trace: TraceEvent, metadata: AgentTraceMetadata) {
@@ -123,6 +95,7 @@ export class AgentTrace {
   private updateMessage(event: MessageEvent, trace: TraceEvent, metadata: AgentTraceMetadata) {
     if (event.type === 'message_start' || !this.message) {
       this.message = this.recorder.createEntry(this.sessionId, 'message', event.message.role);
+      this.message.id = trace.messageId!;
     }
 
     const entry = this.message;
@@ -198,17 +171,5 @@ export class AgentTrace {
     }
 
     this.recorder.saveEntry(entry);
-  }
-
-  private attachMessageReferences(trace: TraceEvent) {
-    const event = trace.event;
-    if (event.type.startsWith('message_')) {
-      trace.messageId = this.message?.id;
-      trace.toolCallId = this.message?.toolCallId;
-    }
-    if ('toolCallId' in event) {
-      trace.messageId = this.callMessages.get(event.toolCallId);
-      trace.toolCallId = event.toolCallId;
-    }
   }
 }

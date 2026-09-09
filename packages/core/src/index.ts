@@ -2,7 +2,6 @@ export { default as models } from './models/index.ts';
 export { defineCiel } from './ciel.ts';
 export type {
   Ciel,
-  CielEmbeddingOptions,
   CielMcpOptions,
   CielSession,
   CielStatus,

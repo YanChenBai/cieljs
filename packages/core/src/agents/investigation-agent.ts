@@ -76,13 +76,13 @@ export async function runInvestigation(options: {
 
   const messages: AgentMessage[] = [];
   const unsubscribe = agent.subscribe(async event => {
+    await session.record(event, { tools, model: options.model });
     options.onEvent?.(event, { tools, model: options.model });
     if (event.type !== 'message_end') {
       return;
     }
 
     messages.push(event.message);
-    await session.appendMessage(event.message);
   });
   const abort = () => agent.abort();
   options.signal?.addEventListener('abort', abort, { once: true });

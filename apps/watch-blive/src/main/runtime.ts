@@ -1,6 +1,7 @@
 import type { Ciel, CielSession } from '@cieljs/core';
 import type { DevtoolsHost } from '@cieljs/devtools/host';
 import { createPerception, type Perception, type PerceptionOptions } from '@cieljs/perception';
+import type { Storage } from '@cieljs/storage';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type {
@@ -25,6 +26,7 @@ import { RoomScorePolicy } from './room-score-policy.ts';
 import { RoomVisit } from './room-visit.ts';
 
 export interface WatchBliveOptions {
+  storage: Storage;
   devtools?: DevtoolsHost;
   model: Model<Api>;
   apiKey?: string;
@@ -134,7 +136,7 @@ class WatchBliveRuntime implements WatchBlive {
     validateStartOptions(options);
     this.loginController?.abort();
     this.runController?.abort();
-    this.visit?.session.agent.abort();
+    this.visit?.cancel();
 
     const controller = new AbortController();
     this.runController = controller;
@@ -215,7 +217,7 @@ class WatchBliveRuntime implements WatchBlive {
 
     this.loginController?.abort();
     this.runController?.abort();
-    this.visit?.session.agent.abort();
+    this.visit?.cancel();
 
     return this.enqueue(() => this.stopRuntime());
   }
@@ -256,6 +258,7 @@ class WatchBliveRuntime implements WatchBlive {
     }
 
     return createWatchCiel({
+      storage: this.options.storage,
       model: this.options.model,
       apiKey: this.options.apiKey,
       mode,
@@ -577,7 +580,7 @@ class WatchBliveRuntime implements WatchBlive {
     const mode = this.requireStartOptions().mode;
     // 先禁止新弹幕并中止正在思考的 Agent，再排队关闭资源，避免下播后仍发送。
     this.setStatus('stopping');
-    visit.session.agent.abort();
+    visit.cancel();
     if (error) this.emitError('media', error);
     void this.enqueue(async () => {
       if (signal.aborted || this.visit?.generation !== generation) return;
@@ -641,7 +644,7 @@ class WatchBliveRuntime implements WatchBlive {
     // 退出应用直接取消，不能因视频的“停止并总结”延迟关闭。
     this.loginController?.abort();
     this.runController?.abort();
-    this.visit?.session.agent.abort();
+    this.visit?.cancel();
     await this.enqueue(() => this.stopRuntime());
     this.currentStatus = 'closed';
     this.listeners.clear();

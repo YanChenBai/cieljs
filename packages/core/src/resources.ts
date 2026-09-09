@@ -2,7 +2,6 @@ import { createMcp, type Mcp } from '@cieljs/mcp';
 import { MemoryManager } from '@cieljs/memory';
 import { SessionManager } from '@cieljs/session';
 
-import { investigationStorage } from './storage.ts';
 import type { DefineCielOptions } from './types.ts';
 
 export class CielResources implements AsyncDisposable {
@@ -18,13 +17,22 @@ export class CielResources implements AsyncDisposable {
     await using disposables = new AsyncDisposableStack();
 
     const sessionManager = disposables.use(
-      await SessionManager.open({ ...options.session, embedding: options.embedding }),
+      await SessionManager.open({
+        ...options.session,
+        storage: options.storage,
+        namespace: 'session',
+        vectors: options.vectors,
+      }),
     );
     const investigationManager = disposables.use(
-      await SessionManager.open(investigationStorage(options)),
+      await SessionManager.open({ storage: options.storage, namespace: 'investigation' }),
     );
     const memoryManager = disposables.use(
-      await MemoryManager.open({ ...options.memory, embedding: options.embedding }),
+      await MemoryManager.open({
+        ...options.memory,
+        storage: options.storage,
+        vectors: options.vectors,
+      }),
     );
 
     let mcp: Mcp | undefined;

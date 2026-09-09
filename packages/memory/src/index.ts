@@ -46,3 +46,5 @@ export type {
   SpaceMemorySourceSearchOptions,
   UpdateMemoryInput,
 } from './types.ts';
+
+export { memoryStorage } from './storage-module.ts';

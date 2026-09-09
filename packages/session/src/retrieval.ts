@@ -1,11 +1,12 @@
+import { vectorEntries as retrievalEmbeddings, vectorCache } from '@cieljs/vector';
+import type { VectorIndex } from '@cieljs/vector';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { Database } from './database.ts';
-import type { EmbeddingIndex } from './embedding-index.ts';
 import { SessionValidationError } from './errors.ts';
 import { chunkCondition, sessionCondition, type SessionSelector } from './query.ts';
 import { materializeMessage, materializeSession } from './repository.ts';
-import { retrievalChunks, retrievalEmbeddings, sessionMessages, sessions } from './schema.ts';
+import { retrievalChunks, sessionMessages, sessions } from './schema.ts';
 import { normalizeSearchText } from './search.ts';
 import type {
   FindSessionsBySourceOptions,
@@ -29,7 +30,7 @@ interface RawSourceHit {
 export class SessionRetrieval {
   constructor(
     private readonly db: Database,
-    private readonly embeddingIndex: EmbeddingIndex,
+    private readonly embeddingIndex: VectorIndex,
     private readonly tokenize: (text: string) => string[],
   ) {}
 
@@ -190,14 +191,16 @@ export class SessionRetrieval {
     const score = sql<number>`CASE WHEN ${retrievalEmbeddings.model} = ${model.model}
       AND ${retrievalEmbeddings.dimensions} = ${model.dimensions}
       AND ${retrievalEmbeddings.status} = 'ready'
-      THEN 1 - (${retrievalEmbeddings.embedding} <=> ${JSON.stringify(vector)}::vector) ELSE NULL END`;
+      THEN 1 - (${vectorCache.embedding} <=> ${JSON.stringify(vector)}::vector) ELSE NULL END`;
     const rows = await this.db
       .select({ messageId: retrievalChunks.messageId, excerpt: retrievalChunks.content, score })
       .from(retrievalChunks)
       .innerJoin(retrievalEmbeddings, eq(retrievalEmbeddings.chunkId, retrievalChunks.id))
+      .innerJoin(vectorCache, eq(vectorCache.key, retrievalEmbeddings.cacheKey))
       .where(
         and(
           chunkCondition(selector),
+          eq(retrievalEmbeddings.namespace, model.namespace),
           eq(retrievalEmbeddings.model, model.model),
           eq(retrievalEmbeddings.dimensions, model.dimensions),
           eq(retrievalEmbeddings.status, 'ready'),
@@ -234,7 +237,16 @@ export class SessionRetrieval {
 
     if (!hits.size) return [];
     const rows = await this.db
-      .select({ message: sessionMessages, spaceId: sessions.spaceId })
+      .select({
+        message: {
+          id: sessionMessages.id,
+          sessionId: sessionMessages.sessionId,
+          seq: sessionMessages.seq,
+          message: sessionMessages.message,
+          createdAt: sessionMessages.createdAt,
+        },
+        spaceId: sessions.spaceId,
+      })
       .from(sessionMessages)
       .innerJoin(sessions, eq(sessions.id, sessionMessages.sessionId))
       .where(and(inArray(sessionMessages.id, [...hits.keys()]), sessionCondition(selector)));

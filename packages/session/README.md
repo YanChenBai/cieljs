@@ -28,9 +28,14 @@
 打开一个会话，写入消息，再取回它的当前上下文：
 
 ```ts
-import { SessionManager } from '@cieljs/session';
+import { Storage } from '@cieljs/storage';
+import { SessionManager, sessionStorage } from '@cieljs/session';
 
-const manager = await SessionManager.open({ dataDir: '.ciel/sessions' });
+await using storage = await Storage.open({
+  dataDir: '.ciel/storage',
+  modules: [sessionStorage],
+});
+const manager = await SessionManager.open({ storage, namespace: 'session' });
 const space = manager.space('blive:room:21452505');
 
 try {

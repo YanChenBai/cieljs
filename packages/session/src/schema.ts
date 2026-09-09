@@ -3,12 +3,10 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   check,
-  customType,
   index,
   integer,
   jsonb,
-  pgTable,
-  primaryKey,
+  pgSchema,
   text,
   timestamp,
   uniqueIndex,
@@ -16,25 +14,19 @@ import {
 
 import type { SessionSource } from './types.ts';
 
-// 不在列类型中固定维数，允许多个模型的派生索引共存。
-const embeddingVector = customType<{ data: number[]; driverData: string }>({
-  dataType: () => 'vector',
-  toDriver: value => JSON.stringify(value),
-  fromDriver: value => JSON.parse(value) as number[],
-});
-
 /**
  * Session 本身。
  *
  * nextMessageSeq 只给 session_messages 使用。
  * Compaction 不参与 Message seq。
  */
-export const sessions = pgTable(
+export const sessions = pgSchema('session').table(
   'sessions',
   {
     id: text('id').primaryKey(),
 
     spaceId: text('space_id').notNull(),
+    namespace: text('namespace').notNull(),
 
     nextMessageSeq: bigint('next_message_seq', {
       mode: 'number',
@@ -78,8 +70,18 @@ export const sessions = pgTable(
 /**
  * Agent Message 是 Session 唯一真实时间线。
  */
-export const sessionMessages = pgTable(
-  'session_messages',
+export const sessionMessages = pgSchema('session')
+  .view('session_messages', {
+    id: text('id').notNull(),
+    sessionId: text('session_id').notNull(),
+    seq: bigint('seq', { mode: 'number' }).notNull(),
+    message: jsonb('message').$type<AgentMessage>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  })
+  .existing();
+
+export const sessionMessageLinks = pgSchema('session').table(
+  'message_links',
   {
     id: text('id').primaryKey(),
 
@@ -93,7 +95,7 @@ export const sessionMessages = pgTable(
       mode: 'number',
     }).notNull(),
 
-    message: jsonb('message').$type<AgentMessage>().notNull(),
+    eventId: text('event_id').notNull(),
 
     createdAt: timestamp('created_at', {
       withTimezone: true,
@@ -111,7 +113,7 @@ export const sessionMessages = pgTable(
  *
  * 表示 summary 已经包含 message 1 ~ 10。
  */
-export const sessionCompactions = pgTable(
+export const sessionCompactions = pgSchema('session').table(
   'session_compactions',
   {
     id: text('id').primaryKey(),
@@ -145,7 +147,7 @@ export const sessionCompactions = pgTable(
  * 当前来源只有 Session Message，
  * 以后 ASR / Percept / Memory 可以继续扩。
  */
-export const retrievalChunks = pgTable(
+export const retrievalChunks = pgSchema('session').table(
   'retrieval_chunks',
   {
     id: text('id').primaryKey(),
@@ -158,7 +160,7 @@ export const retrievalChunks = pgTable(
 
     messageId: text('message_id')
       .notNull()
-      .references(() => sessionMessages.id, {
+      .references(() => sessionMessageLinks.id, {
         onDelete: 'cascade',
       }),
 
@@ -218,41 +220,3 @@ export const retrievalChunks = pgTable(
  *
  * Vector 是派生数据，可以随时重新生成。
  */
-export const retrievalEmbeddings = pgTable(
-  'retrieval_embeddings',
-  {
-    chunkId: text('chunk_id')
-      .notNull()
-      .references(() => retrievalChunks.id, {
-        onDelete: 'cascade',
-      }),
-
-    model: text('model').notNull(),
-
-    dimensions: integer('dimensions').notNull(),
-
-    embedding: embeddingVector('embedding'),
-
-    status: text('status').$type<'pending' | 'ready' | 'failed'>().notNull().default('pending'),
-
-    error: text('error'),
-
-    createdAt: timestamp('created_at', {
-      withTimezone: true,
-    })
-      .notNull()
-      .defaultNow(),
-  },
-  table => [
-    primaryKey({
-      columns: [table.chunkId, table.model, table.dimensions],
-    }),
-
-    index('retrieval_embeddings_model_dimensions_idx').on(table.model, table.dimensions),
-    index('retrieval_embeddings_jobs_idx').on(table.model, table.dimensions, table.status),
-    check(
-      'retrieval_embeddings_status_check',
-      sql`(${table.status} = 'ready' AND ${table.embedding} IS NOT NULL) OR (${table.status} IN ('pending', 'failed') AND ${table.embedding} IS NULL)`,
-    ),
-  ],
-);

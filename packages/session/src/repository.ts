@@ -1,7 +1,9 @@
+import type { RuntimeRecord } from '@cieljs/runtime-protocol';
+import { type Storage, type Transaction } from '@cieljs/storage';
+import type { VectorIndex } from '@cieljs/vector';
 import { and, asc, between, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 
 import type { Database } from './database.ts';
-import type { EmbeddingIndex } from './embedding-index.ts';
 import {
   SessionCompactionConflictError,
   SessionNotFoundError,
@@ -13,7 +15,13 @@ import {
   sessionCondition,
   type SessionSelector,
 } from './query.ts';
-import { retrievalChunks, sessionCompactions, sessionMessages, sessions } from './schema.ts';
+import {
+  retrievalChunks,
+  sessionCompactions,
+  sessionMessages,
+  sessionMessageLinks,
+  sessions,
+} from './schema.ts';
 import { chunkSearchText, messageToSearchText, normalizeSearchText } from './search.ts';
 import type {
   AppendCompactionInput,
@@ -34,7 +42,8 @@ type CompactionRow = typeof sessionCompactions.$inferSelect;
 export class SessionRepository {
   constructor(
     private readonly db: Database,
-    private readonly embeddingIndex: EmbeddingIndex,
+    private readonly embeddingIndex: VectorIndex,
+    private readonly storage: Storage,
     private readonly tokenize: (text: string) => string[],
   ) {}
 
@@ -58,6 +67,7 @@ export class SessionRepository {
       .values({
         id,
         spaceId,
+        namespace: selector.namespace!,
         sources: providedSources ?? [],
         sourceSearchText: normalizeSearchText((providedSources ?? []).join('\n')),
         sourceTokenText: this.toTokenText((providedSources ?? []).join('\n')),
@@ -80,7 +90,7 @@ export class SessionRepository {
           sourceTokenText: this.toTokenText(providedSources.join('\n')),
           updatedAt: new Date(),
         })
-        .where(sessionCondition({ spaceId, sessionId: id }))
+        .where(sessionCondition({ namespace: selector.namespace, spaceId, sessionId: id }))
         .returning();
 
       if (updated) {
@@ -88,7 +98,7 @@ export class SessionRepository {
       }
     }
 
-    const existing = await this.getInfo({ spaceId, sessionId: id });
+    const existing = await this.getInfo({ namespace: selector.namespace, spaceId, sessionId: id });
 
     if (!existing) {
       throw new SessionNotFoundError();
@@ -159,69 +169,84 @@ export class SessionRepository {
     selector: SessionSelector,
     message: MessageRow['message'],
   ): Promise<SessionMessage> {
-    const messageId = crypto.randomUUID();
-    const projectedChunks = chunkSearchText(messageToSearchText(message));
-    const updatedAt = new Date();
-
-    const row = await this.db.transaction(async transaction => {
-      const [counter] = await transaction
-        .update(sessions)
-        .set({ nextMessageSeq: sql`${sessions.nextMessageSeq} + 1`, updatedAt })
-        .where(sessionCondition(selector))
-        .returning({ nextMessageSeq: sessions.nextMessageSeq });
-
-      if (!counter) {
-        throw new SessionNotFoundError();
-      }
-
-      const seq = counter.nextMessageSeq - 1;
-      const [messageRow] = await transaction
-        .insert(sessionMessages)
-        .values({
-          id: messageId,
-          sessionId: selector.sessionId!,
-          seq,
-          message,
-          createdAt: updatedAt,
-        })
-        .returning();
-
-      if (!messageRow) {
-        throw new SessionNotFoundError('消息写入失败');
-      }
-
-      if (!projectedChunks.length) {
-        return messageRow;
-      }
-
-      const chunks = await transaction
-        .insert(retrievalChunks)
-        .values(
-          projectedChunks.map((chunk, chunkIndex) => ({
-            id: crypto.randomUUID(),
-            sessionId: selector.sessionId!,
-            messageId,
-            messageSeq: seq,
-            chunkIndex,
-            content: chunk.content,
-            searchText: chunk.searchText,
-            tokenText: this.toTokenText(chunk.searchText),
-            createdAt: updatedAt,
-          })),
-        )
-        .returning({ id: retrievalChunks.id });
-
-      await this.embeddingIndex.addPending(
-        transaction,
-        chunks.map(chunk => chunk.id),
-      );
-
-      return messageRow;
-    });
-
+    const record = await this.storage.journal.record(
+      selector.sessionId!,
+      { type: 'message_end', message },
+      {},
+      (tx, event) => this.projectMessage(tx, selector, event),
+    );
     this.embeddingIndex.enqueue();
+    return (await this.getMessage(selector, record.messageId!))!;
+  }
 
-    return materializeMessage(row);
+  async projectMessage(
+    transaction: Transaction,
+    selector: SessionSelector,
+    record: RuntimeRecord,
+  ): Promise<void> {
+    if (record.event.type !== 'message_end') return;
+    const messageId = record.messageId!;
+    const message = record.event.message;
+    const projectedChunks = chunkSearchText(messageToSearchText(message));
+    const updatedAt = new Date(record.timestamp);
+    const existing = await transaction
+      .select({ id: sessionMessageLinks.id })
+      .from(sessionMessageLinks)
+      .where(eq(sessionMessageLinks.id, messageId));
+    if (existing.length) return;
+    const [counter] = await transaction
+      .update(sessions)
+      .set({ nextMessageSeq: sql`${sessions.nextMessageSeq} + 1`, updatedAt })
+      .where(sessionCondition(selector))
+      .returning({ nextMessageSeq: sessions.nextMessageSeq });
+
+    if (!counter) {
+      throw new SessionNotFoundError();
+    }
+
+    const seq = counter.nextMessageSeq - 1;
+    const [messageRow] = await transaction
+      .insert(sessionMessageLinks)
+      .values({
+        id: messageId,
+        sessionId: selector.sessionId!,
+        seq,
+        eventId: record.id,
+        createdAt: updatedAt,
+      })
+      .returning();
+
+    if (!messageRow) {
+      throw new SessionNotFoundError('消息写入失败');
+    }
+
+    if (!projectedChunks.length) {
+      return;
+    }
+
+    const chunks = await transaction
+      .insert(retrievalChunks)
+      .values(
+        projectedChunks.map((chunk, chunkIndex) => ({
+          id: crypto.randomUUID(),
+          sessionId: selector.sessionId!,
+          messageId,
+          messageSeq: seq,
+          chunkIndex,
+          content: chunk.content,
+          searchText: chunk.searchText,
+          tokenText: this.toTokenText(chunk.searchText),
+          createdAt: updatedAt,
+        })),
+      )
+      .returning({ id: retrievalChunks.id });
+
+    await this.embeddingIndex.addPending(
+      transaction,
+      chunks.map(chunk => chunk.id),
+    );
+
+    return;
   }
 
   async getMessage(selector: SessionSelector, messageId: string): Promise<SessionMessage | null> {

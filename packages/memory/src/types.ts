@@ -1,4 +1,5 @@
-import type { EmbeddingProvider } from '@cieljs/model-kit';
+import type { Storage } from '@cieljs/storage';
+import type { VectorService } from '@cieljs/vector';
 
 export type { EmbeddingOptions, EmbeddingProvider } from '@cieljs/model-kit';
 
@@ -176,9 +177,9 @@ export interface MemorySpaceSourceHit {
 }
 
 export interface MemoryManagerOptions {
-  dataDir: string;
+  storage: Storage;
   timeZone?: string;
-  embedding?: EmbeddingProvider;
+  vectors?: VectorService;
   tokenize?: (text: string) => string[];
   onIndexError?: (error: unknown) => void;
 }

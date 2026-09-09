@@ -7,7 +7,7 @@ import { isAllowedPageUrl } from './bilibili/page-executor.ts';
 import { prepareWatchResources, migrateWatchResources } from './config.ts';
 import { registerWatchBliveIpc } from './ipc.ts';
 
-function createWindow(): void {
+async function createWindow(): Promise<void> {
   const mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -29,7 +29,7 @@ function createWindow(): void {
   });
 
   const livePage = new LivePage();
-  const disposeIpc = registerWatchBliveIpc(mainWindow, livePage);
+  const disposeIpc = await registerWatchBliveIpc(mainWindow, livePage);
 
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     if (!isAllowedPageUrl(params.src)) {
@@ -86,11 +86,11 @@ app.whenReady().then(async () => {
   await migrateWatchResources();
   app.setAppUserModelId('com.electron');
 
-  createWindow();
+  await createWindow();
 
   app.on('activate', () => {
     // macOS 关闭窗口后保留进程，点击 Dock 图标时重新创建窗口。
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow().catch(console.error);
   });
 });
 

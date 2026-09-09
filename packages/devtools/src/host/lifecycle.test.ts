@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MessageChannel } from 'node:worker_threads';
 
+import { Storage } from '@cieljs/storage';
 import { RPCLink } from '@orpc/client/message-port';
 import { createRouterClient } from '@orpc/server';
 import type { RouterClient } from '@orpc/server';
@@ -10,16 +11,26 @@ import { RPCHandler } from '@orpc/server/message-port';
 import { afterEach, expect, it } from 'vite-plus/test';
 
 import { createDevtoolsClient } from '../client/index.ts';
-import type { TraceEvent, TraceEntry } from '../protocol/index.ts';
+import type { TraceEntry } from '../protocol/index.ts';
 import { DevtoolsHost } from './host.ts';
 import { createDevtoolsRouter } from './router.ts';
-const cleanup: (() => void)[] = [];
-afterEach(() => {
-  for (const close of cleanup.splice(0).reverse()) close();
+import { devtoolsStorage } from './store.ts';
+const cleanup: (() => void | Promise<void>)[] = [];
+async function openHost(capacity?: number, directory = 'memory://') {
+  const storage = await Storage.open({ dataDir: directory, modules: [devtoolsStorage] });
+  const host = await DevtoolsHost.open({ storage, capacity });
+  cleanup.push(async () => {
+    await host.close();
+    await storage.close();
+  });
+  return host;
+}
+afterEach(async () => {
+  for (const close of cleanup.splice(0).reverse()) await close();
 });
 
 it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原对象变化', async () => {
-  const host = new DevtoolsHost();
+  const host = await openHost();
   cleanup.push(() => host.close());
   const receive = host.agentListener('session');
   const message = {
@@ -51,7 +62,8 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
   receive({ type: 'turn_end', message, toolResults: [] });
   receive({ type: 'agent_end', messages: [message] });
   message.content = [];
-  const events = host.store.list<TraceEvent>('event', { ascending: true });
+  await host.flushRecords();
+  const events = await host.storage.journal.read();
   expect(events.map(item => item.event.type)).toEqual([
     'agent_start',
     'turn_start',
@@ -70,9 +82,9 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
   expect(events[2]!.messageId).toBe(events[3]!.messageId);
   expect(events[2]!.turnId).not.toBe(events[8]!.turnId);
   expect(events[4]!.toolCallId).toBe('call-1');
-  const entries = host.store.list<TraceEntry>('entry');
+  const entries = await host.store.list<TraceEntry>('entry');
   expect(entries.find(entry => entry.kind === 'message')!.text).toHaveLength(20000);
-  expect(host.store.get(`${events[2]!.messageId}:output`)).toMatchObject({
+  expect(await host.store.get(`${events[2]!.messageId}:output`)).toMatchObject({
     content: [{ text: 'x'.repeat(20000) }],
   });
   const controller = new AbortController();
@@ -83,21 +95,22 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
   expect((await pending).done).toBe(true);
 });
 
-it('淘汰后与宿主重启后均可按 ID 回读原始图片', () => {
+it('淘汰后与宿主重启后均可按 ID 回读原始图片', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'ciel-trace-'));
   cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
-  const host = new DevtoolsHost(1, directory);
+  const host = await openHost(1, directory);
   host.record('image', { type: 'image', mimeType: 'image/png', data: 'a'.repeat(100000) });
-  const entry = host.store.list<TraceEntry>('entry')[0]!;
+  const entry = (await host.store.list<TraceEntry>('entry'))[0]!;
   host.record('next', 'hello');
-  host.close();
-  const reopened = new DevtoolsHost(1, directory);
+  await host.close();
+  await host.storage.close();
+  const reopened = await openHost(1, directory);
   cleanup.push(() => reopened.close());
-  expect(reopened.store.get(entry.output!.id)).toMatchObject({ data: 'a'.repeat(100000) });
+  expect(await reopened.store.get(entry.output!.id)).toMatchObject({ data: 'a'.repeat(100000) });
 });
 
 it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {
-  const host = new DevtoolsHost();
+  const host = await openHost();
   cleanup.push(() => host.close());
   const router = createDevtoolsRouter(host);
   const handler = new RPCHandler(router);
@@ -124,7 +137,7 @@ it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {
 });
 
 it('宿主关闭会结束等待中的更新订阅', async () => {
-  const host = new DevtoolsHost();
+  const host = await openHost();
   cleanup.push(() => host.close());
   const client = createRouterClient(createDevtoolsRouter(host));
   const updates = await client.updates();
@@ -134,8 +147,8 @@ it('宿主关闭会结束等待中的更新订阅', async () => {
   expect((await pending).done).toBe(true);
 });
 
-it('缺少工具 start 的 update 仍保存原始事件', () => {
-  const host = new DevtoolsHost();
+it('缺少工具 start 的 update 仍保存原始事件', async () => {
+  const host = await openHost();
   cleanup.push(() => host.close());
   host.agentListener('late')({
     type: 'tool_execution_update',
@@ -144,13 +157,14 @@ it('缺少工具 start 的 update 仍保存原始事件', () => {
     args: {},
     partialResult: { text: '部分结果' },
   });
-  const events = host.store.list<TraceEvent>('event');
+  await host.flushRecords();
+  const events = await host.storage.journal.read();
   expect(events).toHaveLength(1);
   expect(events[0]?.toolCallId).toBe('unknown');
 });
 
-it('两个观察器交错执行时保持独立的消息和 run 关联', () => {
-  const host = new DevtoolsHost();
+it('两个观察器交错执行时保持独立的消息和 run 关联', async () => {
+  const host = await openHost();
   cleanup.push(() => host.close());
   const first = host.agentListener('first');
   const second = host.agentListener('second');
@@ -161,7 +175,8 @@ it('两个观察器交错执行时保持独立的消息和 run 关联', () => {
   second({ type: 'message_start', message });
   first({ type: 'message_end', message });
   second({ type: 'message_end', message });
-  const events = host.store.list<TraceEvent>('event');
+  await host.flushRecords();
+  const events = await host.storage.journal.read();
   const a = events.filter(event => event.sessionId === 'first');
   const b = events.filter(event => event.sessionId === 'second');
   expect(a[1]?.messageId).toBe(a[2]?.messageId);

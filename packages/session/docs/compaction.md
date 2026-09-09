@@ -86,9 +86,14 @@ const summarize = createSummarizer({
 接着上面的 `summarize` 示例：
 
 ```ts
-import { SessionManager } from '@cieljs/session';
+import { Storage } from '@cieljs/storage';
+import { SessionManager, sessionStorage } from '@cieljs/session';
 
-const manager = await SessionManager.open({ dataDir: '.ciel/sessions' });
+await using storage = await Storage.open({
+  dataDir: '.ciel/storage',
+  modules: [sessionStorage],
+});
+const manager = await SessionManager.open({ storage, namespace: 'session' });
 try {
   const session = await manager.space('blive:room:21452505').session({
     id: 'conversation-1',

@@ -1,7 +1,10 @@
+import { Storage } from '@cieljs/storage';
+import { VectorService, vectorStorage } from '@cieljs/vector';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vite-plus/test';
 
 import { globalMemoryTools, loadMemoryContext, memoryTools } from '../src/agent/index.ts';
 import { MemoryConflictError, MemoryManager, tokenizeSearchText } from '../src/index.ts';
+import { memoryStorage } from '../src/storage-module.ts';
 
 const spaceId = 'space:alpha';
 const embedBatch = vi.fn(async (texts: string[], options: { purpose: 'document' | 'query' }) =>
@@ -14,6 +17,8 @@ const embedBatch = vi.fn(async (texts: string[], options: { purpose: 'document' 
   }),
 );
 
+let storage: Storage;
+let vectors: VectorService;
 let manager: MemoryManager;
 
 test('默认 tokenizer 使用中文词边界并忽略标点', () => {
@@ -31,15 +36,26 @@ test('默认 tokenizer 使用中文词边界并忽略标点', () => {
 });
 
 beforeAll(async () => {
+  storage = await Storage.open({ dataDir: 'memory://', modules: [memoryStorage, vectorStorage] });
+  vectors = new VectorService({
+    storage,
+    provider: { model: 'test', dimensions: 3, embedBatch },
+    providerId: 'test',
+    revision: '1',
+    granularity: 'chunk',
+    inputConfig: 'raw',
+  });
   manager = await MemoryManager.open({
-    dataDir: 'memory://',
+    storage,
     timeZone: 'Asia/Shanghai',
-    embedding: { model: 'test', dimensions: 3, embedBatch },
+    vectors,
   });
 });
 
 afterAll(async () => {
   await manager.close();
+  await vectors.close();
+  await storage.close();
 });
 
 describe('分层与 revision', () => {
@@ -366,9 +382,11 @@ describe('Agent 接入', () => {
 test('本地数据库可重复打开并保留 revision', async () => {
   const dataDir = await mkdtemp(join(tmpdir(), 'ciel-memory-'));
   let persistent: MemoryManager | undefined;
+  let persistentStorage: Storage | undefined;
 
   try {
-    persistent = await MemoryManager.open({ dataDir });
+    persistentStorage = await Storage.open({ dataDir, modules: [memoryStorage] });
+    persistent = await MemoryManager.open({ storage: persistentStorage });
     const original = await persistent.space('persistent').longTerm.remember({
       content: '持久化旧版本',
       sources: ['persistence:test'],
@@ -378,8 +396,10 @@ test('本地数据库可重复打开并保留 revision', async () => {
       content: '持久化新版本',
     });
     await persistent.close();
+    await persistentStorage.close();
 
-    persistent = await MemoryManager.open({ dataDir });
+    persistentStorage = await Storage.open({ dataDir, modules: [memoryStorage] });
+    persistent = await MemoryManager.open({ storage: persistentStorage });
     expect(await persistent.space('persistent').get(original.id)).toMatchObject({
       content: '持久化新版本',
       revision: 2,
@@ -389,6 +409,7 @@ test('本地数据库可重复打开并保留 revision', async () => {
     });
   } finally {
     await persistent?.close();
+    await persistentStorage?.close();
     await rm(dataDir, { recursive: true, force: true });
   }
 }, 30000);

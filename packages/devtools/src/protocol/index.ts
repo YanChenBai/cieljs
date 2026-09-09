@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@earendil-works/pi-agent-core';
+import type { RuntimeRecord } from '@cieljs/runtime-protocol';
 
 export interface TraceEntry {
   id: string;
@@ -35,15 +35,4 @@ export interface DevtoolsUpdate {
   steps: TraceEntry[];
 }
 
-export interface TraceEvent {
-  id: string;
-  sequence: number;
-  sessionId: string;
-  runId: string;
-  parentRunId?: string;
-  turnId?: string;
-  messageId?: string;
-  toolCallId?: string;
-  timestamp: number;
-  event: AgentEvent;
-}
+export type TraceEvent = RuntimeRecord;

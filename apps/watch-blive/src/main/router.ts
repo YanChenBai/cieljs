@@ -49,6 +49,7 @@ export function createWatchRouter(
       livePage,
       api,
       devtools,
+      storage: devtools.storage,
       dataDir: watchDataDirectory(),
       ffmpegPath: config.ffmpegPath,
       ...config.interaction,

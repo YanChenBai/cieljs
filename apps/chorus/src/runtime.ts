@@ -3,7 +3,11 @@ import { join, resolve } from 'node:path';
 
 import { defineCiel, type Ciel, type CielSession } from '@cieljs/core';
 import { qwen } from '@cieljs/embed';
+import { memoryStorage } from '@cieljs/memory';
 import { createPerception, type Perception, type SpeechEndEvent } from '@cieljs/perception';
+import { sessionStorage } from '@cieljs/session';
+import { Storage } from '@cieljs/storage';
+import { VectorService, vectorStorage } from '@cieljs/vector';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import { createAudioInput } from './audio/input.ts';
@@ -55,6 +59,8 @@ class ChorusRuntime implements Chorus {
   private readonly listeners = new Set<(event: ChorusEvent) => void>();
   private readonly selfEcho = new SelfEchoFilter();
 
+  private storage?: Storage;
+  private vectors?: VectorService;
   private ciel?: Ciel;
   private session?: CielSession;
   private perception?: Perception;
@@ -146,13 +152,28 @@ class ChorusRuntime implements Chorus {
         onAecReference: pcm => this.input?.pushAecReference(pcm),
       });
 
+      this.storage = await Storage.open({
+        dataDir: join(resolve(this.options.dataDir ?? join(homedir(), '.ciel')), 'storage'),
+        modules: [sessionStorage, memoryStorage, vectorStorage],
+      });
+      if (config.embedding) {
+        this.vectors = new VectorService({
+          storage: this.storage,
+          provider: qwen(config.embedding),
+          providerId: 'qwen',
+          revision: '1',
+          granularity: 'chunk',
+          inputConfig: 'qwen-default',
+        });
+      }
+
       this.ciel = defineCiel({
         model: this.options.model,
         systemPrompt: CHORUS_SYSTEM_PROMPT,
-        embedding: config.embedding ? qwen(config.embedding) : undefined,
+        storage: this.storage,
+        vectors: this.vectors,
         tools: [speakTool],
         mcp: config.mcp,
-        ...this.createStorage(),
       });
 
       await this.ciel.start();
@@ -209,16 +230,6 @@ class ChorusRuntime implements Chorus {
       apiKey,
       model: this.options.config.tts.model,
     });
-  }
-
-  private createStorage() {
-    const root = resolve(this.options.dataDir ?? join(homedir(), '.ciel'));
-
-    return {
-      session: { dataDir: join(root, 'session') },
-      memory: { dataDir: join(root, 'memory') },
-      investigation: { dataDir: join(root, 'investigation') },
-    };
   }
 
   private async pumpAudio(scheduler: ConversationScheduler, config: ChorusConfig): Promise<void> {
@@ -292,7 +303,15 @@ class ChorusRuntime implements Chorus {
     await this.output?.close();
     await this.tts?.close();
     await this.session?.close();
-    await this.ciel?.close();
+    try {
+      await this.ciel?.close();
+    } finally {
+      try {
+        await this.vectors?.close();
+      } finally {
+        await this.storage?.close();
+      }
+    }
 
     this.schedulerInstance = undefined;
     this.session = undefined;

@@ -2,7 +2,6 @@ import { runInvestigation } from './agents/investigation-agent.ts';
 import { createCielSessionAgent, type SessionAgentHandle } from './agents/session-agent.ts';
 import { CielResources } from './resources.ts';
 import { createSourceResolver } from './sources.ts';
-import { assertDistinctStorage } from './storage.ts';
 import type {
   Ciel,
   CielSession,
@@ -211,7 +210,5 @@ class CielRuntime implements Ciel {
 }
 
 export function defineCiel(options: DefineCielOptions): Ciel {
-  assertDistinctStorage(options);
-
   return new CielRuntime(options);
 }

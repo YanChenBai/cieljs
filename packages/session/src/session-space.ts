@@ -24,7 +24,7 @@ export interface SessionSpace {
 }
 
 export function createSessionSpace(services: SessionServices, spaceId: string): SessionSpace {
-  const selector = { spaceId };
+  const selector = { namespace: services.namespace, spaceId };
 
   return {
     spaceId,

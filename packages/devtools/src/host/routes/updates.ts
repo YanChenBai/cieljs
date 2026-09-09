@@ -31,8 +31,8 @@ async function* subscribeUpdates(
   signal.addEventListener('abort', abort);
   try {
     yield {
-      entries: host.store.list<TraceEntry>('entry', { limit: 300 }),
-      steps: host.store.list<TraceEntry>('step', { limit: 300 }),
+      entries: await host.store.list<TraceEntry>('entry', { limit: 300 }),
+      steps: await host.store.list<TraceEntry>('step', { limit: 300 }),
     };
     while (!signal.aborted) {
       const pending = new Promise<void>(resolve => {
