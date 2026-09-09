@@ -54,14 +54,14 @@ export interface InvestigationResult {
   messages: AgentMessage[];
 }
 
-export interface CielSession {
+export interface CielSession extends AsyncDisposable {
   readonly id: string;
   readonly spaceId: string;
   readonly agent: Agent;
   close(): Promise<void>;
 }
 
-export interface Ciel {
+export interface Ciel extends AsyncDisposable {
   readonly status: CielStatus;
   start(): Promise<void>;
   session(options: OpenSessionOptions): Promise<CielSession>;

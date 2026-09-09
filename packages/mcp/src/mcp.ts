@@ -14,34 +14,42 @@ import type {
   McpToolDetails,
 } from './types.ts';
 
-export class Mcp implements McpRuntime {
+export class Mcp implements McpRuntime, AsyncDisposable {
   readonly servers = new Map<string, McpServer>();
 
   readonly tools: AgentTool[] = [];
+
+  private readonly disposables = new AsyncDisposableStack();
+  private closing: Promise<void> | undefined;
 
   private constructor(private readonly cwd: string) {}
 
   static async open(options: McpOptions = {}): Promise<Mcp> {
     const loaded = await loadMcpConfig(options);
-    const mcp = new Mcp(loaded.cwd);
+    await using disposables = new AsyncDisposableStack();
+    const mcp = disposables.use(new Mcp(loaded.cwd));
 
-    try {
-      await mcp.connectServers(loaded.config.mcpServers ?? {});
+    await mcp.connectServers(loaded.config.mcpServers ?? {});
+    disposables.move();
 
-      return mcp;
-    } catch (error) {
-      await mcp.close();
-      throw error;
-    }
+    return mcp;
   }
 
-  async close(): Promise<void> {
-    const clients = [...this.servers.values()].map(server => server.client);
+  close(): Promise<void> {
+    this.closing ??= this.closeResources();
 
+    return this.closing;
+  }
+
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.close();
+  }
+
+  private async closeResources(): Promise<void> {
     this.servers.clear();
     this.tools.length = 0;
 
-    await Promise.allSettled(clients.map(client => client.close()));
+    await this.disposables.disposeAsync();
   }
 
   private async connectServers(configs: Record<string, McpServerConfig>): Promise<void> {
@@ -68,6 +76,8 @@ export class Mcp implements McpRuntime {
       cwd: resolveServerCwd(this.cwd, config.cwd),
       env: config.env,
     });
+
+    this.disposables.defer(() => client.close());
 
     await client.connect(transport, {
       timeout: config.timeout,

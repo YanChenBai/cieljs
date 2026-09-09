@@ -29,10 +29,12 @@ export class SessionAgentHandle {
   }
 
   private async closeAgent() {
+    await using disposables = new AsyncDisposableStack();
+    disposables.defer(() => this.onClose(this));
+    disposables.defer(() => this.unsubscribe());
+
     this.markClosed();
     await this.agent.waitForIdle();
-    this.unsubscribe();
-    this.onClose(this);
   }
 }
 

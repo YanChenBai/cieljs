@@ -1,11 +1,8 @@
-import { createMcp, type Mcp } from '@cieljs/mcp';
-import { MemoryManager } from '@cieljs/memory';
-import { SessionManager } from '@cieljs/session';
-
 import { runInvestigation } from './agents/investigation-agent.ts';
 import { createCielSessionAgent, type SessionAgentHandle } from './agents/session-agent.ts';
+import { CielResources } from './resources.ts';
 import { createSourceResolver } from './sources.ts';
-import { assertDistinctStorage, investigationStorage } from './storage.ts';
+import { assertDistinctStorage } from './storage.ts';
 import type {
   Ciel,
   CielSession,
@@ -15,12 +12,6 @@ import type {
   InvestigationResult,
   OpenSessionOptions,
 } from './types.ts';
-
-interface CielResources {
-  sessionManager: SessionManager;
-  investigationManager: SessionManager;
-  memoryManager: MemoryManager;
-}
 
 class CielSessionRuntime implements CielSession {
   readonly id: string;
@@ -33,6 +24,10 @@ class CielSessionRuntime implements CielSession {
     this.agent = handle.agent;
   }
 
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.close();
+  }
+
   close() {
     return this.handle.close();
   }
@@ -42,10 +37,7 @@ class CielRuntime implements Ciel {
   private currentStatus: CielStatus = 'idle';
   private startPromise: Promise<void> | undefined;
   private closePromise: Promise<void> | undefined;
-  private sessionManager: SessionManager | undefined;
-  private investigationManager: SessionManager | undefined;
-  private memoryManager: MemoryManager | undefined;
-  private mcp: Mcp | undefined;
+  private resources: CielResources | undefined;
 
   private readonly sessions = new Set<SessionAgentHandle>();
   private readonly sessionOpenings = new Set<Promise<SessionAgentHandle>>();
@@ -89,7 +81,7 @@ class CielRuntime implements Ciel {
       model: this.options.model,
       apiKey: this.options.apiKey,
       systemPrompt: this.options.systemPrompt,
-      tools: [...(this.options.tools ?? []), ...(this.mcp?.tools ?? [])],
+      tools: [...(this.options.tools ?? []), ...(resources.mcp?.tools ?? [])],
       sessionManager: resources.sessionManager,
       memoryManager: resources.memoryManager,
       sessionId: options.sessionId,
@@ -151,36 +143,16 @@ class CielRuntime implements Ciel {
     return this.closePromise;
   }
 
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.close();
+  }
+
   private async startResources() {
     try {
-      this.sessionManager = await SessionManager.open({
-        ...this.options.session,
-        embedding: this.options.embedding,
-      });
-      this.investigationManager = await SessionManager.open(investigationStorage(this.options));
-      this.memoryManager = await MemoryManager.open({
-        ...this.options.memory,
-        embedding: this.options.embedding,
-      });
-
-      if (this.options.mcp?.enabled) {
-        const { enabled: _, ...mcpOptions } = this.options.mcp;
-
-        this.mcp = await createMcp(mcpOptions);
-      }
+      this.resources = await CielResources.open(this.options);
 
       if (this.currentStatus !== 'closing') this.currentStatus = 'running';
     } catch (error) {
-      await Promise.allSettled([
-        this.sessionManager?.close(),
-        this.investigationManager?.close(),
-        this.memoryManager?.close(),
-        this.mcp?.close(),
-      ]);
-      this.sessionManager = undefined;
-      this.investigationManager = undefined;
-      this.memoryManager = undefined;
-      this.mcp = undefined;
       this.startPromise = undefined;
       if (this.currentStatus !== 'closing') this.currentStatus = 'idle';
 
@@ -205,15 +177,10 @@ class CielRuntime implements Ciel {
       ...[...this.sessions].map(session => session.close()),
       ...this.investigations,
     ]);
-    const storageResults = await Promise.allSettled([
-      this.sessionManager?.close(),
-      this.investigationManager?.close(),
-      this.memoryManager?.close(),
-      this.mcp?.close(),
-    ]);
+    const storageResults = await Promise.allSettled([this.resources?.[Symbol.asyncDispose]()]);
 
     this.currentStatus = 'closed';
-    this.mcp = undefined;
+    this.resources = undefined;
 
     const failures = [...openingResults, ...activeResults, ...storageResults]
       .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
@@ -231,15 +198,11 @@ class CielRuntime implements Ciel {
   }
 
   private requireResources(): CielResources {
-    if (!this.sessionManager || !this.investigationManager || !this.memoryManager) {
+    if (!this.resources) {
       throw new Error('Ciel 尚未完成启动');
     }
 
-    return {
-      sessionManager: this.sessionManager,
-      investigationManager: this.investigationManager,
-      memoryManager: this.memoryManager,
-    };
+    return this.resources;
   }
 
   private removeSession(session: SessionAgentHandle) {

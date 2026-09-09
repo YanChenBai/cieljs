@@ -26,6 +26,7 @@ const { closeMcp, createMcp } = vi.hoisted(() => ({
   createMcp: vi.fn(async () => ({
     tools: [] as unknown[],
     close: vi.fn(async () => {}),
+    [Symbol.asyncDispose]: vi.fn(async () => {}),
   })),
 }));
 
@@ -99,6 +100,7 @@ describe('defineCiel', () => {
     createMcp.mockResolvedValueOnce({
       tools: [tool],
       close: closeMcp,
+      [Symbol.asyncDispose]: closeMcp,
     });
 
     const ciel = defineCiel({

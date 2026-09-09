@@ -87,23 +87,23 @@ export class MemoryManager implements AsyncDisposable {
     };
     const { client, db } = createDatabase(options.dataDir);
 
-    try {
-      await client.waitReady;
-      await client.exec(
-        'CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;',
-      );
-      await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+    await using disposables = new AsyncDisposableStack();
+    disposables.defer(() => client.close());
 
-      const manager = new MemoryManager(client, db, resolvedOptions);
-      await manager.embeddingIndex.prepare();
-      manager.embeddingIndex.enqueue();
+    await client.waitReady;
+    await client.exec(
+      'CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;',
+    );
+    await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
 
-      return manager;
-    } catch (error) {
-      await client.close();
+    const manager = new MemoryManager(client, db, resolvedOptions);
+    await manager.embeddingIndex.prepare();
+    manager.embeddingIndex.enqueue();
 
-      throw error;
-    }
+    // 初始化完成后由 Manager 接管数据库，取消局部作用域的回收。
+    disposables.move();
+
+    return manager;
   }
 
   space(spaceId: string): SpaceMemory {
@@ -206,17 +206,21 @@ export class MemoryManager implements AsyncDisposable {
   }
 
   close(): Promise<void> {
-    this.closing ??= (async () => {
-      await Promise.allSettled(this.operations);
-      await this.embeddingIndex.flush();
-      await this.client.close();
-    })();
+    this.closing ??= this.closeResources();
 
     return this.closing;
   }
 
   [Symbol.asyncDispose](): Promise<void> {
     return this.close();
+  }
+
+  private async closeResources(): Promise<void> {
+    await using disposables = new AsyncDisposableStack();
+    disposables.defer(() => this.client.close());
+
+    await Promise.allSettled(this.operations);
+    await this.embeddingIndex.flush();
   }
 
   private assertOpen(): void {
