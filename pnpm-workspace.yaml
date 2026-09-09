@@ -72,7 +72,7 @@ minimumReleaseAgeExclude:
   - '@orpc/contract@2.0.0-beta.33'
   - '@orpc/server@2.0.0-beta.33'
   - '@orpc/shared@2.0.0-beta.33'
-  - veldorajs@0.0.1 || 0.0.2 || 0.0.3
+  - veldorajs@0.0.1 || 0.0.2 || 0.0.3 || 0.0.4
   - '@types/node@26.5.0'
   - electron-to-chromium@1.5.423
   - entities@8.1.0
@@ -88,3 +88,6 @@ peerDependencyRules:
     - vitest
   allowedVersions:
     vite: '*'
+
+patchedDependencies:
+  sherpa-onnx-node@1.13.7: patches/sherpa-onnx-node@1.13.7.patch

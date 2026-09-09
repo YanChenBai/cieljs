@@ -20,7 +20,7 @@ import { installKWSModels } from './kws.ts';
 import { installModels, type InstallModelsOptions } from './model-installer.ts';
 import { createAudioConfig } from './models.ts';
 import { ProcessASR } from './process-asr.ts';
-import { ASR_MODELS, DEFAULT_ASR_MODEL } from './registry.ts';
+import { ASR_MODELS, DEFAULT_ASR_MODEL, type ASRModelId } from './registry.ts';
 import { SpeakerTracker } from './speaker.ts';
 import type { ASREventMap, ASROptions, ASRSegment, ASRResult, Unsubscribe } from './types.ts';
 import { WakeGate } from './wake-gate.ts';
@@ -43,9 +43,25 @@ export class NativeASR {
   private closed = false;
   private readonly windowSize: number;
   private streamStartAt?: Date;
+  private currentModel: ASRModelId;
+
+  setModel(model: ASRModelId): void {
+    if (this.closed) throw new Error('ASR is closed');
+    if (model === this.currentModel) return;
+    const definition = ASR_MODELS[model];
+    if (!this.vad && !definition.events)
+      throw new Error('Selected ASR model does not support audio events');
+
+    // 先准备新识别器，失败时旧模型仍可继续；尾段必须由旧模型完成。
+    const recognizer = definition.create();
+    this.flush();
+    this.recognizer = recognizer;
+    this.currentModel = model;
+  }
 
   constructor(options: ASROptions = {}) {
     validateOptions(options);
+    this.currentModel = options.model ?? DEFAULT_ASR_MODEL;
 
     const models = createAudioConfig();
     const bufferSeconds = options.bufferSeconds ?? DEFAULT_BUFFER_SECONDS;
@@ -152,6 +168,7 @@ export class NativeASR {
       const samples = this.buffer.get(this.buffer.head(), this.windowSize);
       this.buffer.pop(this.windowSize);
       this.vad.acceptWaveform(samples);
+      this.drainVad();
     }
   }
 
@@ -177,6 +194,7 @@ export class NativeASR {
     if (result.content || result.events?.length) {
       this.emit('result', {
         ...result,
+        model: this.currentModel,
         speaker: result.content ? this.speaker?.assign(segment.samples, SAMPLE_RATE) : undefined,
         startAt: segmentStartAt,
         endAt: segmentEndAt,
@@ -213,6 +231,10 @@ export class ASR implements AsyncDisposable {
   constructor(options: ASROptions = {}) {
     this.backend = process.versions.electron ? new ProcessASR(options) : new NativeASR(options);
     if (options.wake) this.gate = new WakeGate(this.backend, options.wake);
+  }
+
+  async setModel(model: ASRModelId): Promise<void> {
+    await this.backend.setModel(model);
   }
 
   write(segment: ASRSegment): void | Promise<void> {

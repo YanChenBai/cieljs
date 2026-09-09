@@ -64,7 +64,10 @@ for await (const line of input) {
           data: Buffer.from(command.data, 'base64'),
           startAt: new Date(command.startAt),
         });
-      else if (command.type === 'flush') stream.flush();
+      else if (command.type === 'set-model') {
+        if (!(stream instanceof NativeASR)) throw new Error('Only ASR supports model switching');
+        stream.setModel(command.model);
+      } else if (command.type === 'flush') stream.flush();
       else await stream.close();
     }
     if (operationError) throw operationError;

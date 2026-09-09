@@ -44,6 +44,8 @@ export interface ASRToken {
 }
 
 export interface ASRResult {
+  /** 实际产出此段结果的模型；旧的持久化结果可能没有此字段。 */
+  model?: ASRModelId;
   content: string;
   language?: string;
   emotion?: string;

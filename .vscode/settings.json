@@ -55,6 +55,7 @@
     "tsvector",
     "typebox",
     "vcodec",
+    "veldora",
     "veldorajs",
     "vitejs",
     "vitest",

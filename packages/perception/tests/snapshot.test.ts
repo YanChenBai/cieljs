@@ -3,6 +3,27 @@ import { expect, test } from 'vite-plus/test';
 
 import { createPerceptionSnapshot } from '../src/snapshot.ts';
 
+test('纯声音事件进入听觉提示，并与外部结果对象隔离', async () => {
+  const events = [{ type: 'applause' }];
+  const snapshot = createPerceptionSnapshot({
+    startAt: new Date(0),
+    endAt: new Date(1),
+    transcripts: [{ content: '', events, startAt: new Date(0), endAt: new Date(1) }],
+    frames: [],
+    hearingPrompt: '听觉提示',
+    visionPrompt: '',
+    maxFrames: 9,
+  });
+  events[0]!.type = 'bgm';
+  expect(snapshot.transcripts[0]?.events).toEqual([{ type: 'applause' }]);
+  const messages = await snapshot.compose();
+  expect(messages).toMatchObject([
+    {
+      content: [{ type: 'text', text: expect.stringContaining('声音事件（模型识别）：applause') }],
+    },
+  ]);
+});
+
 test('compose combines visual blocks before the hearing transcript', async () => {
   const image = await sharp({
     create: {

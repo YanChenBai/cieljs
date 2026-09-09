@@ -37,6 +37,7 @@ const {
   logout,
   refreshAccount,
   installHearingModels,
+  selectHearingModel,
 } = useWatchBlive();
 
 const { collapsed, width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyboardResize } =
@@ -138,6 +139,7 @@ const videoProgressLabel = computed(() => {
           :models="hearingModels"
           :pending="pending"
           @install-models="installHearingModels"
+          @select-model="selectHearingModel"
         />
         <WatchControls
           :areas="areas"

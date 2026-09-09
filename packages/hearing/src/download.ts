@@ -54,6 +54,7 @@ async function downloadFile(
   const attempts = (options.retries ?? 2) + 1;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
+      options.onProgress?.({ file: path.basename(target), receivedBytes: 0, attempt });
       await download(url, temporary, progress => options.onProgress?.({ ...progress, attempt }));
       await rename(temporary, target);
       return;
@@ -75,10 +76,14 @@ async function download(
   target: string,
   onProgress?: (progress: ModelInstallProgress) => void,
 ): Promise<void> {
-  const response = await fetch(url, {
-    redirect: 'follow',
-    signal: AbortSignal.timeout(30 * 60_000),
-  });
+  const controller = new AbortController();
+  const connectionTimer = setTimeout(() => controller.abort(), 30_000);
+  let response: Response;
+  try {
+    response = await fetch(url, { redirect: 'follow', signal: controller.signal });
+  } finally {
+    clearTimeout(connectionTimer);
+  }
 
   if (!response.ok || !response.body) {
     await response.body?.cancel();
@@ -99,7 +104,9 @@ async function download(
   });
 
   onProgress?.({ file, receivedBytes, totalBytes });
-  await pipeline(Readable.fromWeb(response.body as never), meter, createWriteStream(target));
+  await pipeline(Readable.fromWeb(response.body as never), meter, createWriteStream(target), {
+    signal: AbortSignal.timeout(30 * 60_000),
+  });
   if (receivedBytes === 0 || (totalBytes !== undefined && receivedBytes !== totalBytes)) {
     throw new Error(`模型文件不完整：${file}（${receivedBytes}/${totalBytes ?? '未知'} 字节）`);
   }

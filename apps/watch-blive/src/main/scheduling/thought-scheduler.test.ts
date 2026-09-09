@@ -5,7 +5,12 @@ import { describe, expect, it, vi } from 'vite-plus/test';
 import { ThoughtScheduler } from './thought-scheduler.ts';
 
 describe('ThoughtScheduler', () => {
-  it.each([true, false])('主动取消=%s 时正确区分请求中止和运行失败', async cancelled => {
+  it.each([
+    [true, 'Request was aborted'],
+    [false, 'Request was aborted'],
+    [true, 'Request aborted'],
+    [false, 'Request aborted'],
+  ] as const)('主动取消=%s 时正确区分请求中止 %s 和运行失败', async (cancelled, message) => {
     let rejectPrompt!: (error: Error) => void;
     const prompt = vi.fn(
       () =>
@@ -28,7 +33,7 @@ describe('ThoughtScheduler', () => {
     if (cancelled) {
       scheduler.cancel();
     }
-    rejectPrompt(new Error('Agent 运行失败：Request was aborted'));
+    rejectPrompt(new Error(`Agent 运行失败：${message}`));
     if (!cancelled) {
       await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     }

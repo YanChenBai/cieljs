@@ -30,6 +30,7 @@ export const watchBridge: WatchBliveBridge = {
   areas: () => rpc.watch.areas(),
   configuration: () => rpc.setup.configuration(),
   hearingModels: () => rpc.setup.hearingModels(),
+  selectHearingModel: model => rpc.setup.selectHearingModel(model),
   installHearingModels: () => rpc.setup.installHearingModels(),
   pickRecordingFile: () => rpc.recording.pickFile(),
   snapshot: () => rpc.watch.snapshot(),

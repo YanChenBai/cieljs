@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { KWSOptions } from './kws.ts';
 import type { ASRWorkerCommand, ASRWorkerEvent } from './process-protocol.ts';
+import type { ASRModelId } from './registry.ts';
 import type { ASREventMap, ASROptions, ASRSegment, Unsubscribe } from './types.ts';
 type Command = ASRWorkerCommand extends infer T
   ? T extends { id: number }
@@ -72,6 +73,10 @@ export class ProcessASR {
   }
   flush(): Promise<void> {
     return this.closing ?? this.request({ type: 'flush' });
+  }
+  setModel(model: ASRModelId): Promise<void> {
+    if (this.closing) return Promise.reject(new Error('Hearing worker is closing'));
+    return this.request({ type: 'set-model', model });
   }
   on<K extends keyof ASREventMap>(event: K, listener: ASREventMap[K]): Unsubscribe {
     this.emitter.on(event, listener);

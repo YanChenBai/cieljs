@@ -1,4 +1,5 @@
 import type { DevtoolsHost } from '@cieljs/devtools/host';
+import type { ASRModelId } from '@cieljs/hearing';
 import type { McpTools } from '@cieljs/mcp';
 import { createPerception, type Perception, type PerceptionOptions } from '@cieljs/perception';
 import type { Ciel, CielSession } from '@cieljs/runtime';
@@ -48,6 +49,7 @@ export interface WatchBlive {
 
   start(options: StartWatchOptions): Promise<void>;
   stop(): Promise<void>;
+  setHearingModel(model: ASRModelId): Promise<void>;
   login(): Promise<Account>;
   logout(): Promise<void>;
   areas(): ReturnType<BilibiliApi['areas']>;
@@ -83,6 +85,16 @@ class WatchBliveRuntime implements WatchBlive {
 
   get status(): WatchStatus {
     return this.currentStatus;
+  }
+
+  setHearingModel(model: ASRModelId): Promise<void> {
+    return this.enqueue(async () => {
+      await this.visit?.setHearingModel(model);
+      this.options.perception = {
+        ...this.options.perception,
+        asr: { ...this.options.perception?.asr, model },
+      };
+    });
   }
 
   get room(): RoomInfo | undefined {
@@ -307,6 +319,10 @@ class WatchBliveRuntime implements WatchBlive {
       ...this.options.perception,
     });
 
+    perception.asr.on('result', e => {
+      console.log(e);
+    });
+
     try {
       const streamerHistory = await this.loadStreamerHistory(room.streamerUid);
       await this.options.livePage.open(room.roomId, signal);
@@ -457,7 +473,7 @@ class WatchBliveRuntime implements WatchBlive {
         // 异常中断只清理资源，不能把未读完的录播当作完整内容总结。
         if (!error && !signal.aborted) await visit.finishRecording(signal);
       } catch (cause) {
-        this.emitError('recording_summary', cause);
+        if (!signal.aborted) this.emitError('recording_summary', cause);
       } finally {
         await this.stopRuntime();
       }

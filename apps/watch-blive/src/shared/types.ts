@@ -1,3 +1,5 @@
+import type { ASRModelId } from '@cieljs/hearing';
+
 export type DanmakuDelivery = 'simulate' | 'live';
 
 export type RecordingSource = { type: 'url'; url: string } | { type: 'file'; path: string };
@@ -19,6 +21,9 @@ export interface WatchConfigurationStatus {
 }
 
 export interface HearingModelStatus {
+  model?: ASRModelId;
+  activeModel?: ASRModelId;
+  availableModels?: readonly ASRModelId[];
   installing?: boolean;
   error?: string;
   progress?: {

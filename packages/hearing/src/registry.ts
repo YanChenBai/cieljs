@@ -44,7 +44,7 @@ export const ASR_MODELS = {
     },
     files: () =>
       ['model.int8.onnx', 'tokens.txt'].map(file => ({
-        url: `https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/${file}`,
+        url: `https://modelscope.cn/models/pengzhendong/sherpa-onnx-sense-voice-zh-en-ja-ko-yue/resolve/master/${file}`,
         target: path.join(resolveModelsPath(), 'asr/sensevoice-small', file),
       })),
     create: () => new SenseVoiceRecognizer(),

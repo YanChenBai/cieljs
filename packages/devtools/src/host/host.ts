@@ -116,6 +116,16 @@ export class DevtoolsHost implements AsyncDisposable {
     this.saveEntry(entry);
   }
 
+  /** 展示感知输入，不伪造 Agent 事件，也不重复写入模型会话。 */
+  recordMessage(label: string, content: string, sessionId: string) {
+    const entry = this.createEntry(sessionId, 'message', 'perception');
+    entry.label = label;
+    entry.status = 'completed';
+    entry.endedAt = Date.now();
+    entry.output = this.storeValue(`${entry.id}:output`, content);
+    this.saveEntry(entry);
+  }
+
   observe(agent: Pick<Agent, 'subscribe' | 'state'>, sessionId: string) {
     const receive = this.agentListener(sessionId, () => ({
       tools: agent.state.tools,
@@ -202,7 +212,8 @@ export class DevtoolsHost implements AsyncDisposable {
   private createEntry(sessionId: string, kind: TraceEntry['kind'], name: string): TraceEntry {
     return {
       id: this.currentTrace ? `${this.currentTrace.id}:${this.entryOrdinal++}` : randomUUID(),
-      sequence: this.currentTrace?.sequence ?? ++this.sequence,
+      // 对话投影与宿主感知共用顺序；原始 Agent 事件序号仅用于执行记录。
+      sequence: ++this.sequence,
       sessionId,
       kind,
       name,

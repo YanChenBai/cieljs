@@ -57,7 +57,9 @@ await asr.write({ data: pcm16k, startAt: new Date() });
 
 ## 下载和扩展
 
-资源放在 `CIEL_DATA_DIR/models`，默认 `~/.ciel/models`。所选模型的注册项维护资源和创建函数；共享 VAD 与 speaker 按需下载。`speaker: false` 跳过声纹模型，events 模式跳过 VAD。下载使用临时文件和重试；同进程相同目标的下载合并。
+资源放在 `CIEL_DATA_DIR/models`，默认 `cwd/.ciel/models`。Watch Blive 开发时使用 cwd，打包后显式设置为 `homedir/.ciel`。所选模型的注册项维护资源和创建函数；共享 VAD 与 speaker 按需下载。`speaker: false` 跳过声纹模型，events 模式跳过 VAD。下载使用临时文件和重试；同进程相同目标的下载合并。
+
+模型资源准备完成后可调用 `await asr.setModel(model)`，旧模型先完成尾段，随后继续使用原有事件订阅与声纹追踪。Electron 中切换和音频写入按 worker 命令顺序执行。Watch Blive 可在运行配置中实时切换，缺少资源时下载完成后应用。
 
 ```sh
 vp run --filter @cieljs/hearing install-model -- --model sensevoice-small --no-speaker

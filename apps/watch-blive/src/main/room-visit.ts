@@ -1,4 +1,5 @@
 import type { DevtoolsHost } from '@cieljs/devtools/host';
+import type { ASRModelId } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
 import type { CielSession } from '@cieljs/runtime';
 
@@ -34,6 +35,7 @@ export class RoomVisit {
   private closePromise?: Promise<void>;
   private unsubscribeAgent?: () => void;
   private unsubscribePerceptionError?: () => void;
+  private unsubscribeTranscript?: () => void;
 
   constructor(private readonly options: RoomVisitOptions) {
     this.scheduler = new ThoughtScheduler({
@@ -79,6 +81,20 @@ export class RoomVisit {
     this.unsubscribePerceptionError = this.options.perception.on('error', error =>
       this.options.emit({ type: 'error', stage: 'perception', error }),
     );
+    if (this.options.mode.type === 'recording') {
+      this.unsubscribeTranscript = this.options.perception.asr.on('result', result => {
+        const events = result.events?.map(event => event.type).join('、');
+        const content = [result.content, events ? `声音事件（模型识别）：${events}` : '']
+          .filter(Boolean)
+          .join('\n');
+        if (!content) return;
+        const seconds = Math.max(0, (result.startAt.getTime() - this.startedAt) / 1_000);
+        const timestamp = `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60)
+          .toString()
+          .padStart(2, '0')}`;
+        this.options.devtools?.recordMessage(`视频语音 · ${timestamp}`, content, this.session.id);
+      });
+    }
     this.options.media.start();
     if (this.options.mode.type === 'recording') return;
     this.unsubscribeSpeechEnd = this.options.perception.on('speechend', ({ at }) =>
@@ -93,6 +109,10 @@ export class RoomVisit {
   cancel(): void {
     this.scheduler.cancel();
     this.session.agent.abort();
+  }
+
+  setHearingModel(model: ASRModelId): Promise<void> {
+    return this.options.perception.asr.setModel(model);
   }
 
   close(): Promise<void> {
@@ -131,6 +151,7 @@ export class RoomVisit {
     const failures = [...media, ...remaining]
       .filter(result => result.status === 'rejected')
       .map(result => result.reason);
+    this.unsubscribeTranscript?.();
 
     if (failures.length) {
       throw new AggregateError(failures, `直播间 ${this.room.roomId} 关闭失败`);

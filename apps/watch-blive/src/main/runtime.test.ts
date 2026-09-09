@@ -2,6 +2,8 @@ import { Storage } from '@cieljs/storage';
 import { afterAll } from 'vite-plus/test';
 const storage = await Storage.open({ dataDir: 'memory://' });
 afterAll(() => storage.close());
+import type { DevtoolsHost } from '@cieljs/devtools/host';
+import type { ASRResult } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
 import type { OpenSessionOptions } from '@cieljs/runtime';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
@@ -51,7 +53,7 @@ const room = {
 let runtime: WatchBlive;
 let faux: ReturnType<typeof registerFauxProvider>;
 
-function setup() {
+function setup(devtools?: DevtoolsHost) {
   faux = registerFauxProvider();
   const sessionClose = vi.fn().mockResolvedValue(undefined);
   mocks.session.mockImplementation(async (options: OpenSessionOptions) => ({
@@ -61,7 +63,10 @@ function setup() {
     close: sessionClose,
   }));
   const perceptionClose = vi.fn().mockResolvedValue(undefined);
+  const setModel = vi.fn().mockResolvedValue(undefined);
+  const asrOn = vi.fn(() => vi.fn());
   const perception = {
+    asr: { on: asrOn, setModel },
     close: perceptionClose,
     on: vi.fn(() => vi.fn()),
     snapshot: vi.fn().mockResolvedValue({ compose: async () => [] }),
@@ -81,13 +86,14 @@ function setup() {
     streamerHistory: vi.fn().mockResolvedValue({ dynamics: [], videos: [] }),
   };
   runtime = createWatchBlive({
+    devtools,
     storage,
     model: faux.getModel(),
     livePage: page as unknown as LivePage,
     api: api as unknown as BilibiliApi,
     createPerception: () => perception,
   });
-  return { page, api, sessionClose, perceptionClose };
+  return { page, api, sessionClose, perceptionClose, setModel, asrOn };
 }
 
 beforeEach(() => {
@@ -101,6 +107,34 @@ afterEach(async () => {
 });
 
 describe('观看生命周期', () => {
+  it('视频对话保留无转写文本的声音事件', async () => {
+    const recordMessage = vi.fn();
+    const { asrOn } = setup({ observe: vi.fn(), recordMessage } as unknown as DevtoolsHost);
+    await runtime.start({
+      mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
+    });
+    const calls = asrOn.mock.calls as unknown as [string, (result: ASRResult) => void][];
+    const receive = calls.find(([event]) => event === 'result')![1];
+    receive({
+      content: '',
+      events: [{ type: 'applause' }],
+      startAt: new Date(),
+      endAt: new Date(),
+    });
+    expect(recordMessage).toHaveBeenCalledWith(
+      expect.stringContaining('视频语音'),
+      '声音事件（模型识别）：applause',
+      expect.any(String),
+    );
+  });
+  it('观看时切换听觉模型沿用当前感知实例', async () => {
+    const { setModel, perceptionClose } = setup();
+    await runtime.start({ mode: { type: 'follow', roomId: 123 } });
+    await runtime.setHearingModel('sensevoice-small');
+    expect(setModel).toHaveBeenCalledWith('sensevoice-small');
+    expect(perceptionClose).not.toHaveBeenCalled();
+    expect(runtime.status).toBe('watching');
+  });
   it('中途停止视频先等待识别、只生成一次部分总结，再关闭会话', async () => {
     const { perceptionClose, sessionClose } = setup();
     const recognition = Promise.withResolvers<void>();

@@ -1,9 +1,20 @@
-import { describe, expect, it } from 'vite-plus/test';
+import { join } from 'node:path';
 
+import { describe, expect, it, vi } from 'vite-plus/test';
+
+import { resolveDataPath } from '../src/constants.ts';
 import { createAudioConfig } from '../src/models.ts';
 import { createQwen3Config } from '../src/models/qwen3.ts';
 
 describe('createAudioConfig', () => {
+  it('未指定数据目录时使用当前工作目录', () => {
+    vi.stubEnv('CIEL_DATA_DIR', '');
+    try {
+      expect(resolveDataPath()).toBe(join(process.cwd(), '.ciel'));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   it('使用 Qwen3-ASR-1.7B INT8 与 TEN-VAD', () => {
     const config = createAudioConfig();
 

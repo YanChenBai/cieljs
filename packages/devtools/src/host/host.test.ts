@@ -28,6 +28,27 @@ afterEach(async () => {
 });
 
 describe('DevTools 按需内容', () => {
+  it('感知分段即时进入对话，且不写入 Agent 事件流', async () => {
+    const value = await host();
+    value.recordMessage('视频语音 · 0:01', '第一段', 'video');
+    value.recordMessage('视频语音 · 0:02', '第二段', 'video');
+    const snapshot = await entries(value);
+    expect(snapshot).toHaveLength(2);
+    expect(snapshot.every(entry => entry.kind === 'message' && entry.sessionId === 'video')).toBe(
+      true,
+    );
+    const contents = await Promise.all(snapshot.map(entry => value.store.get(entry.output!.id)));
+    expect(contents).toEqual(expect.arrayContaining(['第一段', '第二段']));
+    expect(await value.storage.journal.read(0)).toEqual([]);
+    const receive = value.agentListener('video');
+    await receive({
+      type: 'message_end',
+      message: { role: 'user', content: '开始总结', timestamp: Date.now() },
+    });
+    const ordered = await entries(value);
+    expect(ordered.at(-1)?.name).toBe('user');
+    expect(new Set(ordered.map(entry => entry.sequence)).size).toBe(ordered.length);
+  });
   it('大对象、循环引用和二进制不会进入事件消息', async () => {
     const value = await host();
     const data: Record<string, unknown> = {

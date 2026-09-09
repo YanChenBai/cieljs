@@ -10,6 +10,7 @@ import type { WatchBridgeEvent } from '../shared/ipc.ts';
 import { BilibiliApi } from './bilibili/api.ts';
 import type { LivePage } from './bilibili/live-page.ts';
 import { resolveWatchConfig, resolveWatchModel, watchDataDirectory } from './config.ts';
+import { readHearingModel, saveHearingModel } from './hearing-settings.ts';
 import { createAccountRoutes } from './routes/account.ts';
 import { createRecordingRoutes } from './routes/recording.ts';
 import { createSetupRoutes } from './routes/setup.ts';
@@ -39,6 +40,8 @@ export function createWatchRouter(
   const api = new BilibiliApi();
   const listeners = new Set<(event: WatchBridgeEvent) => void>();
   let runtime: WatchBlive | undefined;
+  const dataDirectory = watchDataDirectory();
+  let hearingModel = readHearingModel(dataDirectory);
   let unsubscribe: (() => void) | undefined;
 
   function requireRuntime() {
@@ -55,6 +58,7 @@ export function createWatchRouter(
       storage: devtools.storage,
       dataDir: watchDataDirectory(),
       ffmpegPath: config.ffmpegPath,
+      perception: { asr: { model: hearingModel } },
       ...config.interaction,
     });
     unsubscribe = runtime.onEvent(event => {
@@ -74,7 +78,17 @@ export function createWatchRouter(
     devtools: devtoolsRouter,
     account: createAccountRoutes(livePage, () => runtime),
     watch: createWatchRoutes(api, () => runtime, requireRuntime, listeners),
-    setup: createSetupRoutes(),
+    setup: createSetupRoutes(async model => {
+      const previous = hearingModel;
+      await runtime?.setHearingModel(model);
+      try {
+        saveHearingModel(dataDirectory, model);
+      } catch (error) {
+        await runtime?.setHearingModel(previous);
+        throw error;
+      }
+      hearingModel = model;
+    }, hearingModel),
     recording: createRecordingRoutes(mainWindow),
     window: createWindowRoutes(mainWindow, livePage, roomId => {
       for (const listener of listeners) listener({ type: 'room_requested', roomId });

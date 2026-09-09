@@ -141,6 +141,25 @@ vi.mock('sherpa-onnx-node', () => {
 const { ASR } = await import('../src/asr.ts');
 
 describe('ASR', () => {
+  it('切换模型完成旧尾段并保留结果监听和新音频时间', async () => {
+    const asr = new ASR({ speaker: false });
+    const results: import('../src/types.ts').ASRResult[] = [];
+    asr.on('result', result => results.push(result));
+    await asr.write({ data: Buffer.alloc(32_000), startAt: new Date(0) });
+    await asr.setModel('sensevoice-small');
+    expect(results).toHaveLength(1);
+    expect(results[0]?.model).toBe('qwen3-asr-1.7b-int8');
+    recognizerResult.text = '<|zh|><|Speech|>新模型';
+    await asr.write({ data: Buffer.alloc(32_000), startAt: new Date(5_000) });
+    await asr.flush();
+    expect(results[1]).toMatchObject({
+      content: '新模型',
+      startAt: new Date(5_100),
+      model: 'sensevoice-small',
+      events: [{ type: 'speech' }],
+    });
+    await asr.close();
+  });
   beforeEach(() => {
     recognizerResult.calls = 0;
     recognizerResult.degenerateTokenCount = 256;

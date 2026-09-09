@@ -1,3 +1,4 @@
+import type { ASRModelId } from '@cieljs/hearing';
 import type { WatchBridgeEvent, WatchSnapshot } from '@shared/ipc.ts';
 import type {
   Account,
@@ -154,6 +155,10 @@ export function useWatchBlive() {
     installHearingModels: () =>
       run('install-models', async () => {
         hearingModels.value = await watchBridge.installHearingModels();
+      }),
+    selectHearingModel: (model: ASRModelId) =>
+      run('switch-model', async () => {
+        hearingModels.value = await watchBridge.selectHearingModel(model);
       }),
   };
 }

@@ -1,4 +1,3 @@
-import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,7 +27,7 @@ export const SPEAKER_MODEL = 'model.onnx' as const;
 export const TOKENIZER_FILES = ['merges.txt', 'tokenizer_config.json', 'vocab.json'] as const;
 
 export function resolveDataPath(): string {
-  return process.env.CIEL_DATA_DIR?.trim() || path.join(homedir(), '.ciel');
+  return process.env.CIEL_DATA_DIR?.trim() || path.join(process.cwd(), '.ciel');
 }
 
 export function resolveModelsPath(): string {

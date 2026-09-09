@@ -297,6 +297,7 @@ function cloneValidDate(value: Date, name: string) {
 function cloneTranscript(transcript: ASRResult): ASRResult {
   return {
     ...transcript,
+    events: transcript.events?.map(event => ({ ...event })),
     startAt: new Date(transcript.startAt),
     endAt: new Date(transcript.endAt),
     tokens: transcript.tokens?.map(token => ({

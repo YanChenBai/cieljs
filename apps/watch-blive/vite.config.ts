@@ -6,9 +6,9 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
-  electron: {
+  veldora: {
     main: {
-      // filterConsole: line => line.includes('Failed to resolve address'),
+      filterConsole: line => line.includes('Failed to resolve address'),
     },
     preload: {
       build: {

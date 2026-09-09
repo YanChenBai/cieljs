@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ASRModelId } from '@cieljs/hearing';
 import { Download, LoaderCircle } from '@lucide/vue';
 import { Button, Progress } from '@vuetify/v0/components';
 import { computed } from 'vue';
@@ -17,15 +18,33 @@ const downloadLabel = computed(() => {
   return '下载听觉模型';
 });
 
-const emit = defineEmits<{ installModels: [] }>();
+const emit = defineEmits<{ installModels: []; selectModel: [model: ASRModelId] }>();
+
+function selectModel(event: Event) {
+  const value = (event.target as HTMLSelectElement).value;
+  if (value === 'qwen3-asr-1.7b-int8' || value === 'sensevoice-small') emit('selectModel', value);
+}
 </script>
 
 <template>
-  <section
-    v-if="!configuration?.valid || !models?.valid"
-    class="border-b border-[#ffffff0b] px-4.5 py-4"
-  >
+  <section class="border-b border-[#ffffff0b] px-4.5 py-4">
     <div class="section-heading">运行配置</div>
+    <label class="my-3 flex flex-col gap-2 text-[11px]">
+      听觉模型
+      <select
+        :value="models?.model"
+        :disabled="!!pending || !!models?.installing"
+        @change="selectModel"
+      >
+        <option v-for="model in models?.availableModels" :key="model" :value="model">
+          {{ model }}
+        </option>
+      </select>
+    </label>
+    <p v-if="pending === 'switch-model'" class="hint" role="status">正在切换听觉模型…</p>
+    <p v-if="models?.modelsPath" :title="models.modelsPath" class="hint truncate break-all">
+      模型目录：{{ models.modelsPath }}
+    </p>
     <div
       v-if="!configuration?.valid"
       class="my-2 rounded-lg bg-[#442936] px-3 py-2 text-[11px] leading-[1.6] text-[#ffc1d2]"
@@ -33,7 +52,7 @@ const emit = defineEmits<{ installModels: [] }>();
       <p class="m-0">{{ configuration?.message || '正在检查配置…' }}</p>
     </div>
 
-    <template v-if="!models?.valid">
+    <template v-if="!models?.valid || models?.installing || models?.error">
       <p class="hint">
         {{ models ? `缺少 ${models.missingFiles.length} 个模型文件` : '正在检查听觉模型…' }}
       </p>

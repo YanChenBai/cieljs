@@ -1,3 +1,5 @@
+import type { ASRModelId } from '@cieljs/hearing';
+
 import type {
   Account,
   HearingModelStatus,
@@ -40,6 +42,7 @@ export interface WatchBliveBridge {
   areas(): Promise<readonly LiveArea[]>;
   configuration(): Promise<WatchConfigurationStatus>;
   hearingModels(): Promise<HearingModelStatus>;
+  selectHearingModel(model: ASRModelId): Promise<HearingModelStatus>;
   installHearingModels(): Promise<HearingModelStatus>;
   pickRecordingFile(): Promise<string | undefined>;
   snapshot(): Promise<WatchSnapshot>;

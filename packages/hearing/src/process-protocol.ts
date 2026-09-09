@@ -1,4 +1,5 @@
 import type { KWSOptions, WakeEvent } from './kws.ts';
+import type { ASRModelId } from './registry.ts';
 import type { ASROptions, ASRResult } from './types.ts';
 export type ASRWorkerCommand = { id: number } & (
   | { type: 'init'; kind: 'asr'; options: ASROptions }
@@ -12,6 +13,7 @@ export type ASRWorkerCommand = { id: number } & (
       format?: 's16le';
     }
   | { type: 'flush' | 'close' }
+  | { type: 'set-model'; model: ASRModelId }
 );
 export type ASRWorkerEvent =
   | { type: 'ack'; id: number; error?: string }

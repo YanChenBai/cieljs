@@ -141,7 +141,7 @@ export class ThoughtScheduler {
     } catch (error) {
       const failure = toError(error);
       const aborted =
-        failure.name === 'AbortError' || failure.message.includes('Request was aborted');
+        failure.name === 'AbortError' || /Request (?:was )?aborted/iu.test(failure.message);
       if (this.closed && aborted) {
         return;
       }
