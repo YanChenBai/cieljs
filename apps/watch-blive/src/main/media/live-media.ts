@@ -148,7 +148,7 @@ export class LiveMedia {
     }
   }
 
-  private trackWrite(write: Promise<void> | undefined): void {
+  private trackWrite(write: void | Promise<void>): void {
     if (!write) {
       return;
     }
