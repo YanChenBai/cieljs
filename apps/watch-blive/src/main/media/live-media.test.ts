@@ -57,6 +57,24 @@ it('加速解码的帧按媒体时间分布，进度支持分块输出', async (
   await media.close();
 });
 
+it('ASR 写入等待 worker 时不暂停 FFmpeg 音频流', async () => {
+  const { media, child, audioWrite } = setup();
+  let resolveWrite!: () => void;
+  audioWrite.mockReturnValue(
+    new Promise<void>(resolve => {
+      resolveWrite = resolve;
+    }),
+  );
+
+  child.stdout.write(Buffer.alloc(320));
+
+  expect(audioWrite).toHaveBeenCalledTimes(1);
+  expect(child.stdout.isPaused()).toBe(false);
+
+  resolveWrite();
+  await media.close();
+});
+
 it('自然 EOF 也通知宿主，不遗留失去媒体的 watching 状态', async () => {
   const { media, child, onStopped } = setup();
   child.emit('close', 0, null);

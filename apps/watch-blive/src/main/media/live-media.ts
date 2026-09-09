@@ -103,18 +103,9 @@ export class LiveMedia {
     const startAt = new Date(this.startedAt + this.sampleCount / 16);
 
     this.sampleCount += Math.floor(data.byteLength / 2);
-    const audio = child.stdout;
-    if (audio && 'pause' in audio) audio.pause();
-    const write = Promise.resolve(this.options.perception.asr.write({ data, startAt }));
-    this.writes.add(write);
-    void write
-      .catch(error =>
-        this.options.onError?.(error instanceof Error ? error : new Error(String(error))),
-      )
-      .finally(() => {
-        this.writes.delete(write);
-        if (this.child === child && audio && 'resume' in audio) audio.resume();
-      });
+    // ASR write may wait for worker-side inference. Do not pause FFmpeg until it resolves:
+    // doing so makes media timestamps lag wall time and lets scheduler windows skip transcripts.
+    this.trackWrite(this.options.perception.asr.write({ data, startAt }));
   }
 
   private writeImages(child: ChildProcess, data: Buffer): void {
