@@ -1,6 +1,6 @@
-import type { CielSession } from '@cieljs/core';
 import type { DevtoolsHost } from '@cieljs/devtools/host';
 import type { Perception } from '@cieljs/perception';
+import type { CielSession } from '@cieljs/runtime';
 
 import type { RoomInfo, StreamerHistory, WatchEvent, WatchMode } from '../shared/types.ts';
 import type { LiveMedia } from './media/live-media.ts';

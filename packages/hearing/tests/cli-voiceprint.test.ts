@@ -42,7 +42,7 @@ vi.mock('sherpa-onnx-node', () => ({
 }));
 
 vi.mock('../src/models.ts', () => ({
-  createModelConfig: () => ({ speaker: {} }),
+  createAudioConfig: () => ({ speaker: {} }),
 }));
 
 vi.mock('../src/voiceprint.ts', () => ({

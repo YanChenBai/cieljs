@@ -109,7 +109,7 @@ class PerceptionRuntime implements Perception {
     this.closed = true;
     const imageClosing = this.image?.close();
 
-    this.asr.flush();
+    await this.asr.flush();
     await this.asr.close();
     await imageClosing;
     await this.publication;

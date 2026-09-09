@@ -1,8 +1,7 @@
-export { default as models } from './models/index.ts';
+export type * from '@cieljs/agent-kit/protocol';
 export { defineCiel } from './ciel.ts';
 export type {
   Ciel,
-  CielMcpOptions,
   CielSession,
   CielStatus,
   DefineCielOptions,

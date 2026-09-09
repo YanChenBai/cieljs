@@ -1,4 +1,4 @@
-import { models } from '@cieljs/core';
+import { models } from '@cieljs/model-kit/models';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 export { defaultChorusConfig, defineChorusConfig } from './config.ts';

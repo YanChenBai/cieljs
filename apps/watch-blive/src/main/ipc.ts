@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { DevtoolsHost, devtoolsStorage } from '@cieljs/devtools/host';
+import { createMcp } from '@cieljs/mcp';
 import { memoryStorage } from '@cieljs/memory';
 import { sessionStorage } from '@cieljs/session';
 import { Storage } from '@cieljs/storage';
@@ -23,7 +24,10 @@ export async function registerWatchBliveIpc(mainWindow: BrowserWindow, livePage:
     }),
   );
   const devtools = resources.use(await DevtoolsHost.open({ storage }));
-  const runtime = createWatchRouter(mainWindow, livePage, devtools);
+  const mcp = resources.use(
+    await createMcp({ configFile: join(watchDataDirectory(), 'mcp.json') }),
+  );
+  const runtime = createWatchRouter(mainWindow, livePage, devtools, mcp);
   const handler = new RPCHandler(runtime.router);
   const ports = new Set<MessagePortMain>();
   // 仅主窗口的主 frame 可建立连接，直播 guest 不能访问控制路由。

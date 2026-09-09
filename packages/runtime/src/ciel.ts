@@ -80,7 +80,7 @@ class CielRuntime implements Ciel {
       model: this.options.model,
       apiKey: this.options.apiKey,
       systemPrompt: this.options.systemPrompt,
-      tools: [...(this.options.tools ?? []), ...(resources.mcp?.tools ?? [])],
+      tools: [...(this.options.tools ?? []), ...(this.options.mcp?.tools ?? [])],
       sessionManager: resources.sessionManager,
       memoryManager: resources.memoryManager,
       sessionId: options.sessionId,

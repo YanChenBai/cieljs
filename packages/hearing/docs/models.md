@@ -1,3 +1,5 @@
+> 多模型的最新配置与安装方式见 [多模型接口](./multi-model.md)。
+
 # 模型配置
 
 ## 安装
@@ -32,13 +34,13 @@ voiceprints/...
 
 ## 运行时配置
 
-`createModelConfig()` 固定生成 sherpa-onnx-node 的配置：
+内部模型实现 分别生成 sherpa-onnx-node 的配置：
 
 - ASR：`maxTotalLen 512`、`maxNewTokens 256`、`temperature 1e-6`、`topP 0.8`、`seed 42`，CPU 双线程
 - VAD：`threshold 0.25`、`minSpeechDuration 0.5s`、`minSilenceDuration 0.5s`、`maxSpeechDuration 10s`、窗口 256 采样
 - Speaker：CPU 单线程
 
-`ASR` 构造时自动调用 `createModelConfig()`，无需手动传入。`checkConfiguration()` 校验所有模型文件是否齐备：
+`ASR` 构造时自动调用 内部模型实现，无需手动传入。`checkConfiguration()` 校验所有模型文件是否齐备：
 
 ```ts
 import { checkConfiguration } from '@cieljs/hearing';

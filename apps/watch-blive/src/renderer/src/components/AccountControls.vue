@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { LoaderCircle, LogIn, LogOut, RefreshCw, UserRound } from '@lucide/vue';
 import { Button } from '@vuetify/v0/components';
-import { LoaderCircle, LogIn, LogOut, RefreshCw, UserRound } from 'lucide-vue-next';
 
 import type { Account } from '../../../shared/types.ts';
 

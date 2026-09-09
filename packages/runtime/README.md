@@ -1,4 +1,4 @@
-<h1 align="center">@cieljs/core</h1>
+<h1 align="center">@cieljs/runtime</h1>
 
 <p align="center">定义并运行 Ciel，组合普通 Session、长期 Memory 与隔离的 Investigation Agent。</p>
 
@@ -9,7 +9,7 @@
   <a href="./docs/lifecycle.md">存储与生命周期</a>
 </p>
 
-`@cieljs/core` 定义一个 Ciel 运行时，在共享 Storage 上管理三个业务入口：
+`@cieljs/runtime` 定义一个 Ciel 运行时，在共享 Storage 上管理三个业务入口：
 
 | 概念          | 存储             | 职责                       |
 | ------------- | ---------------- | -------------------------- |
@@ -26,7 +26,10 @@ import { Storage } from '@cieljs/storage';
 import { sessionStorage } from '@cieljs/session';
 import { memoryStorage } from '@cieljs/memory';
 import { VectorService, vectorStorage } from '@cieljs/vector';
-import { defineCiel } from '@cieljs/core';
+import { defineCiel } from '@cieljs/runtime';
+import { createMcp } from '@cieljs/mcp';
+
+await using mcp = await createMcp();
 
 await using storage = await Storage.open({
   dataDir: '.ciel/storage',
@@ -36,9 +39,7 @@ await using storage = await Storage.open({
 const ciel = defineCiel({
   model,
   systemPrompt: '你是 Ciel。',
-  mcp: {
-    enabled: true,
-  },
+  mcp,
   storage,
 });
 
@@ -65,7 +66,7 @@ await session.close();
 await ciel.close();
 ```
 
-`mcp.enabled` 默认为关闭。开启后，Core 会在 `start()` 时读取 `.ciel/mcp.json` 并把发现的工具注入普通 Session，在 `close()` 时统一释放 MCP。
+MCP 由宿主创建并通过 `mcp` 注入。runtime 借用实例，关闭时不释放 MCP；宿主在全部 runtime 关闭后释放共享实例。
 
 ## 普通 Session
 

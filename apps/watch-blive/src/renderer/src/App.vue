@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CielDevtools } from '@cieljs/devtools';
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X } from '@lucide/vue';
 import { Button } from '@vuetify/v0/components';
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 import type { StartWatchOptions } from '../../shared/types.ts';

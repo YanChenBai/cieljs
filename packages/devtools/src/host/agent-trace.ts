@@ -3,8 +3,8 @@ import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import type { TraceEntry, TraceEvent, ValueRef } from '../protocol/index.ts';
 import { messageContent } from './trace-content.ts';
 
-export type { RuntimeMetadata as AgentTraceMetadata } from '@cieljs/runtime-protocol';
-import type { RuntimeMetadata as AgentTraceMetadata } from '@cieljs/runtime-protocol';
+export type { RuntimeMetadata as AgentTraceMetadata } from '@cieljs/agent-kit/protocol';
+import type { RuntimeMetadata as AgentTraceMetadata } from '@cieljs/agent-kit/protocol';
 
 interface TraceRecorder {
   createEntry: (sessionId: string, kind: TraceEntry['kind'], name: string) => TraceEntry;

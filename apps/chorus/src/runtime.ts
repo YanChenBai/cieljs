@@ -1,10 +1,11 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { defineCiel, type Ciel, type CielSession } from '@cieljs/core';
 import { qwen } from '@cieljs/embed';
+import { createMcp, type Mcp } from '@cieljs/mcp';
 import { memoryStorage } from '@cieljs/memory';
 import { createPerception, type Perception, type SpeechEndEvent } from '@cieljs/perception';
+import { defineCiel, type Ciel, type CielSession } from '@cieljs/runtime';
 import { sessionStorage } from '@cieljs/session';
 import { Storage } from '@cieljs/storage';
 import { VectorService, vectorStorage } from '@cieljs/vector';
@@ -62,6 +63,7 @@ class ChorusRuntime implements Chorus {
   private storage?: Storage;
   private vectors?: VectorService;
   private ciel?: Ciel;
+  private mcp?: Mcp;
   private session?: CielSession;
   private perception?: Perception;
   private schedulerInstance?: ConversationScheduler;
@@ -167,13 +169,18 @@ class ChorusRuntime implements Chorus {
         });
       }
 
+      if (config.mcp.enabled && !this.mcp) {
+        const { enabled: _, ...options } = config.mcp;
+        this.mcp = await createMcp(options);
+      }
+
       this.ciel = defineCiel({
         model: this.options.model,
         systemPrompt: CHORUS_SYSTEM_PROMPT,
         storage: this.storage,
         vectors: this.vectors,
         tools: [speakTool],
-        mcp: config.mcp,
+        mcp: this.mcp,
       });
 
       await this.ciel.start();
@@ -244,7 +251,7 @@ class ChorusRuntime implements Chorus {
         const pcm = normalizer.normalize(chunk);
 
         if (pcm.length > 0) {
-          this.perception!.asr.write({ data: pcm, startAt: chunk.capturedAt });
+          await this.perception!.asr.write({ data: pcm, startAt: chunk.capturedAt });
         }
       }
     })().catch(error => {
@@ -279,14 +286,21 @@ class ChorusRuntime implements Chorus {
     }
 
     if (this.currentStatus === 'starting' && this.startPromise) {
-      await this.startPromise;
+      // 启动错误由 start() 返回；关闭仍需释放宿主持有的 MCP。
+      await Promise.allSettled([this.startPromise]);
     }
 
     this.currentStatus = 'closing';
 
-    await this.dispose();
-
-    this.currentStatus = 'closed';
+    try {
+      await this.dispose();
+    } finally {
+      try {
+        await this.mcp?.close();
+      } finally {
+        this.currentStatus = 'closed';
+      }
+    }
   }
 
   private async dispose(): Promise<void> {

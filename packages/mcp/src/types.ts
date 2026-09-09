@@ -118,7 +118,11 @@ export interface McpServer {
   config: McpServerConfig;
 }
 
-export interface McpRuntime extends AsyncDisposable {
+export interface McpTools {
+  readonly tools: readonly AgentTool[];
+}
+
+export interface McpRuntime extends McpTools, AsyncDisposable {
   readonly servers: ReadonlyMap<string, McpServer>;
   readonly tools: AgentTool[];
 

@@ -9,7 +9,7 @@
 - **探索模式**：从指定直播分区读取真实候选，由 Agent 选择房间；观看过程中持续评分，满足宿主侧切换策略后重新探索。
 - **单推模式**：从 UI 接受固定主播 UID，解析该主播当前直播间后持续观看和互动，不因评分、无聊或短时断流切换到其他主播。
 
-本应用复用当前仓库的 `@cieljs/core`、`@cieljs/perception` 与 TypeBox。Electron 主进程负责运行时与直播 guest `WebContents`；渲染进程使用 Vue 3、Vuetify Zero 与 Tailwind CSS，并通过 `<webview>` 将 Bilibili 登录和直播页面直接嵌入应用界面。
+本应用复用当前仓库的 `@cieljs/runtime`、`@cieljs/perception` 与 TypeBox。Electron 主进程负责运行时与直播 guest `WebContents`；渲染进程使用 Vue 3、Vuetify Zero 与 Tailwind CSS，并通过 `<webview>` 将 Bilibili 登录和直播页面直接嵌入应用界面。
 
 ## 2. 不在第一阶段解决的问题
 
@@ -573,7 +573,7 @@ sources:
 
 探索 Investigation 使用独立 system prompt，不复用“每轮必须发弹幕”的房间互动提示，也不能写 Memory 或发送弹幕。选中房间后，宿主才创建对应房间 Session。
 
-当前 `@cieljs/core` 的宿主工具属于 Ciel 级别，因此工具实现必须额外检查运行时 phase；在 `exploring`、`opening`、`closing` 阶段调用 `send_danmaku` 必须明确失败。
+当前 `@cieljs/runtime` 的宿主工具属于 Ciel 级别，因此工具实现必须额外检查运行时 phase；在 `exploring`、`opening`、`closing` 阶段调用 `send_danmaku` 必须明确失败。
 
 ## 9. 两种模式
 
@@ -955,7 +955,7 @@ vp -C apps/watch-blive run build
 - [Electron `<webview>` API](https://www.electronjs.org/docs/latest/api/webview-tag)
 - [Electron `webContents` API](https://www.electronjs.org/docs/latest/api/web-contents)
 - [Electron Security](https://www.electronjs.org/docs/latest/tutorial/security)
-- 当前仓库 `packages/core`、`packages/perception`、`packages/agent-kit`
+- 当前仓库 `packages/runtime`、`packages/perception`、`packages/agent-kit`
 - 行为参考：`C:\Users\bycrx\MyCode\ciel\apps\watch-blive`
 
 ## 17. 本轮实现边界

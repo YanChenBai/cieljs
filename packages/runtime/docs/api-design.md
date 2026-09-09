@@ -1,8 +1,8 @@
-# `@cieljs/core` API 设计
+# `@cieljs/runtime` API 设计
 
 > 状态：设计草案，尚未实现。
 
-`@cieljs/core` 负责定义和运行 Ciel，并组合模型、Session、Memory 与隔离的 Investigation Agent。
+`@cieljs/runtime` 负责定义和运行 Ciel，并组合模型、Session、Memory 与隔离的 Investigation Agent。
 
 这份设计从核心职责出发，不以当前 Core 实现作为兼容基础。
 
@@ -92,12 +92,7 @@ export interface DefineCielOptions {
 
   tools?: AgentTool[];
 
-  mcp?: {
-    enabled: boolean;
-    cwd?: string;
-    configFile?: string;
-    required?: boolean;
-  };
+  mcp?: McpTools;
 
   investigation?: {
     model?: Model;
@@ -113,7 +108,7 @@ export function defineCiel(options: DefineCielOptions): Ciel;
 
 宿主显式创建 VectorService，通过 `vectors` 注入。普通 Session 与 Memory 共享向量缓存，Investigation 默认不建立向量索引。`embedding` 透传 Qwen 配置，其中 `cacheDir` 控制 Transformers.js 的本地模型缓存目录。宿主显式传入 `storage.session.embedding` 或 `storage.memory.embedding` 时，分别覆盖对应默认值。Investigation Session 不提供自身检索工具，因此不注入默认 embedding。
 
-`mcp.enabled` 为 `true` 时，Core 在 `start()` 中创建 MCP，将发现的工具注入普通 Session，并在 `close()` 中统一释放。未配置或设为 `false` 时不会读取 MCP 配置或启动外部进程。`cwd`、`configFile` 与 `required` 直接沿用 `@cieljs/mcp` 的配置语义。
+`mcp` 接收来自 `@cieljs/mcp` 的 `McpTools` 结构接口，只需要只读 `tools`。实例由宿主创建、复用和关闭，runtime 不负责服务连接的生命周期。
 
 ```ts
 const ciel = defineCiel(options);

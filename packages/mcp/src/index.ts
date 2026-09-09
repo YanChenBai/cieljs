@@ -6,6 +6,7 @@ export type {
   McpConfig,
   McpOptions,
   McpRuntime,
+  McpTools,
   McpServer,
   McpServerConfig,
   McpStdioServerConfig,

@@ -28,13 +28,12 @@ vi.mock('@cieljs/session', () => ({
 vi.mock('@cieljs/memory', () => ({
   MemoryManager: { open: async () => resource('memory') },
 }));
-vi.mock('@cieljs/mcp', () => ({ createMcp: async () => resource('mcp') }));
 const faux = registerFauxProvider();
 const options = {
   model: faux.getModel(),
   systemPrompt: 'test',
   storage: await Storage.open({ dataDir: 'memory://' }),
-  mcp: { enabled: true },
+  mcp: { tools: [] },
 };
 afterEach(() => {
   opened.length = 0;
@@ -47,7 +46,7 @@ test('成功启动转移资源所有权，关闭失败仍逆序释放全部资�
   const ciel = defineCiel(options);
   await ciel.start();
   expect(closed).toEqual([]);
-  const failure = new Error('memory close');
+  const failure = new Error('investigation close');
   failClosing.mockImplementation(async name => {
     if (name === 'memory') throw failure;
   });
@@ -55,11 +54,11 @@ test('成功启动转移资源所有权，关闭失败仍逆序释放全部资�
   expect(ciel.close()).toBe(closing);
   expect(ciel[Symbol.asyncDispose]()).toBe(closing);
   await expect(closing).rejects.toMatchObject({ errors: [failure] });
-  expect(closed).toEqual(['mcp', 'memory', 'investigation', 'session']);
+  expect(closed).toEqual(['memory', 'investigation', 'session']);
   expect(ciel.status).toBe('closed');
 });
 
-test.each(['session', 'investigation', 'memory', 'mcp'])(
+test.each(['session', 'investigation', 'memory'])(
   '%s 启动失败回收此前资源，之后允许重试',
   async name => {
     const failure = new Error('open');
@@ -77,13 +76,13 @@ test.each(['session', 'investigation', 'memory', 'mcp'])(
 );
 
 test('启动错误与回滚错误均保留，其他资源继续回收', async () => {
-  const openingError = new Error('mcp open');
+  const openingError = new Error('memory open');
   const closingError = new Error('memory close');
   failOpening.mockImplementation(name => {
-    if (name === 'mcp') throw openingError;
+    if (name === 'memory') throw openingError;
   });
   failClosing.mockImplementation(async name => {
-    if (name === 'memory') throw closingError;
+    if (name === 'investigation') throw closingError;
   });
   const ciel = defineCiel(options);
   await expect(ciel.start()).rejects.toMatchObject({
@@ -91,8 +90,22 @@ test('启动错误与回滚错误均保留，其他资源继续回收', async ()
     error: closingError,
     suppressed: openingError,
   });
-  expect(closed).toEqual(['memory', 'investigation', 'session']);
+  expect(closed).toEqual(['investigation', 'session']);
   await ciel.close();
 });
 
 afterAll(() => options.storage.close());
+
+test('启动失败与关闭并发时仍进入终态', async () => {
+  failOpening.mockImplementation(name => {
+    if (name === 'memory') throw new Error('memory open');
+  });
+  const ciel = defineCiel(options);
+  const starting = ciel.start();
+  const failure = expect(starting).rejects.toThrow('memory open');
+  const closing = ciel.close();
+  await failure;
+  await closing;
+  expect(ciel.status).toBe('closed');
+  await expect(ciel.start()).rejects.toThrow('关闭');
+});

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { RuntimeReader, RuntimeWriter } from '@cieljs/runtime-protocol';
+import type { RuntimeReader, RuntimeWriter } from '@cieljs/agent-kit/protocol';
 import type { Storage } from '@cieljs/storage';
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 

@@ -8,10 +8,13 @@ import type { WatchBliveBridge } from '../../shared/ipc.ts';
 const channel = new MessageChannel();
 window.postMessage('watch-blive:connect', '*', [channel.port2]);
 channel.port1.start();
+
 export const rpc: RouterClient<WatchRouter> = createORPCClient(
   new RPCLink({ port: channel.port1 }),
 );
+
 const controllers = new Set<AbortController>();
+
 window.addEventListener('beforeunload', () => {
   for (const controller of controllers) controller.abort();
   channel.port1.close();

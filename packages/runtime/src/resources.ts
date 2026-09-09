@@ -1,4 +1,3 @@
-import { createMcp, type Mcp } from '@cieljs/mcp';
 import { MemoryManager } from '@cieljs/memory';
 import { SessionManager } from '@cieljs/session';
 
@@ -10,7 +9,6 @@ export class CielResources implements AsyncDisposable {
     readonly sessionManager: SessionManager,
     readonly investigationManager: SessionManager,
     readonly memoryManager: MemoryManager,
-    readonly mcp: Mcp | undefined,
   ) {}
 
   static async open(options: DefineCielOptions): Promise<CielResources> {
@@ -35,20 +33,12 @@ export class CielResources implements AsyncDisposable {
       }),
     );
 
-    let mcp: Mcp | undefined;
-
-    if (options.mcp?.enabled) {
-      const { enabled: _, ...mcpOptions } = options.mcp;
-      mcp = disposables.use(await createMcp(mcpOptions));
-    }
-
     // 全部初始化成功后转移所有权；中途失败由局部栈逆序回收。
     return new CielResources(
       disposables.move(),
       sessionManager,
       investigationManager,
       memoryManager,
-      mcp,
     );
   }
 

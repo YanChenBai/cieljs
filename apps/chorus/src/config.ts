@@ -1,8 +1,8 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import type { CielMcpOptions } from '@cieljs/core';
 import type { QwenEmbeddingOptions } from '@cieljs/embed';
+import type { McpOptions } from '@cieljs/mcp';
 import type { SpeakerProfile } from '@cieljs/perception';
 
 import type { DeviceSelector } from './audio/types.ts';
@@ -43,7 +43,7 @@ export interface ChorusTtsConfig {
 
 export interface ChorusConfig {
   embedding?: QwenEmbeddingOptions;
-  mcp: CielMcpOptions;
+  mcp: McpOptions & { enabled: boolean };
   audio: {
     input: ChorusAudioInputConfig;
     output: ChorusAudioOutputConfig;

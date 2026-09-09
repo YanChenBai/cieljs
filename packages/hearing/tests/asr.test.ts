@@ -243,3 +243,29 @@ describe('ASR', () => {
     expect(results.map(result => result.content)).toEqual(['恢复恢复']);
   });
 });
+
+it('SenseVoice 事件窗口不依赖 VAD，空文本事件保留且 flush 不重复输出', async () => {
+  recognizerResult.text = '';
+  const asr = new ASR({
+    model: 'sensevoice-small',
+    mode: 'events',
+    speaker: false,
+    eventWindowSeconds: 1,
+  });
+  const results: import('../src/types.ts').ASRResult[] = [];
+  asr.on('result', result => results.push(result));
+  asr.write({ data: Buffer.alloc(48_000), startAt: new Date(0) });
+  asr.flush();
+  asr.flush();
+  expect(results).toHaveLength(2);
+  expect(results[0]).toMatchObject({
+    content: '',
+    language: 'zh',
+    emotion: 'neutral',
+    events: [{ type: 'speech' }],
+    startAt: new Date(0),
+    endAt: new Date(1000),
+  });
+  expect(results[1]?.endAt).toEqual(new Date(1500));
+  await asr.close();
+});

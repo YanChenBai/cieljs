@@ -11,7 +11,9 @@
     "noEmit": true,
     "composite": false,
     "paths": {
-      "@renderer/*": ["./src/renderer/src/*"]
+      "@renderer/*": ["./src/renderer/src/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@rpc": ["./src/renderer/rpc.ts"]
     }
   }
 }

@@ -5,7 +5,7 @@ import sherpaOnnx from 'sherpa-onnx-node';
 import type { SpeakerEmbeddingExtractor as SpeakerEmbeddingExtractorInstance } from 'sherpa-onnx-node';
 
 import { SAMPLE_RATE } from '../constants.ts';
-import { createModelConfig } from '../models.ts';
+import { createAudioConfig } from '../models.ts';
 import { averageEmbeddings, writeVoiceprint } from '../voiceprint.ts';
 import { loading } from './utils/index.ts';
 
@@ -40,7 +40,7 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
     type: 'voiceprint';
   };
   try {
-    const extractor = new SpeakerEmbeddingExtractor(createModelConfig().speaker);
+    const extractor = new SpeakerEmbeddingExtractor(createAudioConfig().speaker);
     const embeddings = positionals.map(file => computeEmbedding(extractor, file));
     const target = writeVoiceprint(output, averageEmbeddings(embeddings));
     result = {

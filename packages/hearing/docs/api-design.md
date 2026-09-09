@@ -1,3 +1,5 @@
+> 多模型、结构化事件和 KWS 的当前接口见 [多模型接口](./multi-model.md)。
+
 # Hearing API 设计
 
 本文定义 `@cieljs/hearing` 第一版的公开 API、数据语义和运行边界。
@@ -28,7 +30,7 @@
 主入口只包含运行时 API 和配置检查：
 
 ```ts
-import { ASR, checkConfiguration, createModelConfig } from '@cieljs/hearing';
+import { ASR, createASR, checkConfiguration } from '@cieljs/hearing';
 ```
 
 `./ciel` 是 CLI 入口，`./worker` 是 Electron 后端启动的独立进程，两者都不作为公共子路径导出类型。
@@ -149,7 +151,7 @@ ASR（门面）
     └── spawn worker.mjs → NativeASR
 ```
 
-`createModelConfig()` 与 `checkConfiguration()` 是仅有的两个配置入口。数据库、网络或业务类型均不在本包范围内。
+`createASR()` 负责模型准备和实例创建，`checkConfiguration(options)` 检查所选资源，原生推理配置不对外暴露。
 
 ## 关键设计原因
 

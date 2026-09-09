@@ -25,10 +25,12 @@
   },
   "dependencies": {
     "@cieljs/agent-kit": "workspace:*",
-    "@cieljs/core": "workspace:*",
     "@cieljs/embed": "workspace:*",
+    "@cieljs/mcp": "workspace:*",
     "@cieljs/memory": "workspace:*",
+    "@cieljs/model-kit": "workspace:*",
     "@cieljs/perception": "workspace:*",
+    "@cieljs/runtime": "workspace:*",
     "@cieljs/session": "workspace:*",
     "@cieljs/storage": "workspace:*",
     "@cieljs/vector": "workspace:*",

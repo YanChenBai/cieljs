@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vite-plus/test';
 
-import { createModelConfig } from '../src/models.ts';
+import { createAudioConfig } from '../src/models.ts';
+import { createQwen3Config } from '../src/models/qwen3.ts';
 
-describe('createModelConfig', () => {
+describe('createAudioConfig', () => {
   it('使用 Qwen3-ASR-1.7B INT8 与 TEN-VAD', () => {
-    const config = createModelConfig();
+    const config = createAudioConfig();
 
-    expect(config.recognizer.modelConfig?.qwen3Asr).toMatchObject({
+    expect(createQwen3Config().modelConfig?.qwen3Asr).toMatchObject({
       hotwords: '',
       maxNewTokens: 64,
       maxTotalLen: 512,
     });
-    expect(config.recognizer.modelConfig?.qwen3Asr?.convFrontend).toMatch(/conv_frontend\.onnx$/);
-    expect(config.recognizer.modelConfig?.qwen3Asr?.encoder).toMatch(/encoder\.int8\.onnx$/);
-    expect(config.recognizer.modelConfig?.qwen3Asr?.decoder).toMatch(/decoder\.int8\.onnx$/);
-    expect(config.recognizer.modelConfig?.qwen3Asr?.tokenizer).toMatch(/tokenizer$/);
+    expect(createQwen3Config().modelConfig?.qwen3Asr?.convFrontend).toMatch(/conv_frontend\.onnx$/);
+    expect(createQwen3Config().modelConfig?.qwen3Asr?.encoder).toMatch(/encoder\.int8\.onnx$/);
+    expect(createQwen3Config().modelConfig?.qwen3Asr?.decoder).toMatch(/decoder\.int8\.onnx$/);
+    expect(createQwen3Config().modelConfig?.qwen3Asr?.tokenizer).toMatch(/tokenizer$/);
     expect(config.vad.sileroVad).toBeUndefined();
     expect(config.vad.tenVad).toMatchObject({
       threshold: 0.25,
@@ -30,9 +31,9 @@ describe('createModelConfig', () => {
     const previous = process.env.CIEL_DATA_DIR;
     try {
       process.env.CIEL_DATA_DIR = 'C:\\ciel-first';
-      const first = createModelConfig();
+      const first = createAudioConfig();
       process.env.CIEL_DATA_DIR = 'C:\\ciel-second';
-      const second = createModelConfig();
+      const second = createAudioConfig();
 
       expect(first.vad.tenVad?.model).toContain('ciel-first');
       expect(second.vad.tenVad?.model).toContain('ciel-second');

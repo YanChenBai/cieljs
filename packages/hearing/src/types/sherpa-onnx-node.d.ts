@@ -573,6 +573,14 @@ declare module 'sherpa-onnx-node' {
     handle: DisplayHandle;
   };
 
+  export class KeywordSpotter {
+    constructor(config: KeywordSpotterConfig);
+    createStream(): OnlineStream;
+    isReady(stream: OnlineStream): boolean;
+    decode(stream: OnlineStream): void;
+    reset(stream: OnlineStream): void;
+    getResult(stream: OnlineStream): KeywordResult;
+  }
   export class OnlineStream {
     readonly handle: OnlineStreamHandle;
     acceptWaveform(waveform: Waveform): void;
@@ -656,6 +664,7 @@ declare module 'sherpa-onnx-node' {
   export function writeWave(filename: string, wave: WaveObject): void;
 
   const sherpaOnnx: {
+    KeywordSpotter: typeof KeywordSpotter;
     CircularBuffer: typeof CircularBuffer;
     OfflineRecognizer: typeof OfflineRecognizer;
     OnlineRecognizer: typeof OnlineRecognizer;

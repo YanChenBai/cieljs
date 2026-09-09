@@ -103,7 +103,18 @@ export class LiveMedia {
     const startAt = new Date(this.startedAt + this.sampleCount / 16);
 
     this.sampleCount += Math.floor(data.byteLength / 2);
-    this.options.perception.asr.write({ data, startAt });
+    const audio = child.stdout;
+    if (audio && 'pause' in audio) audio.pause();
+    const write = Promise.resolve(this.options.perception.asr.write({ data, startAt }));
+    this.writes.add(write);
+    void write
+      .catch(error =>
+        this.options.onError?.(error instanceof Error ? error : new Error(String(error))),
+      )
+      .finally(() => {
+        this.writes.delete(write);
+        if (this.child === child && audio && 'resume' in audio) audio.resume();
+      });
   }
 
   private writeImages(child: ChildProcess, data: Buffer): void {

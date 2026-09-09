@@ -1,16 +1,14 @@
-// @env node
-
 import { EventEmitter } from 'node:events';
 
 import sherpaOnnx from 'sherpa-onnx-node';
+// @env node
 import type {
   CircularBuffer as CircularBufferInstance,
-  OfflineRecognizer as OfflineRecognizerInstance,
-  OfflineRecognizerResult,
   SpeechSegment,
   Vad as VadInstance,
 } from 'sherpa-onnx-node';
 
+import { AudioNormalizer } from './audio.ts';
 import {
   SAMPLE_RATE,
   VAD_WINDOW_SIZE,
@@ -18,50 +16,63 @@ import {
   DEFAULT_MAX_SPEAKERS,
   DEFAULT_SPEAKER_THRESHOLD,
 } from './constants.ts';
-import { createModelConfig } from './models.ts';
+import { installKWSModels } from './kws.ts';
+import { installModels, type InstallModelsOptions } from './model-installer.ts';
+import { createAudioConfig } from './models.ts';
 import { ProcessASR } from './process-asr.ts';
+import { ASR_MODELS, DEFAULT_ASR_MODEL } from './registry.ts';
 import { SpeakerTracker } from './speaker.ts';
-import type { ASREventMap, ASROptions, ASRSegment, Unsubscribe } from './types.ts';
+import type { ASREventMap, ASROptions, ASRSegment, ASRResult, Unsubscribe } from './types.ts';
+import { WakeGate } from './wake-gate.ts';
 
-const { CircularBuffer, OfflineRecognizer, SpeakerEmbeddingExtractor, Vad } = sherpaOnnx;
-const QWEN3_ASR_TEXT_MARKER = '<asr_text>';
-const MAX_TRANSCRIPTION_RETRY_DEPTH = 2;
-const MIN_TRANSCRIPTION_RETRY_SAMPLES = SAMPLE_RATE * 4;
-
+const { CircularBuffer, SpeakerEmbeddingExtractor, Vad } = sherpaOnnx;
 export class NativeASR {
   private readonly emitter = new EventEmitter();
   private readonly buffer: CircularBufferInstance;
   private readonly bufferCapacity: number;
-  private readonly maxNewTokens: number;
-  private readonly recognizer: OfflineRecognizerInstance;
-  private readonly speaker: SpeakerTracker;
-  private readonly vad: VadInstance;
+  private recognizer?: {
+    transcribe(
+      samples: Float32Array,
+    ): Pick<ASRResult, 'content' | 'language' | 'emotion' | 'events'>;
+  };
+  private speaker?: SpeakerTracker;
+  private vad?: VadInstance;
+  private readonly normalizer = new AudioNormalizer();
+  private readonly eventWindow: number;
+  private eventOffset = 0;
+  private closed = false;
   private readonly windowSize: number;
   private streamStartAt?: Date;
 
   constructor(options: ASROptions = {}) {
     validateOptions(options);
 
-    const models = createModelConfig();
+    const models = createAudioConfig();
     const bufferSeconds = options.bufferSeconds ?? DEFAULT_BUFFER_SECONDS;
     this.bufferCapacity = Math.ceil(bufferSeconds * SAMPLE_RATE);
     this.buffer = new CircularBuffer(this.bufferCapacity);
-    this.recognizer = new OfflineRecognizer(models.recognizer);
-    this.maxNewTokens = models.recognizer.modelConfig?.qwen3Asr?.maxNewTokens ?? 128;
-    this.vad = new Vad(models.vad, bufferSeconds);
+    const model = ASR_MODELS[options.model ?? DEFAULT_ASR_MODEL];
+    if (!model) throw new Error(`Unsupported ASR model: ${options.model}`);
+    if (options.mode === 'events' && !model.events)
+      throw new Error('Selected ASR model does not support audio events');
+    this.recognizer = model.create();
+    this.eventWindow = Math.round((options.eventWindowSeconds ?? 5) * SAMPLE_RATE);
+    if (options.mode !== 'events') this.vad = new Vad(models.vad, bufferSeconds);
     this.windowSize = models.vad.tenVad?.windowSize ?? VAD_WINDOW_SIZE;
-    this.speaker = new SpeakerTracker(
-      new SpeakerEmbeddingExtractor(models.speaker),
-      options.speaker ?? [],
-      options.speakerThreshold ?? DEFAULT_SPEAKER_THRESHOLD,
-      options.maxSpeakers ?? DEFAULT_MAX_SPEAKERS,
-    );
+    if (options.speaker !== false)
+      this.speaker = new SpeakerTracker(
+        new SpeakerEmbeddingExtractor(models.speaker),
+        options.speaker ?? [],
+        options.speakerThreshold ?? DEFAULT_SPEAKER_THRESHOLD,
+        options.maxSpeakers ?? DEFAULT_MAX_SPEAKERS,
+      );
   }
 
   write(segment: ASRSegment): void {
     try {
       if (!this.streamStartAt) this.streamStartAt = segment.startAt;
-      const samples = pcm16ToFloat32(segment.data);
+      if (this.closed) throw new Error('ASR is closed');
+      const samples = this.normalizer.write(segment);
       this.push(samples);
       this.processWindows();
       this.drainVad();
@@ -72,6 +83,19 @@ export class NativeASR {
 
   flush(): void {
     try {
+      if (this.closed || !this.streamStartAt) return;
+      this.push(this.normalizer.flush());
+      this.processWindows();
+      if (!this.vad) {
+        this.processWindows();
+        const remaining = this.buffer.size();
+        if (remaining > 0)
+          this.transcribe({
+            start: this.eventOffset,
+            samples: this.buffer.get(this.buffer.head(), remaining),
+          });
+        return;
+      }
       const remaining = this.buffer.size();
       if (remaining > 0) {
         const samples = this.buffer.get(this.buffer.head(), remaining);
@@ -85,7 +109,8 @@ export class NativeASR {
     } catch (error) {
       this.emit('error', toError(error));
     } finally {
-      this.vad.reset();
+      this.vad?.reset();
+      this.eventOffset = 0;
       this.buffer.reset();
       this.streamStartAt = undefined;
     }
@@ -114,6 +139,15 @@ export class NativeASR {
   }
 
   private processWindows(): void {
+    if (!this.vad) {
+      while (this.buffer.size() >= this.eventWindow) {
+        const samples = this.buffer.get(this.buffer.head(), this.eventWindow);
+        this.buffer.pop(this.eventWindow);
+        this.transcribe({ start: this.eventOffset, samples });
+        this.eventOffset += samples.length;
+      }
+      return;
+    }
     while (this.buffer.size() >= this.windowSize) {
       const samples = this.buffer.get(this.buffer.head(), this.windowSize);
       this.buffer.pop(this.windowSize);
@@ -122,7 +156,7 @@ export class NativeASR {
   }
 
   private drainVad(): void {
-    while (!this.vad.isEmpty()) {
+    while (this.vad && !this.vad.isEmpty()) {
       const segment = this.vad.front();
       this.vad.pop();
       this.transcribe(segment);
@@ -139,11 +173,11 @@ export class NativeASR {
     const segmentEndAt = addSamples(segmentStartAt, segment.samples.length);
     this.emit('speechstart', segmentStartAt);
 
-    const content = this.recognize(segment.samples);
-    if (content) {
+    const result = this.recognizer!.transcribe(segment.samples);
+    if (result.content || result.events?.length) {
       this.emit('result', {
-        content,
-        speaker: this.speaker.assign(segment.samples, SAMPLE_RATE),
+        ...result,
+        speaker: result.content ? this.speaker?.assign(segment.samples, SAMPLE_RATE) : undefined,
         startAt: segmentStartAt,
         endAt: segmentEndAt,
       });
@@ -151,27 +185,17 @@ export class NativeASR {
     this.emit('speechend', segmentEndAt);
   }
 
-  private recognize(samples: Float32Array, depth = 0): string {
-    const stream = this.recognizer.createStream();
-    stream.acceptWaveform({
-      samples,
-      sampleRate: SAMPLE_RATE,
-    });
-    this.recognizer.decode(stream);
-    const result = this.recognizer.getResult(stream);
-    const content = parseQwen3AsrText(result.text);
-    if (!isDegenerateResult(result, content, this.maxNewTokens)) return content;
-    if (
-      depth >= MAX_TRANSCRIPTION_RETRY_DEPTH ||
-      samples.length < MIN_TRANSCRIPTION_RETRY_SAMPLES
-    ) {
-      return '';
+  async close(): Promise<void> {
+    if (this.closed) return;
+    try {
+      this.flush();
+    } finally {
+      this.closed = true;
+      this.recognizer = undefined;
+      this.speaker = undefined;
+      this.vad = undefined;
+      this.emitter.removeAllListeners();
     }
-    const midpoint = Math.floor(samples.length / 2);
-    return joinTranscriptParts([
-      this.recognize(samples.subarray(0, midpoint), depth + 1),
-      this.recognize(samples.subarray(midpoint), depth + 1),
-    ]);
   }
 }
 
@@ -179,78 +203,43 @@ export class NativeASR {
  * 在普通 Node 中直接使用原生 sherpa；Electron 的 V8 memory cage 不允许 sherpa 返回堆外 ArrayBuffer，因此自动将识别工作移入独立 Node
  * ESM 进程。
  */
-export class ASR {
+export class ASR implements AsyncDisposable {
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.close();
+  }
   private readonly backend: NativeASR | ProcessASR;
+  private readonly gate?: WakeGate;
 
   constructor(options: ASROptions = {}) {
     this.backend = process.versions.electron ? new ProcessASR(options) : new NativeASR(options);
+    if (options.wake) this.gate = new WakeGate(this.backend, options.wake);
   }
 
-  write(segment: ASRSegment): void {
-    this.backend.write(segment);
+  write(segment: ASRSegment): void | Promise<void> {
+    return this.gate ? this.gate.write(segment) : this.backend.write(segment);
   }
 
-  flush(): void {
-    this.backend.flush();
+  flush(): void | Promise<void> {
+    return this.gate ? this.gate.flush() : this.backend.flush();
   }
 
   on<K extends keyof ASREventMap>(event: K, callback: ASREventMap[K]): Unsubscribe {
+    if (event === 'error' && this.gate) {
+      const first = this.gate.kws.on('error', callback as ASREventMap['error']);
+      const second = this.backend.on(event, callback);
+      return () => {
+        first();
+        second();
+      };
+    }
+    if (event === 'wake' && this.gate)
+      return this.gate.kws.on('wake', callback as ASREventMap['wake']);
     return this.backend.on(event, callback);
   }
 
   close(): Promise<void> {
-    return this.backend instanceof ProcessASR ? this.backend.close() : Promise.resolve();
+    return this.gate ? this.gate.close() : this.backend.close();
   }
-}
-
-function pcm16ToFloat32(data: Buffer): Float32Array {
-  if (data.length % Int16Array.BYTES_PER_ELEMENT !== 0) {
-    throw new Error('Echo data must contain aligned s16le PCM samples');
-  }
-  const samples = new Float32Array(data.length / Int16Array.BYTES_PER_ELEMENT);
-  for (let index = 0; index < samples.length; index += 1) {
-    const value = data.readInt16LE(index * Int16Array.BYTES_PER_ELEMENT);
-    samples[index] = value < 0 ? value / 32_768 : value / 32_767;
-  }
-  return samples;
-}
-
-function parseQwen3AsrText(text: string): string {
-  const marker = text.indexOf(QWEN3_ASR_TEXT_MARKER);
-  return (marker < 0 ? text : text.slice(marker + QWEN3_ASR_TEXT_MARKER.length)).trim();
-}
-
-function isDegenerateResult(
-  result: OfflineRecognizerResult,
-  content: string,
-  maxNewTokens: number,
-): boolean {
-  return result.tokens.length >= maxNewTokens || hasExcessiveRepetition(content);
-}
-
-function hasExcessiveRepetition(content: string): boolean {
-  const characters = Array.from(content.normalize().replaceAll(/[\s\p{P}\p{S}]+/gu, ''));
-  if (characters.length < 32) return false;
-  for (let unitLength = 1; unitLength <= 8; unitLength += 1) {
-    const unitStart = characters.length - unitLength;
-    const unit = characters.slice(unitStart).join('');
-    let repeats = 1;
-    for (let cursor = unitStart - unitLength; cursor >= 0; cursor -= unitLength) {
-      if (characters.slice(cursor, cursor + unitLength).join('') !== unit) break;
-      repeats += 1;
-    }
-    if (repeats >= 8 && repeats * unitLength >= characters.length / 2) return true;
-  }
-  return false;
-}
-
-function joinTranscriptParts(parts: readonly string[]): string {
-  return parts.filter(Boolean).reduce((combined, part) => {
-    if (!combined) return part;
-    const separator =
-      /[\p{Script=Han}\p{P}]$/u.test(combined) || /^[\p{Script=Han}\p{P}]/u.test(part) ? '' : ' ';
-    return `${combined}${separator}${part}`;
-  }, '');
 }
 
 function addSamples(at: Date, samples: number): Date {
@@ -266,9 +255,17 @@ function toError(error: unknown): Error {
 }
 
 function validateOptions(options: ASROptions): void {
+  const seconds = options.eventWindowSeconds ?? 5;
+  if (
+    !Number.isFinite(seconds) ||
+    Math.round(seconds * SAMPLE_RATE) < 1 ||
+    (options.mode === 'events' && seconds > (options.bufferSeconds ?? DEFAULT_BUFFER_SECONDS))
+  )
+    throw new Error('eventWindowSeconds must fit in the audio buffer');
   if (
     options.bufferSeconds !== undefined &&
-    options.bufferSeconds < VAD_WINDOW_SIZE / SAMPLE_RATE
+    (!Number.isFinite(options.bufferSeconds) ||
+      options.bufferSeconds < VAD_WINDOW_SIZE / SAMPLE_RATE)
   ) {
     throw new Error(`bufferSeconds must hold at least one ${VAD_WINDOW_SIZE}-sample VAD window`);
   }
@@ -283,5 +280,21 @@ function validateOptions(options: ASROptions): void {
     (!Number.isInteger(options.maxSpeakers) || options.maxSpeakers < 1)
   ) {
     throw new Error('maxSpeakers must be a positive integer');
+  }
+}
+
+export async function createASR(
+  options: ASROptions = {},
+  prepare: InstallModelsOptions = {},
+): Promise<ASR> {
+  await installModels({ ...prepare, ...options });
+  if (options.wake && !options.wake.modelPath) await installKWSModels(prepare);
+  const asr = new ASR(options);
+  try {
+    await asr.flush();
+    return asr;
+  } catch (error) {
+    await asr.close().catch(() => {});
+    throw error;
   }
 }

@@ -1,4 +1,4 @@
-import type { RuntimeRecord } from '@cieljs/runtime-protocol';
+import type { RuntimeRecord } from '@cieljs/agent-kit/protocol';
 
 export interface TraceEntry {
   id: string;

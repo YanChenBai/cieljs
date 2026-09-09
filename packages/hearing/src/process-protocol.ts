@@ -1,23 +1,27 @@
-import type { ASROptions } from './types.ts';
-
-export type ASRWorkerCommand =
-  | { type: 'init'; options: ASROptions }
-  | { type: 'write'; data: string; startAt: string }
-  | { type: 'flush' }
-  | { type: 'close' };
-
+import type { KWSOptions, WakeEvent } from './kws.ts';
+import type { ASROptions, ASRResult } from './types.ts';
+export type ASRWorkerCommand = { id: number } & (
+  | { type: 'init'; kind: 'asr'; options: ASROptions }
+  | { type: 'init'; kind: 'kws'; options: KWSOptions }
+  | {
+      type: 'write';
+      data: string;
+      startAt: string;
+      sampleRate?: number;
+      channels?: number;
+      format?: 's16le';
+    }
+  | { type: 'flush' | 'close' }
+);
 export type ASRWorkerEvent =
-  | { type: 'ready' }
+  | { type: 'ack'; id: number; error?: string }
   | {
       type: 'result';
-      data: {
-        content: string;
-        speaker?: string;
-        confidence?: number;
+      data: Omit<ASRResult, 'startAt' | 'endAt' | 'tokens'> & {
         startAt: string;
         endAt: string;
         tokens?: readonly { content: string; startAt: string; endAt: string }[];
       };
     }
-  | { type: 'speechstart' | 'speechend'; at: string }
-  | { type: 'error'; message: string; fatal?: boolean };
+  | { type: 'wake'; data: Omit<WakeEvent, 'at'> & { at: string } }
+  | { type: 'speechstart' | 'speechend'; at: string };

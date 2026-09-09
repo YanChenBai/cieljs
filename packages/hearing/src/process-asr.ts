@@ -3,145 +3,160 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { fileURLToPath } from 'node:url';
 
+import type { KWSOptions } from './kws.ts';
 import type { ASRWorkerCommand, ASRWorkerEvent } from './process-protocol.ts';
-import type { ASREventMap, ASROptions, ASRResult, ASRSegment, Unsubscribe } from './types.ts';
-
+import type { ASREventMap, ASROptions, ASRSegment, Unsubscribe } from './types.ts';
+type Command = ASRWorkerCommand extends infer T
+  ? T extends { id: number }
+    ? Omit<T, 'id'>
+    : never
+  : never;
 export class ProcessASR {
   private readonly emitter = new EventEmitter();
   private readonly process: ChildProcessWithoutNullStreams;
   private output = '';
-  private closing = false;
-  private failed = false;
-  private ready = false;
-  private readonly pending: ASRWorkerCommand[] = [];
-
-  constructor(options: ASROptions) {
-    const executable = process.env.CIEL_NODE_EXECUTABLE?.trim() || 'node';
-    const worker = new URL('./worker.mjs', import.meta.url);
-    this.process = spawn(executable, [fileURLToPath(worker)], {
-      env: process.env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
+  private diagnostics = '';
+  private sequence = 0;
+  private failure?: Error;
+  private closing?: Promise<void>;
+  private readonly pending = new Map<
+    number,
+    { resolve(): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> }
+  >();
+  private readonly ready: Promise<void>;
+  private readonly exited: Promise<void>;
+  constructor(
+    options: ASROptions | KWSOptions,
+    kind: 'asr' | 'kws' = 'asr',
+    worker = new URL('./worker.mjs', import.meta.url),
+  ) {
+    this.process = spawn(
+      process.env.CIEL_NODE_EXECUTABLE?.trim() || 'node',
+      [fileURLToPath(worker)],
+      { env: process.env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
+    );
     this.process.stdout.setEncoding('utf8');
-    this.process.stderr.setEncoding('utf8');
     this.process.stdout.on('data', chunk => this.consume(String(chunk)));
     this.process.stderr.on('data', chunk => {
-      const messages = String(chunk)
-        .split(/\r?\n/u)
-        .map(message => message.trim())
-        .filter(Boolean);
-      for (const message of messages) {
-        if (message.includes('Result is truncated. max_new_tokens')) continue;
-        this.emit('error', new Error(`ASR worker: ${message}`));
-      }
+      this.diagnostics = (this.diagnostics + String(chunk)).slice(-4000);
     });
-    this.process.on('error', error => this.emit('error', toError(error)));
-    this.process.on('exit', code => {
-      if (!this.closing && code !== 0) {
-        this.emit('error', new Error(`ASR worker exited with code ${String(code)}`));
-      }
-    });
-    this.sendNow({ type: 'init', options });
+    this.process.stdin.on('error', error => this.fail(error));
+    this.process.on('error', error => this.fail(error));
+    this.exited = new Promise(resolve =>
+      this.process.once('close', () => {
+        if (!this.closing || this.pending.size)
+          this.fail(
+            new Error(
+              'Hearing worker exited before completing requests' +
+                (this.diagnostics ? ': ' + this.diagnostics : ''),
+            ),
+          );
+        resolve();
+      }),
+    );
+    const init: Command =
+      kind === 'kws'
+        ? { type: 'init', kind, options: options as KWSOptions }
+        : { type: 'init', kind, options: options as ASROptions };
+    this.ready = this.request(init);
+    void this.ready.catch(error => this.fail(error));
   }
-
-  write(segment: ASRSegment): void {
-    this.send({
+  write(chunk: ASRSegment): Promise<void> {
+    if (this.closing) return Promise.reject(new Error('Hearing worker is closing'));
+    return this.request({
+      ...chunk,
       type: 'write',
-      data: segment.data.toString('base64'),
-      startAt: segment.startAt.toISOString(),
+      data: chunk.data.toString('base64'),
+      startAt: chunk.startAt.toISOString(),
     });
   }
-
-  flush(): void {
-    this.send({ type: 'flush' });
+  flush(): Promise<void> {
+    return this.closing ?? this.request({ type: 'flush' });
   }
-
-  on<K extends keyof ASREventMap>(event: K, callback: ASREventMap[K]): Unsubscribe {
-    this.emitter.on(event, callback);
-
-    return () => this.emitter.off(event, callback);
+  on<K extends keyof ASREventMap>(event: K, listener: ASREventMap[K]): Unsubscribe {
+    this.emitter.on(event, listener);
+    return () => this.emitter.off(event, listener);
   }
-
-  async close(): Promise<void> {
-    if (this.closing) return;
-    this.closing = true;
-    this.send({ type: 'close' });
-    await new Promise<void>(resolve => {
-      if (this.process.exitCode !== null) resolve();
-      else this.process.once('close', () => resolve());
-    });
+  close(): Promise<void> {
+    this.closing ??= this.finish();
+    return this.closing;
   }
-
-  private send(command: ASRWorkerCommand): void {
-    if (this.failed && command.type !== 'close') return;
-    if (!this.ready && !this.failed && command.type !== 'init') {
-      this.pending.push(command);
-      return;
+  private async finish(): Promise<void> {
+    try {
+      await this.ready;
+      await this.request({ type: 'close' });
+    } finally {
+      this.process.stdin.end();
+      const timer = setTimeout(() => this.process.kill(), 5_000);
+      try {
+        await this.exited;
+      } finally {
+        clearTimeout(timer);
+      }
     }
-    this.sendNow(command);
   }
-
-  private sendNow(command: ASRWorkerCommand): void {
-    if (this.process.stdin.destroyed) return;
-    this.process.stdin.write(`${JSON.stringify(command)}\n`);
+  private request(command: Command): Promise<void> {
+    if (this.failure) return Promise.reject(this.failure);
+    if (this.pending.size >= 32 || this.process.stdin.writableLength > 8 * 1024 * 1024)
+      return Promise.reject(new Error('Hearing worker queue is full; await write()'));
+    const id = ++this.sequence;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.fail(new Error('Hearing worker request timed out'));
+        this.process.kill();
+      }, 120_000);
+      this.pending.set(id, { resolve, reject, timer });
+      this.process.stdin.write(JSON.stringify({ ...command, id }) + '\n', error => {
+        if (error) this.fail(error);
+      });
+    });
   }
-
+  private fail(error: Error): void {
+    this.failure ??= error;
+    for (const request of this.pending.values()) {
+      clearTimeout(request.timer);
+      request.reject(this.failure);
+    }
+    this.pending.clear();
+    if (this.emitter.listenerCount('error')) this.emitter.emit('error', this.failure);
+  }
   private consume(chunk: string): void {
     this.output += chunk;
-    let newline = this.output.indexOf('\n');
-    while (newline >= 0) {
-      const line = this.output.slice(0, newline).trim();
+    let newline: number;
+    while ((newline = this.output.indexOf('\n')) >= 0) {
+      const line = this.output.slice(0, newline);
       this.output = this.output.slice(newline + 1);
-      if (line) {
-        try {
-          this.handle(JSON.parse(line) as ASRWorkerEvent);
-        } catch (error) {
-          this.emit('error', toError(error));
-        }
+      if (!line.trim()) continue;
+      try {
+        this.handle(JSON.parse(line) as ASRWorkerEvent);
+      } catch (error) {
+        this.fail(error instanceof Error ? error : new Error(String(error)));
       }
-      newline = this.output.indexOf('\n');
     }
   }
-
   private handle(event: ASRWorkerEvent): void {
-    if (event.type === 'ready') {
-      this.ready = true;
-      for (const command of this.pending.splice(0)) this.sendNow(command);
-      return;
+    if (event.type === 'ack') {
+      const request = this.pending.get(event.id);
+      if (!request) return;
+      this.pending.delete(event.id);
+      clearTimeout(request.timer);
+      if (event.error) request.reject(new Error(event.error));
+      else request.resolve();
+    } else if (event.type === 'result') {
+      this.emitter.emit('result', {
+        ...event.data,
+        startAt: new Date(event.data.startAt),
+        endAt: new Date(event.data.endAt),
+        tokens: event.data.tokens?.map(token => ({
+          ...token,
+          startAt: new Date(token.startAt),
+          endAt: new Date(token.endAt),
+        })),
+      });
+    } else if (event.type === 'wake') {
+      this.emitter.emit('wake', { ...event.data, at: new Date(event.data.at) });
+    } else {
+      this.emitter.emit(event.type, new Date(event.at));
     }
-    if (event.type === 'error') {
-      if (event.fatal) {
-        this.failed = true;
-        this.pending.length = 0;
-        this.sendNow({ type: 'close' });
-      }
-      this.emit('error', new Error(event.message));
-      return;
-    }
-    if (event.type === 'speechstart' || event.type === 'speechend') {
-      this.emit(event.type, new Date(event.at));
-      return;
-    }
-    if (event.type !== 'result') return;
-    const data: ASRResult = {
-      ...event.data,
-      startAt: new Date(event.data.startAt),
-      endAt: new Date(event.data.endAt),
-      tokens: event.data.tokens?.map(token => ({
-        ...token,
-        startAt: new Date(token.startAt),
-        endAt: new Date(token.endAt),
-      })),
-    };
-    this.emit('result', data);
   }
-
-  private emit<K extends keyof ASREventMap>(event: K, ...args: Parameters<ASREventMap[K]>): void {
-    this.emitter.emit(event, ...args);
-  }
-}
-
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }

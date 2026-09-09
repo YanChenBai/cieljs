@@ -24,7 +24,7 @@ export interface DefineCielOptions {
   memory: Omit<MemoryStorageOptions, 'embedding'>;
   embedding?: CielEmbeddingOptions;
   tools?: AgentTool[];
-  mcp?: CielMcpOptions;
+  mcp?: McpTools;
   investigation?: {
     systemPrompt?: string;
     tools?: AgentTool[];

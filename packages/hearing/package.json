@@ -26,6 +26,7 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
+    "pinyin-pro": "catalog:",
     "sherpa-onnx-node": "^1.13.6"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import type { RuntimeRecord } from '@cieljs/runtime-protocol';
+import type { RuntimeRecord } from '@cieljs/agent-kit/protocol';
 import { type Storage, type Transaction } from '@cieljs/storage';
 import type { VectorIndex } from '@cieljs/vector';
 import { and, asc, between, desc, eq, gt, inArray, sql } from 'drizzle-orm';

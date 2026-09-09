@@ -1,4 +1,4 @@
-import type { AgentEvent, RuntimeMetadata } from '@cieljs/runtime-protocol';
+import type { AgentEvent, RuntimeMetadata } from '@cieljs/agent-kit/protocol';
 import type { Storage } from '@cieljs/storage';
 import type { VectorIndex } from '@cieljs/vector';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';

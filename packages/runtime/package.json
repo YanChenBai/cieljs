@@ -1,5 +1,5 @@
 {
-  "name": "@cieljs/core",
+  "name": "@cieljs/runtime",
   "version": "0.0.0",
   "description": "Ciel runtime with isolated session, memory, and investigation agents.",
   "license": "MIT",
@@ -25,7 +25,6 @@
     "@cieljs/mcp": "workspace:*",
     "@cieljs/memory": "workspace:*",
     "@cieljs/model-kit": "workspace:*",
-    "@cieljs/runtime-protocol": "workspace:*",
     "@cieljs/session": "workspace:*",
     "@cieljs/storage": "workspace:*",
     "@cieljs/vector": "workspace:*",

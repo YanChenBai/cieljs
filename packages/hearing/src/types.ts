@@ -1,8 +1,6 @@
-import type {
-  OfflineRecognizerConfig,
-  SpeakerEmbeddingExtractorConfig,
-  VadConfig,
-} from 'sherpa-onnx-node';
+import type { WakeEvent } from './kws.ts';
+import type { ASRModelId } from './registry.ts';
+import type { WakeOptions } from './wake-gate.ts';
 
 export type Unsubscribe = () => void;
 
@@ -12,13 +10,18 @@ export interface SpeakerProfile {
 }
 
 export interface ASROptions {
-  speaker?: readonly SpeakerProfile[];
+  wake?: WakeOptions;
+  model?: ASRModelId;
+  mode?: 'transcription' | 'events';
+  eventWindowSeconds?: number;
+  speaker?: false | readonly SpeakerProfile[];
   bufferSeconds?: number;
   speakerThreshold?: number;
   maxSpeakers?: number;
 }
 
 export interface ASREventMap {
+  wake(event: WakeEvent): void;
   result(data: ASRResult): void;
   speechstart(at: Date): void;
   speechend(at: Date): void;
@@ -28,6 +31,10 @@ export interface ASREventMap {
 export interface ASRSegment {
   data: Buffer;
   startAt: Date;
+  /** 默认 16 kHz、单声道 s16le。 */
+  sampleRate?: number;
+  channels?: number;
+  format?: 's16le';
 }
 
 export interface ASRToken {
@@ -38,6 +45,9 @@ export interface ASRToken {
 
 export interface ASRResult {
   content: string;
+  language?: string;
+  emotion?: string;
+  events?: readonly AudioEvent[];
   speaker?: string;
   confidence?: number;
   startAt: Date;
@@ -45,8 +55,13 @@ export interface ASRResult {
   tokens?: readonly ASRToken[];
 }
 
-export interface ModelConfig {
-  recognizer: OfflineRecognizerConfig;
-  vad: VadConfig;
-  speaker: SpeakerEmbeddingExtractorConfig;
+export interface AudioEvent {
+  type: string;
+}
+
+export interface ASRStream extends AsyncDisposable {
+  write(chunk: ASRSegment): void | Promise<void>;
+  flush(): void | Promise<void>;
+  on<K extends keyof ASREventMap>(event: K, listener: ASREventMap[K]): Unsubscribe;
+  close(): Promise<void>;
 }

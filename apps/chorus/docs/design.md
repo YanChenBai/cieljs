@@ -6,7 +6,7 @@
 
 ## 1. 定位
 
-`@cieljs/chorus` 是一个纯 Node.js 应用。它把 `@cieljs/perception` 产生的多人语音感知快照交给 `@cieljs/core` 管理的 Ciel Session，让 Agent 作为群聊参与者判断何时发言，并通过小米 MiMo TTS 和指定输出设备说出回复。
+`@cieljs/chorus` 是一个纯 Node.js 应用。它把 `@cieljs/perception` 产生的多人语音感知快照交给 `@cieljs/runtime` 管理的 Ciel Session，让 Agent 作为群聊参与者判断何时发言，并通过小米 MiMo TTS 和指定输出设备说出回复。
 
 它不是：
 
@@ -23,7 +23,7 @@
 - 使用 `@cieljs/perception` 完成 VAD、ASR、片段时间戳和多人说话人识别
 - 每个 `speechend` 都进入调度器，但任何时刻最多执行一次 Agent 思考
 - 思考期间或最小间隔内到达的新语音合并成一个待思考窗口
-- 使用 `@cieljs/core` 保存普通 Session，并按来源接入长期 Memory
+- 使用 `@cieljs/runtime` 保存普通 Session，并按来源接入长期 Memory
 - 允许 Agent 主动判断“说话”或“保持沉默”，自然参与多人聊天
 - 通过通用 TTS 契约接入小米 `mimo-v2.5-tts`
 - 从 `XIAOMI_API_KEY` 读取模型和 TTS 共用的凭据
@@ -61,7 +61,7 @@ ConversationScheduler ────────┐
 PerceptionSnapshot[].compose()│
       │ AgentMessage[]        │
       ▼                       │
-@cieljs/core CielSession      │
+@cieljs/runtime CielSession      │
       │ gated speak tool      │
       ▼                       │
 TextToSpeech                  │
@@ -78,7 +78,7 @@ Node AudioOutput ─────────────┘
 | `AudioNormalizer`       | 转为 Perception 固定要求的 16 kHz、单声道、s16le PCM | 设备选择、语音识别  |
 | `@cieljs/perception`    | VAD、ASR、说话人和冻结快照                           | 思考队列、TTS、播放 |
 | `ConversationScheduler` | 串行思考、合并事件、最小间隔和时间游标               | 生成回复内容        |
-| `@cieljs/core`          | Session、Memory、工具和 Agent 生命周期               | 音频设备与音频编码  |
+| `@cieljs/runtime`       | Session、Memory、工具和 Agent 生命周期               | 音频设备与音频编码  |
 | `TextToSpeech`          | 把最终发言意图转换为音频                             | 决定是否应该发言    |
 | `AudioOutput`           | 在指定 Node 输出设备播放音频                         | 文本生成和 TTS 请求 |
 
@@ -136,7 +136,7 @@ export default defineChorusConfig({
 - 输入设备必须满足 `maxInputChannels >= channels`，输出设备必须满足 `maxOutputChannels > 0`，不能只按名字判断方向。
 - 启动时必须找到输入和输出设备。显式 ID 不存在时立即失败，不静默回退到默认设备。
 - `XIAOMI_API_KEY` 缺失时在启动阶段失败，但错误和日志不得包含密钥值。
-- Session、Memory 和 Investigation 使用不同的 `dataDir`，遵守 `@cieljs/core` 的现有约束。
+- Session、Memory 和 Investigation 使用不同的 `dataDir`，遵守 `@cieljs/runtime` 的现有约束。
 - `perception.retentionMs` 至少覆盖一次 VAD 结束前可能出现的最长语音段。调度器会在每个 `speechend` 到达时立即冻结增量快照，不依赖思考结束后仍然存在的 Perception 内部历史。
 
 ## 6. `speechend` 调度与合并
@@ -498,7 +498,7 @@ Core 当前 `defineCiel()` 需要调用方提供 `Model<Api>`。仓库内部已�
 
 实现前需要在以下两种方式中确认一种：
 
-1. 推荐：由 `@cieljs/core` 提供稳定的模型解析入口，Chorus 不读取 Core 私有路径。
+1. 推荐：由 `@cieljs/model-kit/models` 提供稳定的模型解析入口，Chorus 不读取 Core 私有路径。
 2. 备选：Chorus 直接依赖 `@earendil-works/pi-ai` 并在应用内注册 Xiaomi provider。
 
 无论选择哪一种，Agent 模型和 MiMo TTS 都读取同一个 `XIAOMI_API_KEY`，但分别持有自己的 client/adapter，不共享上游响应类型。
@@ -651,7 +651,7 @@ apps/chorus/
 详细设计已经固定业务行为和内部契约。进入实现前只剩三项需要通过真实环境验证：
 
 1. `naudiodon2` 在目标 Windows/Node 版本上的原生构建、设备枚举、Buffer timestamp 和实际全双工表现。
-2. `@cieljs/core` 的 Xiaomi 模型 registry 是否作为公共 API 导出。
+2. `@cieljs/model-kit/models` 的 Xiaomi 模型 registry 是否作为公共 API 导出。
 3. MiMo 预置音色最终使用哪一个 voice ID；设计默认值暂定为 `冰糖`。
 
 这些验证不会改变 speechend 合并、最小思考间隔、多人发言门控或通用 TTS 契约。

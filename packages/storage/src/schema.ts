@@ -1,4 +1,4 @@
-import type { RuntimeRecord } from '@cieljs/runtime-protocol';
+import type { RuntimeRecord } from '@cieljs/agent-kit/protocol';
 import { bigint, jsonb, pgSchema, text } from 'drizzle-orm/pg-core';
 
 export const runtimeRecords = pgSchema('storage').table('events', {

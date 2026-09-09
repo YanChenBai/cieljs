@@ -1,3 +1,5 @@
+> 多模型选择、SenseVoice 事件和独立 KWS `wake` 事件见 [多模型接口](./docs/multi-model.md)。
+
 <h1 align="center">@cieljs/hearing</h1>
 
 <p align="center">基于 sherpa-onnx-node 的流式语音感知，负责 PCM 缓冲、VAD 分段、离线转写、片段时间戳与说话人识别。</p>
@@ -75,7 +77,7 @@ vp run @cieljs/hearing#install-model -- --force
 vp run @cieljs/hearing#voiceprint -- --output alice.voiceprint 1.wav 2.wav 3.wav
 ```
 
-模型安装在包目录下的 `models/`，声纹写入包目录下的 `voiceprints/`。运行时完全使用 Node，不需要 Python。详见[模型配置](./docs/models.md)。
+模型和声纹放在 `CIEL_DATA_DIR` 下，默认 `~/.ciel`。运行时完全使用 Node，不需要 Python。详见[模型配置](./docs/models.md)。
 
 ## 开发
 

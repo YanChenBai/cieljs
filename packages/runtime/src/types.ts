@@ -1,4 +1,4 @@
-import type { McpOptions } from '@cieljs/mcp';
+import type { McpTools } from '@cieljs/mcp';
 import type { MemoryManagerOptions } from '@cieljs/memory';
 import type { SessionManagerOptions } from '@cieljs/session';
 import type { Storage } from '@cieljs/storage';
@@ -14,10 +14,6 @@ export type SessionStorageOptions = SessionManagerOptions;
 export type MemoryStorageOptions = MemoryManagerOptions;
 export type InvestigationStorageOptions = SessionManagerOptions;
 
-export interface CielMcpOptions extends McpOptions {
-  enabled: boolean;
-}
-
 export interface DefineCielOptions {
   model: Model<Api>;
   /** 请求级 API key，不写入全局环境变量或持久化存储。 */
@@ -28,7 +24,7 @@ export interface DefineCielOptions {
   memory?: Pick<MemoryStorageOptions, 'timeZone' | 'tokenize' | 'onIndexError'>;
   vectors?: VectorService;
   tools?: AgentTool[];
-  mcp?: CielMcpOptions;
+  mcp?: McpTools;
   investigation?: {
     systemPrompt?: string;
     tools?: AgentTool[];

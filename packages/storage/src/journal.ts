@@ -6,7 +6,7 @@ import type {
   RuntimeReader,
   RuntimeRecord,
   RuntimeWriter,
-} from '@cieljs/runtime-protocol';
+} from '@cieljs/agent-kit/protocol';
 import { asc, gt, sql } from 'drizzle-orm';
 
 import { runtimeRecords } from './schema.ts';

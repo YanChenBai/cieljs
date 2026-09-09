@@ -2,7 +2,7 @@
 
 <p align="center">多人语音聊天参与者：持续感知、择机思考、通过 TTS 发言并播放的纯 Node.js 应用。</p>
 
-`@cieljs/chorus` 把 `@cieljs/perception` 产生的多人语音感知快照交给 `@cieljs/core` 管理的 Ciel Session，让 Agent 作为群聊成员判断何时发言，并通过小米 MiMo TTS 与指定输出设备说出回复。详细设计见 [docs/design.md](./docs/design.md)。
+`@cieljs/chorus` 把 `@cieljs/perception` 产生的多人语音感知快照交给 `@cieljs/runtime` 管理的 Ciel Session，让 Agent 作为群聊成员判断何时发言，并通过小米 MiMo TTS 与指定输出设备说出回复。详细设计见 [docs/design.md](./docs/design.md)。
 
 ## 定位
 
@@ -38,7 +38,7 @@ process.on('SIGINT', async () => {
 });
 ```
 
-`model` 由 `resolveChorusModel()` 从 `@cieljs/core` 的模型 registry 解析 Xiaomi `mimo-v2.5`；Agent 模型与 MiMo TTS 都读取 `XIAOMI_API_KEY`。
+`model` 由 `resolveChorusModel()` 从 `@cieljs/model-kit/models` 的模型 registry 解析 Xiaomi `mimo-v2.5`；Agent 模型与 MiMo TTS 都读取 `XIAOMI_API_KEY`。
 
 ## 启动与设备
 
@@ -89,7 +89,7 @@ export default defineChorusConfig({
 
 `embedding.cacheDir` 指定本地 Qwen Embedding 模型缓存目录。默认 `.cache` 相对于 Chorus 的启动目录。
 
-`mcp.enabled` 控制是否启用 MCP。启用后由 Core 在 `start()` 时读取 `.ciel/mcp.json`、创建 MCP，并在 `close()` 时统一释放；Chorus 不直接管理 MCP 生命周期。
+`mcp.enabled` 控制宿主是否创建 MCP。Chorus 持有共享实例并注入 runtime，关闭所有会话后再释放 MCP。
 
 `audio.input.device` 与 `audio.output.device` 省略时使用系统默认设备，也可以设置为：
 
@@ -137,5 +137,5 @@ vp run build
 进入实机联调前仍需真实环境确认：
 
 1. decibri AEC（`'tau'`）在实际全双工设备上的回声消除效果；文本近似过滤仍作为兜底保留。
-2. `@cieljs/core` 的 Xiaomi 模型 registry 是否作为公共 API 导出（当前已通过 `models` 导出）。
+2. `@cieljs/model-kit/models` 的 Xiaomi 模型 registry 是否作为公共 API 导出（当前已通过 `models` 导出）。
 3. MiMo 预置音色最终使用哪一个 voice ID；默认暂定为 `冰糖`。

@@ -4,7 +4,7 @@
 
 `@cieljs/mcp` 是 Ciel 的外部工具来源。它通过 MCP `tools/list` 在启动时发现工具定义，把每个 MCP Tool 转换成一个普通的 `AgentTool`；Agent 调用工具时，再通过 `tools/call` 转发给对应的 MCP Server。
 
-> 使用 `@cieljs/core` 时，由 Core 统一创建和关闭 MCP。只有脱离 Core 独立使用时，才需要直接调用本包的生命周期 API。
+> MCP 由宿主持有。多个 runtime 可以复用同一个实例；runtime 不创建或关闭 MCP 服务。
 
 | 概念             | 作用                                         |
 | ---------------- | -------------------------------------------- |
@@ -27,23 +27,24 @@
 }
 ```
 
-使用 `@cieljs/core` 时，在配置中开启 MCP：
+使用 `@cieljs/runtime` 时，传入已连接的 MCP 实例：
 
 ```ts
-import { defineCiel } from '@cieljs/core';
+import { defineCiel } from '@cieljs/runtime';
+import { createMcp } from '@cieljs/mcp';
+
+await using mcp = await createMcp();
 
 const ciel = defineCiel({
   // ...
-  mcp: {
-    enabled: true,
-  },
+  mcp,
 });
 
 await ciel.start();
 await ciel.close();
 ```
 
-脱离 Core 使用时，也可以直接打开 MCP，把 `mcp.tools` 与本地工具一起交给 Agent：
+直接使用 Agent 时，也可以直接打开 MCP，把 `mcp.tools` 与本地工具一起交给 Agent：
 
 ```ts
 import { createMcp } from '@cieljs/mcp';

@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { Download, LoaderCircle } from '@lucide/vue';
 import { Button, Progress } from '@vuetify/v0/components';
-import { Download, LoaderCircle } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 import type { HearingModelStatus, WatchConfigurationStatus } from '../../../shared/types.ts';
@@ -23,7 +23,7 @@ const emit = defineEmits<{ installModels: [] }>();
 <template>
   <section
     v-if="!configuration?.valid || !models?.valid"
-    class="border-b border-[#ffffff0b] px-[18px] py-4"
+    class="border-b border-[#ffffff0b] px-4.5 py-4"
   >
     <div class="section-heading">运行配置</div>
     <div
@@ -77,7 +77,7 @@ const emit = defineEmits<{ installModels: [] }>();
         {{ models.error }}
       </p>
       <Button.Root
-        class="action w-full justify-center !bg-[#442936] !text-[#ffc1d2]"
+        class="action w-full justify-center bg-[#442936]! text-[#ffc1d2]!"
         type="button"
         :disabled="!!models?.installing || !!pending"
         :aria-busy="models?.installing || pending === 'install-models'"

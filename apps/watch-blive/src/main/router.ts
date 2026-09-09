@@ -3,6 +3,7 @@ import {
   type DevtoolsRouter,
   type DevtoolsHost,
 } from '@cieljs/devtools/host';
+import type { McpTools } from '@cieljs/mcp';
 import type { BrowserWindow } from 'electron';
 
 import type { WatchBridgeEvent } from '../shared/ipc.ts';
@@ -33,6 +34,7 @@ export function createWatchRouter(
   mainWindow: BrowserWindow,
   livePage: LivePage,
   devtools: DevtoolsHost,
+  mcp?: McpTools,
 ): WatchRouterHandle {
   const api = new BilibiliApi();
   const listeners = new Set<(event: WatchBridgeEvent) => void>();
@@ -44,6 +46,7 @@ export function createWatchRouter(
     const config = resolveWatchConfig();
     const ai = resolveWatchModel(config);
     runtime = createWatchBlive({
+      mcp,
       model: ai.model,
       apiKey: ai.apiKey,
       livePage,

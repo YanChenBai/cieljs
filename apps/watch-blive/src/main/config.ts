@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-import { models } from '@cieljs/core';
+import { models } from '@cieljs/model-kit/models';
 import { app } from 'electron';
 import * as z from 'zod';
 

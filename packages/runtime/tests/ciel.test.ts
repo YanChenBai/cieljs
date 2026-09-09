@@ -25,16 +25,7 @@ const { qwen } = vi.hoisted(() => ({
   })),
 }));
 
-const { closeMcp, createMcp } = vi.hoisted(() => ({
-  closeMcp: vi.fn(async () => {}),
-  createMcp: vi.fn(async () => ({
-    tools: [] as unknown[],
-    close: vi.fn(async () => {}),
-    [Symbol.asyncDispose]: vi.fn(async () => {}),
-  })),
-}));
-
-vi.mock('@cieljs/mcp', () => ({ createMcp }));
+const closeMcp = vi.fn(async () => {});
 
 const temporaryDirectories: string[] = [];
 const storages: Storage[] = [];
@@ -63,7 +54,6 @@ afterEach(async () => {
   );
   qwen.mockClear();
   closeMcp.mockClear();
-  createMcp.mockClear();
 });
 
 describe('defineCiel', () => {
@@ -78,7 +68,7 @@ describe('defineCiel', () => {
     expect(() => assertUniqueTools([tool, tool])).toThrow('工具名称重复：search_memory');
   });
 
-  test('按配置创建 MCP、向普通 Session 注入工具并统一关闭', async () => {
+  test('借用共享 MCP，关闭一个 runtime 不影响另一个', async () => {
     const storage = await createStorage();
     const faux = registerFauxProvider();
     const tool = defineTool(Type.Object({}), () => ({
@@ -88,11 +78,11 @@ describe('defineCiel', () => {
       execute: async () => ({ content: [], details: {} }),
     }))();
 
-    createMcp.mockResolvedValueOnce({
+    const mcp = {
       tools: [tool],
       close: closeMcp,
       [Symbol.asyncDispose]: closeMcp,
-    });
+    };
 
     const ciel = defineCiel({
       model: faux.getModel(),
@@ -106,27 +96,26 @@ describe('defineCiel', () => {
         granularity: 'chunk',
         inputConfig: 'raw',
       }),
-      mcp: {
-        enabled: true,
-        configFile: '.ciel/test-mcp.json',
-      },
+      mcp,
     });
 
     await ciel.start();
 
     expect(qwen).toHaveBeenCalledTimes(1);
-    expect(createMcp).toHaveBeenCalledWith({
-      configFile: '.ciel/test-mcp.json',
-    });
 
     const session = await ciel.session({ spaceId: 'test' });
     expect(session.agent.state.tools.some(candidate => candidate.name === 'mcp_search')).toBe(true);
 
+    const second = defineCiel({ model: faux.getModel(), systemPrompt: 'second', ...storage, mcp });
+    await second.start();
     await session.close();
     await ciel.close();
-    await ciel.close();
-
-    expect(closeMcp).toHaveBeenCalledTimes(1);
+    expect(closeMcp).not.toHaveBeenCalled();
+    const next = await second.session({ spaceId: 'second' });
+    expect(next.agent.state.tools).toContain(tool);
+    await next.close();
+    await second.close();
+    expect(closeMcp).not.toHaveBeenCalled();
     faux.unregister();
   }, 20_000);
 
@@ -162,7 +151,6 @@ describe('defineCiel', () => {
     expect(firstStart).toBe(secondStart);
     await firstStart;
     expect(qwen).not.toHaveBeenCalled();
-    expect(createMcp).not.toHaveBeenCalled();
     expect(ciel.status).toBe('running');
 
     const session = await ciel.session({
@@ -207,28 +195,3 @@ describe('defineCiel', () => {
     faux.unregister();
   }, 20_000);
 });
-
-test('启动失败时并发关闭仍进入终态，且拒绝重新启动', async () => {
-  const storage = await createStorage();
-  const faux = registerFauxProvider();
-  createMcp.mockRejectedValueOnce(new Error('MCP 启动失败'));
-  const ciel = defineCiel({
-    model: faux.getModel(),
-    systemPrompt: 'test',
-    ...storage,
-    mcp: { enabled: true },
-  });
-  try {
-    const starting = ciel.start();
-    const startFailure = expect(starting).rejects.toThrow('MCP 启动失败');
-    const closing = ciel.close();
-    await expect(ciel.start()).rejects.toThrow('关闭');
-    await startFailure;
-    await closing;
-    expect(ciel.status).toBe('closed');
-    await ciel.close();
-  } finally {
-    await ciel.close();
-    faux.unregister();
-  }
-}, 20_000);

@@ -1,6 +1,7 @@
-import type { Ciel, CielSession } from '@cieljs/core';
 import type { DevtoolsHost } from '@cieljs/devtools/host';
+import type { McpTools } from '@cieljs/mcp';
 import { createPerception, type Perception, type PerceptionOptions } from '@cieljs/perception';
+import type { Ciel, CielSession } from '@cieljs/runtime';
 import type { Storage } from '@cieljs/storage';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
@@ -26,6 +27,7 @@ import { RoomScorePolicy } from './room-score-policy.ts';
 import { RoomVisit } from './room-visit.ts';
 
 export interface WatchBliveOptions {
+  mcp?: McpTools;
   storage: Storage;
   devtools?: DevtoolsHost;
   model: Model<Api>;
@@ -262,7 +264,7 @@ class WatchBliveRuntime implements WatchBlive {
       model: this.options.model,
       apiKey: this.options.apiKey,
       mode,
-      dataDir: this.options.dataDir,
+      mcp: this.options.mcp,
       danmakuTool,
     });
   }

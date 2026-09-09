@@ -34,7 +34,6 @@
   "dependencies": {
     "@cieljs/agent-kit": "workspace:*",
     "@cieljs/model-kit": "workspace:*",
-    "@cieljs/runtime-protocol": "workspace:*",
     "@cieljs/storage": "workspace:*",
     "@cieljs/vector": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",

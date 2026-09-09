@@ -13,7 +13,7 @@
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {
-    "@cieljs/runtime-protocol": "workspace:*",
+    "@cieljs/agent-kit": "workspace:*",
     "@electric-sql/pglite": "catalog:",
     "@electric-sql/pglite-pgvector": "catalog:",
     "drizzle-orm": "catalog:"

@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import { FileVideo, LoaderCircle, Play, Square } from '@lucide/vue';
+import type { LiveArea, StartWatchOptions, WatchMode } from '@shared/types.ts';
 import { Button } from '@vuetify/v0/components';
-import { FileVideo, LoaderCircle, Play, Square } from 'lucide-vue-next';
 import { computed, shallowRef } from 'vue';
 
-import type { LiveArea, StartWatchOptions, WatchMode } from '../../../shared/types.ts';
-import { watchBridge } from '../rpc.ts';
+import { watchBridge } from '../rpc';
 
 const props = defineProps<{
   areas: readonly LiveArea[];

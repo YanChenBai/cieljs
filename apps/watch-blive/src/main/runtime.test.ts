@@ -2,8 +2,8 @@ import { Storage } from '@cieljs/storage';
 import { afterAll } from 'vite-plus/test';
 const storage = await Storage.open({ dataDir: 'memory://' });
 afterAll(() => storage.close());
-import type { OpenSessionOptions } from '@cieljs/core';
 import type { Perception } from '@cieljs/perception';
+import type { OpenSessionOptions } from '@cieljs/runtime';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   mediaStart: vi.fn(),
   mediaClose: vi.fn(),
 }));
-vi.mock('@cieljs/core', () => ({ defineCiel: () => mocks }));
+vi.mock('@cieljs/runtime', () => ({ defineCiel: () => mocks }));
 vi.mock('@cieljs/perception', () => ({ createPerception: vi.fn() }));
 vi.mock('./bilibili/api.ts', () => ({ BilibiliApi: class {} }));
 vi.mock('./bilibili/live-page.ts', () => ({ LivePage: class {} }));
