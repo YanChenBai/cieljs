@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vite-plus/test';
 
-import { createCandidateSources, createRoomSources, createSystemPrompt } from './prompts.ts';
+import { createCandidateSources, createRoomSources, createSystemPrompt } from '../prompts';
 
 describe('直播来源', () => {
   it('房间 Session 同时包含房间和主播来源', () => {

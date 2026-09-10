@@ -112,7 +112,7 @@ apps/watch-blive/
       index.ts
       runtime.ts
       config.ts
-      prompts.ts
+      prompts/index.ts
       room-score-policy.ts
       ipc.ts
       scheduling/
@@ -167,7 +167,7 @@ apps/watch-blive/
 | `main/agent/tools.ts`                     | `send_danmaku` 工具及其宿主侧权限检查                                |
 | `main/agent/decisions.ts`                 | 探索选择、房间判断的 TypeBox Schema 与解析                           |
 | `main/room-score-policy.ts`               | 纯确定性的多轮评分切换策略                                           |
-| `main/prompts.ts`                         | Ciel 身份、直播互动规则、模式规则和动态房间上下文                    |
+| `main/prompts/index.ts`                   | Ciel 身份、直播互动规则、模式规则和动态房间上下文                    |
 | `preload/index.ts`                        | 通过 `contextBridge` 暴露最小 `watchBlive` API                       |
 | `renderer/components/LiveRoomWebview.vue` | 持有 `<webview>` DOM，并在 attach 后上报 WebContents ID              |
 | `renderer/`                               | Vue 3 控制台、Vuetify Zero 交互语义与 Tailwind CSS 视觉样式          |

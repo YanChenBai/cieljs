@@ -3,7 +3,7 @@ import type { Ciel } from '@cieljs/runtime';
 
 import type { WatchEvent } from '../../shared/types.ts';
 import type { BilibiliApi } from '../bilibili/api.ts';
-import { createCandidateSources, createExplorationQuestion } from '../prompts.ts';
+import { createCandidateSources, createExplorationQuestion } from '../prompts/index.ts';
 import { messageText, parseDecision, RoomSelectionSchema } from './decisions.ts';
 
 /** 候选必须来自本轮 API 结果，避免模型虚构或使用过期房间。 */

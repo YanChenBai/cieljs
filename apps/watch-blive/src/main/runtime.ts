@@ -23,7 +23,7 @@ import { LivePage } from './bilibili/live-page.ts';
 import { LiveStatusMonitor } from './bilibili/live-status-monitor.ts';
 import { readRoomLiveStatus } from './bilibili/live-status.ts';
 import { LiveMedia } from './media/live-media.ts';
-import { ROOM_REVIEW_AFTER_MS } from './prompts.ts';
+import { ROOM_REVIEW_AFTER_MS } from './prompts/index.ts';
 import { RoomScorePolicy } from './room-score-policy.ts';
 import { RoomVisit } from './room-visit.ts';
 

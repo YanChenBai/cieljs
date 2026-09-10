@@ -5,7 +5,7 @@ import type { CielSession } from '@cieljs/runtime';
 
 import type { RoomInfo, StreamerHistory, WatchEvent, WatchMode } from '../shared/types.ts';
 import type { LiveMedia } from './media/live-media.ts';
-import { createRoomContext, type SentDanmaku } from './prompts.ts';
+import { createRoomContext, type SentDanmaku } from './prompts/index.ts';
 import { ThoughtScheduler } from './scheduling/thought-scheduler.ts';
 
 interface RoomVisitOptions {

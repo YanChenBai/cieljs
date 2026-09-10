@@ -1,5 +1,5 @@
 import type { RoomInfo, WatchMode } from '../../shared/types.ts';
-import { createRoomSources } from '../prompts.ts';
+import { createRoomSources } from '../prompts/index.ts';
 
 const watchDate = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Shanghai',

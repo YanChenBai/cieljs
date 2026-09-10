@@ -93,7 +93,7 @@ function parseServerConfig(name: string, value: unknown): McpServerConfig {
   }
 
   if (value.type !== undefined && value.type !== 'stdio') {
-    throw new Error(`MCP Server "${name}" 暂不支持 transport "${value.type}"`);
+    throw new Error(`MCP Server "${name}" 暂不支持 transport "${JSON.stringify(value.type)}"`);
   }
 
   return {

@@ -5,7 +5,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { WatchMode } from '../../shared/types.ts';
-import { createSystemPrompt } from '../prompts.ts';
+import { createSystemPrompt } from '../prompts/index.ts';
 
 const EXPLORATION_SYSTEM_PROMPT = `你负责从宿主提供的真实 Bilibili 直播间候选中选择一个房间。可通过只读工具检索其他房间的 Session 与 Memory，结合来源判断；不编造候选，最终只返回指定 JSON。`;
 
