@@ -16,6 +16,12 @@ export interface ASROptions {
   eventWindowSeconds?: number;
   speaker?: false | readonly SpeakerProfile[];
   bufferSeconds?: number;
+  vad?: {
+    /** 连续静音多久后结束当前语音段，单位为秒。 */
+    minSilenceDuration?: number;
+    /** 单段语音的最长时长，单位为秒。 */
+    maxSpeechDuration?: number;
+  };
   speakerThreshold?: number;
   maxSpeakers?: number;
 }

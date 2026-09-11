@@ -63,7 +63,7 @@ export class NativeASR {
     validateOptions(options);
     this.currentModel = options.model ?? DEFAULT_ASR_MODEL;
 
-    const models = createAudioConfig();
+    const models = createAudioConfig(options.vad);
     const bufferSeconds = options.bufferSeconds ?? DEFAULT_BUFFER_SECONDS;
     this.bufferCapacity = Math.ceil(bufferSeconds * SAMPLE_RATE);
     this.buffer = new CircularBuffer(this.bufferCapacity);
@@ -277,6 +277,19 @@ function toError(error: unknown): Error {
 }
 
 function validateOptions(options: ASROptions): void {
+  for (const [name, value] of Object.entries(options.vad ?? {})) {
+    if (value === undefined) continue;
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new Error(`vad.${name} must be a positive number`);
+    }
+  }
+  if (
+    options.vad &&
+    (options.vad?.maxSpeechDuration ?? 10) + (options.vad?.minSilenceDuration ?? 0.5) >
+      (options.bufferSeconds ?? DEFAULT_BUFFER_SECONDS)
+  ) {
+    throw new Error('VAD speech and silence durations must fit in the audio buffer');
+  }
   const seconds = options.eventWindowSeconds ?? 5;
   if (
     !Number.isFinite(seconds) ||

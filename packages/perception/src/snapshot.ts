@@ -130,10 +130,14 @@ function selectFrames(frames: readonly PerceptionFrame[], limit: number) {
 
 function formatTranscript(transcript: ASRResult) {
   const speaker = transcript.speaker ? `[${transcript.speaker}]` : '';
-  const events = transcript.events?.map(event => event.type).join('、');
-  const audioEvents = events ? ` [声音事件（模型识别）：${events}]` : '';
+  const events = transcript.events?.map(event => event.type).join('|');
 
-  return `[${transcript.startAt.toISOString()}]${speaker} ${transcript.content}${audioEvents}`;
+  return [
+    `<开始时间: ${transcript.startAt.toISOString()}>`,
+    `<说话人: ${speaker}>`,
+    `<声音事件: ${events ?? ''}>`,
+    transcript.content,
+  ].join('');
 }
 
 function cloneTranscript(transcript: ASRResult): ASRResult {

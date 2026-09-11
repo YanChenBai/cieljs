@@ -17,12 +17,16 @@ export function createWatchCiel(options: {
   mode: WatchMode;
   mcp?: McpTools;
   danmakuTool?: AgentTool;
+  streamerTools?: AgentTool[];
 }) {
   return defineCiel({
     model: options.model,
     apiKey: options.apiKey,
     systemPrompt: createSystemPrompt(options.mode),
-    tools: options.danmakuTool ? [options.danmakuTool] : [],
+    tools: [
+      ...(options.danmakuTool ? [options.danmakuTool] : []),
+      ...(options.streamerTools ?? []),
+    ],
     storage: options.storage,
     investigation: {
       systemPrompt: EXPLORATION_SYSTEM_PROMPT,

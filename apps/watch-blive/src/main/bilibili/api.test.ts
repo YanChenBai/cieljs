@@ -6,7 +6,7 @@ describe('直播分区查询', () => {
   it('主播动态使用指定参数并经由页面请求', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>();
     const readInPage = vi.fn().mockResolvedValue({ code: 0, data: { items: [] } });
-    await new BilibiliApi({ fetch }).streamerHistory(194484313, readInPage);
+    await new BilibiliApi({ fetch }).streamerDynamics(194484313, readInPage);
     const url = new URL(readInPage.mock.calls[0]![0]);
     expect(url.pathname).toBe('/x/polymer/web-dynamic/v1/feed/space');
     expect(Object.fromEntries(url.searchParams)).toEqual({
@@ -17,6 +17,7 @@ describe('直播分区查询', () => {
       features: 'itemOpusStyle',
     });
     expect(fetch).not.toHaveBeenCalled();
+    expect(readInPage).toHaveBeenCalledOnce();
   });
   it.each([
     [1, '1', '0'],
@@ -51,6 +52,15 @@ describe('直播分区查询', () => {
 });
 
 describe('主播近期公开信息', () => {
+  it('投稿请求不查询动态，失败不会伪装为空列表', async () => {
+    const readInPage = vi.fn().mockResolvedValue({ code: -403, message: '拒绝访问' });
+    const api = new BilibiliApi();
+    await expect(api.streamerVideos(456, readInPage, 3)).rejects.toThrow('-403');
+    expect(readInPage).toHaveBeenCalledOnce();
+    const url = new URL(readInPage.mock.calls[0]![0]);
+    expect(url.pathname).toBe('/x/space/arc/search');
+    expect(url.searchParams.get('ps')).toBe('3');
+  });
   it('动态置顶优先，并从动态卡片提取投稿标题列表', async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
@@ -85,10 +95,13 @@ describe('主播近期公开信息', () => {
       );
     const api = new BilibiliApi({ fetch });
 
-    const history = await api.streamerHistory(456);
+    const dynamics = await api.streamerDynamics(456);
+    expect(fetch).toHaveBeenCalledOnce();
+    const videos = await api.streamerVideos(456);
 
-    expect(history.dynamics.map(item => item.title)).toEqual(['动态里的投稿', '普通动态']);
-    expect(history.videos).toEqual([
+    expect(dynamics.map(item => item.title)).toEqual(['动态里的投稿', '普通动态']);
+    expect(dynamics[0]?.url).toBe('https://t.bilibili.com/video');
+    expect(videos).toEqual([
       expect.objectContaining({ id: 'BV2xx', title: '近期投稿', publishedAt: 456 }),
     ]);
   });

@@ -1,8 +1,11 @@
-import { createHash } from 'node:crypto';
-
 import { describe, expect, it } from 'vite-plus/test';
 
-import { createCandidateSources, createRoomSources, createSystemPrompt } from '../prompts';
+import {
+  createCandidateSources,
+  createRoomContext,
+  createRoomSources,
+  createSystemPrompt,
+} from '../prompts';
 
 describe('直播来源', () => {
   it('房间 Session 同时包含房间和主播来源', () => {
@@ -82,12 +85,37 @@ describe('观看模式提示词', () => {
   });
 });
 
-it('抽离后单推与探索提示词保持旧版本逐字一致', () => {
-  const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-  expect(hash(createSystemPrompt({ type: 'follow', roomId: 1 }))).toBe(
-    '3419435e3dd6b1701ae1427974908607961bd24ba68ee489b4912ab9c68c4327',
-  );
-  expect(hash(createSystemPrompt({ type: 'explore', areaId: 1 }))).toBe(
-    'e10ae2535b29cb4be05deca2cb31dae3d260df4de30ba615e9e693e5faa49d1a',
-  );
+it.each([
+  { type: 'follow' as const, roomId: 1 },
+  { type: 'explore' as const, areaId: 1 },
+])('观看模式 $type 明确完成记忆写入，但不强制制造记忆', mode => {
+  const prompt = createSystemPrompt(mode);
+  expect(prompt).toContain('有就当轮完成查重与写入');
+  expect(prompt).toContain('没有就跳过');
+  expect(prompt).toContain('send_danmaku 返回后仍可继续调用记忆工具');
+  expect(prompt).toContain('remember_current_space_daily_memory');
+  expect(prompt).toContain('remember_current_space_long_term_memory');
+  expect(prompt).toContain('remember_global_memory');
+  expect(prompt).toContain('不重复写入');
+  expect(prompt).toContain('get_streamer_dynamics / get_streamer_videos');
+  expect(prompt).toContain('实际提供的 B 站 MCP 工具');
+  expect(prompt).not.toContain('get_video_transcript：');
+  const context = createRoomContext({
+    mode,
+    startedAt: Date.now(),
+    canSwitch: false,
+    history: [],
+    room: {
+      roomId: 1,
+      streamerUid: 2,
+      streamerName: '测试',
+      title: '聊天',
+      description: '',
+      parentAreaName: '娱乐',
+      areaName: '聊天',
+      live: true,
+    },
+  });
+  expect(context).toContain('有则按记忆规则查重并调用 remember / update');
+  expect(context).not.toContain('主播近期公开信息');
 });

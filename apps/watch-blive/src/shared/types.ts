@@ -44,11 +44,8 @@ export interface StreamerHistoryItem {
   title: string;
   publishedAt?: number;
   pinned: boolean;
-}
-
-export interface StreamerHistory {
-  dynamics: readonly StreamerHistoryItem[];
-  videos: readonly StreamerHistoryItem[];
+  url?: string;
+  summary?: string;
 }
 
 export interface Account {

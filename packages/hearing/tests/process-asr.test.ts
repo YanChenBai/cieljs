@@ -29,6 +29,29 @@ ${source}
   return pathToFileURL(file);
 }
 
+test('自定义 VAD 窗口完整传入独立进程', async () => {
+  const url = await worker(`
+if (command.type === 'init') {
+ const vad = command.options.vad;
+ if (vad?.minSilenceDuration !== 0.8 || vad?.maxSpeechDuration !== 15) {
+   send({ type: 'error', message: 'VAD options missing' });
+   break;
+ }
+}
+send({ type: 'ack', id: command.id });
+if (command.type === 'close') break;`);
+  const asr = new ProcessASR(
+    { vad: { minSilenceDuration: 0.8, maxSpeechDuration: 15 } },
+    'asr',
+    url,
+  );
+  try {
+    await asr.flush();
+  } finally {
+    await asr.close();
+  }
+});
+
 test('flush 等待尾部结果，跨进程恢复事件时间，close 共享同一个 Promise', async () => {
   const url = await worker(`
 if (command.type === 'flush') {

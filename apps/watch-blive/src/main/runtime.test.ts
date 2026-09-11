@@ -5,7 +5,7 @@ afterAll(() => storage.close());
 import type { DevtoolsHost } from '@cieljs/devtools/host';
 import type { ASRResult } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
-import type { OpenSessionOptions } from '@cieljs/runtime';
+import type { DefineCielOptions, OpenSessionOptions } from '@cieljs/runtime';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
@@ -15,6 +15,7 @@ import type { LiveMediaOptions } from './media/live-media.ts';
 import { createWatchBlive, type WatchBlive } from './runtime.ts';
 
 const mocks = vi.hoisted(() => ({
+  defineCiel: vi.fn<(options: DefineCielOptions) => void>(),
   start: vi.fn(),
   close: vi.fn(),
   session: vi.fn(),
@@ -23,7 +24,12 @@ const mocks = vi.hoisted(() => ({
   mediaStart: vi.fn(),
   mediaClose: vi.fn(),
 }));
-vi.mock('@cieljs/runtime', () => ({ defineCiel: () => mocks }));
+vi.mock('@cieljs/runtime', () => ({
+  defineCiel: (options: DefineCielOptions) => {
+    mocks.defineCiel(options);
+    return mocks;
+  },
+}));
 vi.mock('@cieljs/perception', () => ({ createPerception: vi.fn() }));
 vi.mock('./bilibili/api.ts', () => ({ BilibiliApi: class {} }));
 vi.mock('./bilibili/live-page.ts', () => ({ LivePage: class {} }));
@@ -83,7 +89,8 @@ function setup(devtools?: DevtoolsHost) {
     playUrl: vi.fn().mockResolvedValue('https://example.com/live'),
     rooms: vi.fn().mockResolvedValue([room]),
     room: vi.fn().mockResolvedValue(room),
-    streamerHistory: vi.fn().mockResolvedValue({ dynamics: [], videos: [] }),
+    streamerDynamics: vi.fn().mockResolvedValue([]),
+    streamerVideos: vi.fn().mockResolvedValue([]),
   };
   runtime = createWatchBlive({
     devtools,
@@ -107,6 +114,15 @@ afterEach(async () => {
 });
 
 describe('观看生命周期', () => {
+  it('进房不预取主播动态与投稿，查询能力交由 Agent 按需使用', async () => {
+    const { api } = setup();
+    await runtime.start({ mode: { type: 'follow', roomId: 123 } });
+    expect(api.streamerDynamics).not.toHaveBeenCalled();
+    expect(api.streamerVideos).not.toHaveBeenCalled();
+    expect(mocks.defineCiel.mock.calls[0]?.[0].tools?.map(tool => tool.name)).toEqual(
+      expect.arrayContaining(['get_streamer_dynamics', 'get_streamer_videos']),
+    );
+  });
   it('视频对话保留无转写文本的声音事件', async () => {
     const recordMessage = vi.fn();
     const { asrOn } = setup({ observe: vi.fn(), recordMessage } as unknown as DevtoolsHost);

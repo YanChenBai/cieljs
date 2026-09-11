@@ -29,6 +29,39 @@ afterEach(async () => {
   for (const close of cleanup.splice(0).reverse()) await close();
 });
 
+it('运行日志的消息输出、工具输入输出和原始事件均可通过详情接口读取', async () => {
+  const host = await openHost();
+  const receive = host.agentListener('session');
+  const message = { role: 'user' as const, content: '查看房间', timestamp: 0 };
+  await receive({ type: 'message_start', message });
+  await receive({ type: 'message_end', message });
+  await receive({
+    type: 'tool_execution_start',
+    toolCallId: 'call',
+    toolName: 'search',
+    args: { query: '直播' },
+  });
+  await receive({
+    type: 'tool_execution_end',
+    toolCallId: 'call',
+    toolName: 'search',
+    result: { hits: [] },
+    isError: false,
+  });
+  await host.flushRecords();
+
+  const client = createRouterClient(createDevtoolsRouter(host));
+  const steps = await host.store.list<TraceEntry>('step');
+  expect(await client.values.get(steps[1]!.output!)).toEqual(message);
+  expect(await client.values.get(steps[2]!.input!)).toEqual({ query: '直播' });
+  expect(await client.values.get(steps[3]!.output!)).toEqual({ hits: [] });
+  expect(await client.values.get(steps[3]!.raw!)).toMatchObject({
+    event: { type: 'tool_execution_end' },
+  });
+  const entries = await host.store.list<TraceEntry>('entry');
+  expect(entries.filter(entry => entry.kind === 'message')).toHaveLength(1);
+});
+
 it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原对象变化', async () => {
   const host = await openHost();
   cleanup.push(() => host.close());
@@ -107,6 +140,33 @@ it('淘汰后与宿主重启后均可按 ID 回读原始图片', async () => {
   const reopened = await openHost(1, directory);
   cleanup.push(() => reopened.close());
   expect(await reopened.store.get(entry.output!.id)).toMatchObject({ data: 'a'.repeat(100000) });
+});
+
+it('重放保留消息与宿主记录的顺序，随后新增消息使用更大的序号', async () => {
+  const host = await openHost();
+  const receive = host.agentListener('replay');
+  const message = { role: 'user' as const, content: '第一条', timestamp: 0 };
+  await receive({ type: 'agent_start' });
+  await receive({ type: 'message_start', message });
+  await host.flushRecords();
+  host.record('perception', '听觉输入');
+  await receive({ type: 'message_end', message });
+  await receive({ type: 'agent_end', messages: [message] });
+  await host.flushRecords();
+  const before = await host.store.list<TraceEntry>('entry');
+  await host.close();
+
+  const reopened = await DevtoolsHost.open({ storage: host.storage });
+  cleanup.push(() => reopened.close());
+  expect(await reopened.store.list('entry')).toEqual(before);
+  await reopened.agentListener('replay')({
+    type: 'message_end',
+    message: { ...message, content: '第二条' },
+  });
+  await reopened.flushRecords();
+  const after = await reopened.store.list<TraceEntry>('entry');
+  expect(after.slice(0, -1)).toEqual(before);
+  expect(after.at(-1)!.sequence).toBeGreaterThan(Math.max(...before.map(entry => entry.sequence)));
 });
 
 it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {

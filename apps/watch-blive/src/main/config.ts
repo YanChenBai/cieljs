@@ -15,6 +15,12 @@ const watchConfigSchema = z.object({
     provider: z.string().trim().min(1),
     model: z.string().trim().min(1),
     apiKey: z.string().trim().min(1),
+    baseUrl: z
+      .string()
+      .trim()
+      .url()
+      .refine(value => /^https?:\/\//u.test(value), '仅支持 HTTP 或 HTTPS 地址')
+      .optional(),
   }),
   interaction: z
     .object({
@@ -61,7 +67,9 @@ export function resolveWatchModel(config = resolveWatchConfig()) {
     throw new Error(`模型不存在：${config.ai.provider}/${config.ai.model}`);
   }
 
-  return { model, apiKey: config.ai.apiKey };
+  // 只覆盖当前运行使用的模型，避免污染共享注册信息。
+  const resolvedModel = config.ai.baseUrl ? { ...model, baseUrl: config.ai.baseUrl } : model;
+  return { model: resolvedModel, apiKey: config.ai.apiKey };
 }
 
 export function watchConfigurationStatus() {

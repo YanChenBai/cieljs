@@ -19,7 +19,7 @@ export interface ConfigurationCheck {
   readonly valid: boolean;
 }
 
-export function createAudioConfig(): ModelConfig {
+export function createAudioConfig(vad: ASROptions['vad'] = {}): ModelConfig {
   const paths = resolveModelPaths();
 
   return {
@@ -28,9 +28,9 @@ export function createAudioConfig(): ModelConfig {
         model: paths.vad,
         threshold: 0.25,
         minSpeechDuration: 0.5,
-        minSilenceDuration: 0.5,
+        minSilenceDuration: vad.minSilenceDuration ?? 0.5,
         windowSize: 256,
-        maxSpeechDuration: 10,
+        maxSpeechDuration: vad.maxSpeechDuration ?? 10,
       },
       sampleRate: SAMPLE_RATE,
       numThreads: 1,

@@ -33,6 +33,40 @@ afterEach(async () => {
 });
 
 describe('Watch Blive 配置', () => {
+  it('覆盖本次模型地址并保留注册模型及其他能力', async () => {
+    const registered = { id: 'mimo-v2.5', baseUrl: 'https://original.example/v1', reasoning: true };
+    getModel.mockReturnValueOnce(registered);
+    await writeFile(
+      watchConfigFile(),
+      JSON.stringify({
+        ai: {
+          provider: 'xiaomi',
+          model: 'mimo-v2.5',
+          apiKey: 'secret',
+          baseUrl: ' http://localhost:8000/v1 ',
+        },
+      }),
+    );
+    const result = resolveWatchModel(resolveWatchConfig());
+    expect(result.model).toEqual({ ...registered, baseUrl: 'http://localhost:8000/v1' });
+    expect(result.model).not.toBe(registered);
+    expect(registered.baseUrl).toBe('https://original.example/v1');
+    expect(result.apiKey).toBe('secret');
+  });
+
+  it.each(['', 'not-a-url', 'ftp://example.com', '/v1'])('拒绝无效地址 %s', async baseUrl => {
+    await writeFile(
+      watchConfigFile(),
+      JSON.stringify({
+        ai: { provider: 'xiaomi', model: 'mimo-v2.5', apiKey: 'secret', baseUrl },
+      }),
+    );
+    expect(watchConfigurationStatus()).toMatchObject({
+      valid: false,
+      message: expect.stringContaining('ai.baseUrl'),
+    });
+  });
+
   it('从数据目录 config.json 读取并校验 AI 凭据', async () => {
     await writeFile(
       watchConfigFile(),

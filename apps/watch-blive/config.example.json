@@ -2,6 +2,7 @@
   "ai": {
     "provider": "xiaomi",
     "model": "mimo-v2.5",
+    "baseUrl": "https://api.xiaomimimo.com/v1",
     "apiKey": "your-api-key"
   }
 }

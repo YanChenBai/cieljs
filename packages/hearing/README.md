@@ -28,6 +28,10 @@ import { ASR } from '@cieljs/hearing';
 
 const asr = new ASR({
   bufferSeconds: 30,
+  vad: {
+    minSilenceDuration: 0.5,
+    maxSpeechDuration: 10,
+  },
   speakerThreshold: 0.6,
   maxSpeakers: 8,
 });
@@ -41,6 +45,8 @@ asr.flush();
 ```
 
 `write()` 接收一段 PCM 和它的起始时间；`flush()` 排空缓冲并输出最后一段。错误通过 `error` 事件报告，不会从 `write()` 抛出。
+
+`bufferSeconds` 是缓存容量，不是声纹分析时长。说话人识别使用 VAD 切出的语音段；`vad.minSilenceDuration` 控制停顿多久后结束一段，`vad.maxSpeechDuration` 控制单段上限，单位都是秒。增大分段窗口可能减少短句切碎，但也增加等待时间，且可能把不同人的讲话合到同一段，需要用实际音频验证。Watch Blive 当前使用 0.8 秒停顿和 15 秒上限，包默认仍为 0.5 秒和 10 秒。
 
 ## 事件与时间戳
 

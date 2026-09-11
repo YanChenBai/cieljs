@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
+const vadConstructor = vi.hoisted(() => vi.fn());
+
 const recognizerResult = vi.hoisted(() => ({
   calls: 0,
   degenerateTokenCount: 256,
@@ -50,6 +52,9 @@ vi.mock('sherpa-onnx-node', () => {
   }
 
   class Vad {
+    constructor(config: unknown, bufferSeconds: number) {
+      vadConstructor(config, bufferSeconds);
+    }
     private readonly segments: {
       start: number;
       samples: Float32Array;
@@ -167,6 +172,34 @@ describe('ASR', () => {
     recognizerResult.text = 'language Chinese<asr_text>你好';
     recognizerResult.tokens = [];
     recognizerResult.vadSamples = 16_000;
+  });
+
+  it('把自定义分段窗口传入 VAD，并保持未配置时的默认值', async () => {
+    const asr = new ASR({
+      speaker: false,
+      vad: { minSilenceDuration: 0.8, maxSpeechDuration: 15 },
+    });
+    expect(vadConstructor).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        tenVad: expect.objectContaining({ minSilenceDuration: 0.8, maxSpeechDuration: 15 }),
+      }),
+      30,
+    );
+    await asr.close();
+    const defaults = new ASR({ speaker: false });
+    expect(vadConstructor).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        tenVad: expect.objectContaining({ minSilenceDuration: 0.5, maxSpeechDuration: 10 }),
+      }),
+      30,
+    );
+    await defaults.close();
+  });
+
+  it('拒绝无效或超过缓存容量的分段窗口', () => {
+    expect(() => new ASR({ vad: { minSilenceDuration: 0 } })).toThrow('positive');
+    expect(() => new ASR({ vad: { maxSpeechDuration: Number.NaN } })).toThrow('positive');
+    expect(() => new ASR({ vad: { maxSpeechDuration: 30 } })).toThrow('audio buffer');
   });
 
   it('emits timestamped final results with a stable speaker', () => {

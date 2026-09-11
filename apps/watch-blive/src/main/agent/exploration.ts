@@ -30,7 +30,6 @@ export async function selectExplorationRoom(options: {
     crossSpace: true,
     sources: createCandidateSources(areaId, candidates),
     question: createExplorationQuestion(candidates),
-    onEvent: devtools?.agentListener(`bilibili:exploration:${Date.now()}`),
   });
   signal.throwIfAborted();
 

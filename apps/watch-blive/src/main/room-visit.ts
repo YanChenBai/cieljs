@@ -3,7 +3,7 @@ import type { ASRModelId } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
 import type { CielSession } from '@cieljs/runtime';
 
-import type { RoomInfo, StreamerHistory, WatchEvent, WatchMode } from '../shared/types.ts';
+import type { RoomInfo, WatchEvent, WatchMode } from '../shared/types.ts';
 import type { LiveMedia } from './media/live-media.ts';
 import { createRoomContext, type SentDanmaku } from './prompts/index.ts';
 import { ThoughtScheduler } from './scheduling/thought-scheduler.ts';
@@ -13,7 +13,6 @@ interface RoomVisitOptions {
   generation: number;
   room: RoomInfo;
   mode: WatchMode;
-  streamerHistory?: StreamerHistory;
   startedAt: number;
   session: CielSession;
   perception: Perception;
@@ -22,7 +21,7 @@ interface RoomVisitOptions {
   periodicObservationMs: number;
   canSwitch: () => boolean;
   beforeRun: () => void;
-  afterRun: () => void;
+  afterRun: () => Promise<void> | void;
   emit: (event: WatchEvent) => void;
 }
 
@@ -51,7 +50,6 @@ export class RoomVisit {
           startedAt: options.startedAt,
           history: this.history,
           canSwitch: options.canSwitch(),
-          streamerHistory: options.streamerHistory,
         }),
         timestamp: Date.now(),
       }),

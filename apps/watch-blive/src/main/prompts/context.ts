@@ -1,10 +1,4 @@
-import type {
-  RoomCandidate,
-  RoomInfo,
-  StreamerHistory,
-  StreamerHistoryItem,
-  WatchMode,
-} from '../../shared/types.ts';
+import type { RoomCandidate, RoomInfo, WatchMode } from '../../shared/types.ts';
 
 export interface SentDanmaku {
   content: string;
@@ -17,7 +11,6 @@ export function createRoomContext(input: {
   startedAt: number;
   canSwitch: boolean;
   history: readonly SentDanmaku[];
-  streamerHistory?: StreamerHistory;
 }): string {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - input.startedAt) / 1_000));
   const danmakuHistory = input.history.length
@@ -25,7 +18,6 @@ export function createRoomContext(input: {
         .map(item => `- ${new Date(item.sentAt).toISOString()} ${item.content}`)
         .join('\n')
     : '（尚未真实发送弹幕）';
-  const publicHistory = createStreamerHistoryContext(input.streamerHistory);
   const recordingSource =
     input.mode.type === 'recording'
       ? `\n- 录播来源：${input.mode.source.type === 'url' ? input.mode.source.url : input.mode.source.path}`
@@ -43,9 +35,9 @@ export function createRoomContext(input: {
 - 当前允许切换：${input.canSwitch ? '是' : '否'}
 ${recordingSource}
 
-${publicHistory}
-
 ${input.mode.type === 'recording' ? '' : `# 当前访问已真实发送的弹幕\n\n${danmakuHistory}`}
+
+${input.mode.type === 'recording' ? '' : '# 本轮观看\n\n结合本轮画面、语音和互动判断是否有值得下次回忆的新信息。有则按记忆规则查重并调用 remember / update，完成后再结束本轮；没有则跳过。send_danmaku 的 send / defer 不替代记忆判断，不重复发送弹幕。'}
 `.trim();
 }
 
@@ -57,29 +49,4 @@ export function createExplorationQuestion(candidates: readonly RoomCandidate[]):
 候选：
 ${JSON.stringify(candidates)}
 `.trim();
-}
-
-function createStreamerHistoryContext(history?: StreamerHistory): string {
-  if (!history) {
-    return '# 主播近期公开信息\n\n（获取失败或暂无公开内容）';
-  }
-
-  return [
-    '# 主播近期公开信息',
-    '以下是公开列表背景，不代表亲历或已看过投稿，不作为当前录播或直播的内容写入记忆。',
-    '',
-    '## 动态（置顶优先）',
-    formatItems(history.dynamics),
-    '',
-    '## 投稿列表（仅标题）',
-    formatItems(history.videos),
-  ].join('\n');
-}
-
-function formatItems(items: readonly StreamerHistoryItem[]): string {
-  if (!items.length) {
-    return '（暂无）';
-  }
-
-  return items.map(item => `- ${item.pinned ? '[置顶] ' : ''}${item.title}`).join('\n');
 }

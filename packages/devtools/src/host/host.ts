@@ -17,6 +17,7 @@ export class DevtoolsHost implements AsyncDisposable {
   private cursor = 0;
   private unsubscribe?: () => void;
   private currentTrace?: TraceEvent;
+  private currentEntrySequence?: number;
   private entryOrdinal = 0;
   private readonly entries = new Map<string, TraceEntry>();
   private readonly listeners = new Set<(update: DevtoolsUpdate) => void>();
@@ -72,6 +73,11 @@ export class DevtoolsHost implements AsyncDisposable {
         const records = await this.source.read(this.cursor);
         if (!records.length) return;
         for (const trace of records) {
+          const entryId = trace.event.type.startsWith('message_')
+            ? trace.messageId!
+            : `${trace.id}:0`;
+          const previous = await this.store.get<TraceEntry>(entryId);
+
           let observer = this.observers.get(trace.sessionId);
           if (!observer) {
             observer = new AgentTrace(trace.sessionId, {
@@ -82,13 +88,15 @@ export class DevtoolsHost implements AsyncDisposable {
             this.observers.set(trace.sessionId, observer);
           }
           this.currentTrace = trace;
+          this.currentEntrySequence = previous?.sequence;
           this.entryOrdinal = 0;
           this.eventSequence = trace.sequence;
           observer.receive(trace);
           this.saveEvent(trace, trace.metadata);
+          this.currentTrace = undefined;
+          this.currentEntrySequence = undefined;
           await this.store.flush();
           this.cursor = trace.sequence;
-          this.currentTrace = undefined;
         }
       }
     });
@@ -145,6 +153,10 @@ export class DevtoolsHost implements AsyncDisposable {
   }
 
   private saveEvent(trace: TraceEvent, metadata: AgentTraceMetadata) {
+    // 外部日志没有本地事件表记录，保留快照以支持同样的详情引用。
+    if (this.source !== this.storage.journal) {
+      this.store.put(trace.id, 'value', trace.sequence, trace);
+    }
     const step = createTraceStep(trace, metadata.tools, metadata.model);
     this.store.put(step.id, 'step', trace.sequence, step, trace.runId);
     this.stepChanges.set(step.id, step);
@@ -213,7 +225,8 @@ export class DevtoolsHost implements AsyncDisposable {
     return {
       id: this.currentTrace ? `${this.currentTrace.id}:${this.entryOrdinal++}` : randomUUID(),
       // 对话投影与宿主感知共用顺序；原始 Agent 事件序号仅用于执行记录。
-      sequence: ++this.sequence,
+      // 重放只恢复投影状态，已有记录沿用原顺序，不能挤到新消息之后。
+      sequence: this.currentEntrySequence ?? ++this.sequence,
       sessionId,
       kind,
       name,

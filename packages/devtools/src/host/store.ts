@@ -60,7 +60,10 @@ export class TraceStore {
     );
     const row = result.rows[0];
     if (!row) {
-      return undefined;
+      const event = await this.storage.db.execute<{ record: T }>(
+        sql`SELECT record FROM storage.events WHERE id = ${id}`,
+      );
+      return event.rows[0]?.record;
     }
 
     const value = deserialize(row.value);

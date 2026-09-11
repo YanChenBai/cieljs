@@ -1,10 +1,4 @@
-import type {
-  LiveArea,
-  RoomCandidate,
-  RoomInfo,
-  StreamerHistory,
-  StreamerHistoryItem,
-} from '../../shared/types.ts';
+import type { LiveArea, RoomCandidate, RoomInfo, StreamerHistoryItem } from '../../shared/types.ts';
 
 interface ApiResponse<T> {
   code: number;
@@ -161,10 +155,11 @@ export class BilibiliApi {
     return `${url.host}${codec.base_url}${url.extra ?? ''}`;
   }
 
-  async streamerHistory(
+  async streamerDynamics(
     streamerUid: number,
     readInPage?: (url: string) => Promise<unknown>,
-  ): Promise<StreamerHistory> {
+    limit = 8,
+  ): Promise<StreamerHistoryItem[]> {
     assertPositiveInteger(streamerUid, 'streamerUid');
 
     const query = new URLSearchParams({
@@ -174,53 +169,35 @@ export class BilibiliApi {
       platform: 'web',
       features: 'itemOpusStyle',
     });
-    const dynamicRequest = this.request<DynamicFeedPayload>(
+    const result = await this.request<DynamicFeedPayload>(
       `https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space?${query}`,
       `https://space.bilibili.com/${streamerUid}/dynamic`,
       readInPage,
     );
+    return (result.items ?? [])
+      .flatMap(parseHistoryItem)
+      .toSorted((left, right) => Number(right.pinned) - Number(left.pinned))
+      .slice(0, limit);
+  }
+
+  async streamerVideos(
+    streamerUid: number,
+    readInPage?: (url: string) => Promise<unknown>,
+    limit = 8,
+  ): Promise<StreamerHistoryItem[]> {
+    assertPositiveInteger(streamerUid, 'streamerUid');
     const archiveQuery = new URLSearchParams({
       mid: String(streamerUid),
       pn: '1',
-      ps: '8',
+      ps: String(limit),
       order: 'pubdate',
     });
-    const archiveRequest = this.request<ArchiveListPayload>(
+    const result = await this.request<ArchiveListPayload>(
       `https://api.bilibili.com/x/space/arc/search?${archiveQuery}`,
       `https://space.bilibili.com/${streamerUid}/video`,
       readInPage,
     );
-    const [dynamicResult, archiveResult] = await Promise.allSettled([
-      dynamicRequest,
-      archiveRequest,
-    ]);
-
-    if (dynamicResult.status === 'rejected' && archiveResult.status === 'rejected') {
-      throw new AggregateError(
-        [dynamicResult.reason, archiveResult.reason],
-        `无法读取主播 ${streamerUid} 的近期公开信息`,
-      );
-    }
-
-    const dynamicItems =
-      dynamicResult.status === 'fulfilled'
-        ? (dynamicResult.value.items ?? []).flatMap(parseHistoryItem)
-        : [];
-    const sorted = dynamicItems.toSorted(
-      (left, right) => Number(right.pinned) - Number(left.pinned),
-    );
-    const archiveItems =
-      archiveResult.status === 'fulfilled'
-        ? (archiveResult.value.list?.vlist ?? []).flatMap(parseArchiveItem)
-        : [];
-
-    return {
-      dynamics: sorted.slice(0, 8),
-      videos: (archiveItems.length
-        ? archiveItems
-        : sorted.filter(item => item.type === 'video')
-      ).slice(0, 8),
-    };
+    return (result.list?.vlist ?? []).flatMap(parseArchiveItem).slice(0, limit);
   }
 
   private async streamerStatus(streamerUid: number) {
@@ -366,6 +343,8 @@ function parseHistoryItem(item: DynamicItemPayload): StreamerHistoryItem[] {
       title,
       publishedAt: item.modules?.module_author?.pub_ts,
       pinned: item.modules?.module_tag?.text?.includes('置顶') ?? false,
+      url: item.id_str ? `https://t.bilibili.com/${item.id_str}` : undefined,
+      summary: description,
     },
   ];
 }
@@ -384,6 +363,7 @@ function parseArchiveItem(item: ArchiveItemPayload): StreamerHistoryItem[] {
       title,
       publishedAt: item.created,
       pinned: false,
+      url: item.bvid ? `https://www.bilibili.com/video/${item.bvid}` : undefined,
     },
   ];
 }

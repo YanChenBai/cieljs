@@ -14,9 +14,10 @@ import type {
   WatchStatus,
 } from '../shared/types.ts';
 import { createWatchCiel } from './agent/ciel.ts';
-import { parseDecision, RoomDecisionSchema, messageText } from './agent/decisions.ts';
+import { readRoomDecision } from './agent/decisions.ts';
 import { selectExplorationRoom } from './agent/exploration.ts';
 import { createRoomSessionOptions } from './agent/room-session.ts';
+import { createStreamerTools } from './agent/streamer-tools.ts';
 import { createDanmakuTool, DanmakuRunGate } from './agent/tools.ts';
 import { BilibiliApi } from './bilibili/api.ts';
 import { LivePage } from './bilibili/live-page.ts';
@@ -278,6 +279,11 @@ class WatchBliveRuntime implements WatchBlive {
       mode,
       mcp: this.options.mcp,
       danmakuTool,
+      streamerTools: createStreamerTools({
+        api: this.api,
+        room: () => this.visit?.room,
+        readInPage: url => this.options.livePage.readPublicApi(url),
+      }),
     });
   }
 
@@ -324,7 +330,6 @@ class WatchBliveRuntime implements WatchBlive {
     });
 
     try {
-      const streamerHistory = await this.loadStreamerHistory(room.streamerUid);
       await this.options.livePage.open(room.roomId, signal);
       await this.waitUntilReady(room.roomId, generation, signal);
 
@@ -350,7 +355,6 @@ class WatchBliveRuntime implements WatchBlive {
         generation,
         room,
         mode: this.requireStartOptions().mode,
-        streamerHistory,
         startedAt,
         session,
         perception,
@@ -398,7 +402,6 @@ class WatchBliveRuntime implements WatchBlive {
     });
 
     try {
-      const streamerHistory = await this.loadStreamerHistory(room.streamerUid);
       const startedAt = Date.now();
       session = await this.requireCiel().session(
         createRoomSessionOptions(room, new Date(startedAt), mode),
@@ -426,7 +429,6 @@ class WatchBliveRuntime implements WatchBlive {
         generation,
         room,
         mode,
-        streamerHistory,
         startedAt,
         session,
         perception,
@@ -480,18 +482,7 @@ class WatchBliveRuntime implements WatchBlive {
     }).catch(cause => this.emitError('stop', cause));
   }
 
-  private async loadStreamerHistory(streamerUid: number) {
-    try {
-      return await this.api.streamerHistory(streamerUid, url =>
-        this.options.livePage.readPublicApi(url),
-      );
-    } catch (error) {
-      this.emitError('streamer_history', error);
-      return undefined;
-    }
-  }
-
-  private inspectDecision(generation: number, signal: AbortSignal): void {
+  private async inspectDecision(generation: number, signal: AbortSignal): Promise<void> {
     const visit = this.visit;
     const mode = this.requireStartOptions().mode;
 
@@ -505,15 +496,8 @@ class WatchBliveRuntime implements WatchBlive {
       return;
     }
 
-    const assistant = visit.session.agent.state.messages.findLast(
-      message => message.role === 'assistant',
-    );
-
-    if (!assistant) {
-      return;
-    }
-
-    const decision = parseDecision(messageText(assistant), RoomDecisionSchema);
+    const decision = await readRoomDecision(visit.session.agent, signal);
+    if (!decision || signal.aborted || this.visit !== visit) return;
 
     this.emit({
       type: 'room_evaluated',

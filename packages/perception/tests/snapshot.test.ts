@@ -19,7 +19,7 @@ test('纯声音事件进入听觉提示，并与外部结果对象隔离', async
   const messages = await snapshot.compose();
   expect(messages).toMatchObject([
     {
-      content: [{ type: 'text', text: expect.stringContaining('声音事件（模型识别）：applause') }],
+      content: [{ type: 'text', text: expect.stringContaining('<声音事件: applause>') }],
     },
   ]);
 });
@@ -70,7 +70,7 @@ test('compose combines visual blocks before the hearing transcript', async () =>
       { type: 'image', mimeType: 'image/jpeg' },
       {
         type: 'text',
-        text: '# 听觉\n\n听觉提示\n\n[2026-09-05T12:00:04.000Z][主播] 你好',
+        text: '# 听觉\n\n听觉提示\n\n<开始时间: 2026-09-05T12:00:04.000Z><说话人: [主播]><声音事件: >你好',
       },
     ],
   });

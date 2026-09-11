@@ -11,6 +11,7 @@ An Electron application with Vue and TypeScript
   "ai": {
     "provider": "xiaomi",
     "model": "mimo-v2.5",
+    "baseUrl": "https://api.xiaomimimo.com/v1",
     "apiKey": "your-api-key"
   },
   "interaction": {
@@ -22,6 +23,8 @@ An Electron application with Vue and TypeScript
 ```
 
 `ffmpegPath` 和 `interaction` 可省略。默认思考最小间隔为 2 秒，无语音时每 10 秒观察一次；模型响应和 ASR 推理仍可能增加延迟。运行参数修改后重启应用生效。应用不会要求把 API key 写入环境变量。听觉模型缺失时可直接在应用侧栏下载。
+
+`ai.baseUrl` 可省略，省略时使用模型注册的地址。自定义地址必须为 HTTP 或 HTTPS，需包含服务要求的路径前缀（例如 `/v1`）；它只覆盖请求地址，`provider` 和 `model` 仍须是已注册的组合，接口协议也保持不变。修改后重启应用生效。
 
 ## Recommended IDE Setup
 

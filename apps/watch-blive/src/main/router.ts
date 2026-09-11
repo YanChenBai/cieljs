@@ -58,7 +58,13 @@ export function createWatchRouter(
       storage: devtools.storage,
       dataDir: watchDataDirectory(),
       ffmpegPath: config.ffmpegPath,
-      perception: { asr: { model: hearingModel } },
+      perception: {
+        asr: {
+          model: hearingModel,
+          bufferSeconds: 30,
+          vad: { minSilenceDuration: 0.8, maxSpeechDuration: 15 },
+        },
+      },
       ...config.interaction,
     });
     unsubscribe = runtime.onEvent(event => {
