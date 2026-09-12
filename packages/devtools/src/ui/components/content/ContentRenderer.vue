@@ -1,24 +1,35 @@
 <script setup lang="ts">
 import MarkdownRender from 'markstream-vue';
-import { computed } from 'vue';
-import VueJsonPretty from 'vue-json-pretty';
+import { computed, shallowRef } from 'vue';
 
-import { readableText, imageSource } from '../../utils/content-format.ts';
+import type { DevtoolsClient } from '../../../client/index.ts';
+import type { ToolRenderers } from '../../tool-renderers.ts';
+import {
+  imageSource,
+  jsonMarkdown,
+  messageText,
+  readableText,
+} from '../../utils/content-format.ts';
+import type { ToolCallRecord } from '../../utils/tool-calls.ts';
 import Disclosure from './Disclosure.vue';
+import ToolCallView from './ToolCallView.vue';
 
-const props = withDefaults(defineProps<{ value: unknown; final?: boolean }>(), { final: true });
+const props = withDefaults(
+  defineProps<{
+    value: unknown;
+    final?: boolean;
+    /** 以下三项用于把工具调用渲染成单个块；独立使用时可以不传，工具块只显示参数。 */
+    client?: DevtoolsClient;
+    toolCalls?: ReadonlyMap<string, ToolCallRecord>;
+    toolRenderers?: ToolRenderers;
+  }>(),
+  { final: true },
+);
 
-const text = computed(() => {
-  const value = props.value;
-  if (typeof value === 'string') return value;
-  if (!value || typeof value !== 'object') return undefined;
+/** 感知帧是 1920×1080 拼图，对话里按缩略图展示，点击才能撑满面板。 */
+const zoomed = shallowRef<number | null>(null);
 
-  if ('content' in value && typeof value.content === 'string') {
-    return value.content;
-  }
-
-  return undefined;
-});
+const text = computed(() => messageText(props.value));
 
 const blocks = computed(() => {
   const value = props.value;
@@ -33,22 +44,6 @@ const formattedText = computed(() => {
   if (text.value === undefined) return undefined;
 
   return readableText(text.value);
-});
-
-const json = computed(() => {
-  // 调试快照可能包含 BigInt 或循环引用，转换后交给 JSON 查看器展示。
-  const seen = new WeakSet<object>();
-
-  return JSON.parse(
-    JSON.stringify(props.value ?? null, (_key, value) => {
-      if (typeof value === 'bigint') return String(value);
-      if (value && typeof value === 'object') {
-        if (seen.has(value)) return '[Circular]';
-        seen.add(value);
-      }
-      return value;
-    }),
-  );
 });
 </script>
 
@@ -67,8 +62,16 @@ const json = computed(() => {
           v-if="block.type === 'image'"
           :src="imageSource(block)"
           class="dt-image"
+          :class="{ zoomed: zoomed === index }"
           alt="消息图片"
           loading="lazy"
+          role="button"
+          tabindex="0"
+          :aria-pressed="zoomed === index"
+          :title="zoomed === index ? '点击还原' : '点击放大'"
+          @click="zoomed = zoomed === index ? null : index"
+          @keydown.enter.prevent="zoomed = zoomed === index ? null : index"
+          @keydown.space.prevent="zoomed = zoomed === index ? null : index"
         />
         <MarkdownRender
           v-else-if="block.type === 'text'"
@@ -77,7 +80,12 @@ const json = computed(() => {
           html-policy="escape"
           :final="final"
         />
-        <Disclosure v-else-if="block.type === 'thinking'" title="思考">
+        <Disclosure
+          v-else-if="block.type === 'thinking'"
+          title="思考过程"
+          class="dt-thinking"
+          :default-open="false"
+        >
           <MarkdownRender
             :content="block.thinking"
             :is-dark="true"
@@ -85,9 +93,29 @@ const json = computed(() => {
             :final="final"
           />
         </Disclosure>
-        <VueJsonPretty v-else :data="block" :deep="2" theme="dark" />
+        <ToolCallView
+          v-else-if="block.type === 'toolCall' && block.id && block.name"
+          :client="client"
+          :block="block"
+          :call="toolCalls?.get(block.id)?.call"
+          :result="toolCalls?.get(block.id)?.result"
+          :renderer="toolRenderers?.[block.name]"
+        />
+        <MarkdownRender
+          v-else
+          :content="jsonMarkdown(block)"
+          :is-dark="true"
+          html-policy="escape"
+          :final="final"
+        />
       </template>
     </template>
-    <VueJsonPretty v-else :data="json" :deep="3" theme="dark" />
+    <MarkdownRender
+      v-else
+      :content="jsonMarkdown(value)"
+      :is-dark="true"
+      html-policy="escape"
+      :final="final"
+    />
   </div>
 </template>

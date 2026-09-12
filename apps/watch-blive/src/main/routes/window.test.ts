@@ -3,10 +3,35 @@ import type { BrowserWindow } from 'electron';
 import { expect, it, vi } from 'vite-plus/test';
 
 import type { LivePage } from '../bilibili/live-page.ts';
+import { BROWSE_HOME } from '../browse-window.ts';
 import { createWindowRoutes } from './window.ts';
 
-const { fromId } = vi.hoisted(() => ({ fromId: vi.fn() }));
-vi.mock('electron', () => ({ webContents: { fromId } }));
+const { fromId, MockBrowserWindow, windows } = vi.hoisted(() => {
+  const windows: MockBrowserWindow[] = [];
+
+  class MockBrowserWindow {
+    readonly webContents = {
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      loadURL: vi.fn().mockResolvedValue(undefined),
+    };
+    readonly focus = vi.fn();
+    readonly destroy = vi.fn();
+    readonly on = vi.fn();
+
+    constructor() {
+      windows.push(this);
+    }
+
+    isDestroyed() {
+      return false;
+    }
+  }
+
+  return { fromId: vi.fn(), MockBrowserWindow, windows };
+});
+
+vi.mock('electron', () => ({ webContents: { fromId }, BrowserWindow: MockBrowserWindow }));
 
 it('直播间新窗口转成确认请求，外部链接不触发单推', async () => {
   const host = {};
@@ -46,4 +71,22 @@ it('直播间新窗口转成确认请求，外部链接不触发单推', async (
   }
   expect(requestRoom).toHaveBeenCalledOnce();
   expect(loadURL).not.toHaveBeenCalled();
+});
+
+it('openBrowse 打开独立的 B 站浏览窗口，不碰直播 guest', async () => {
+  const host = {};
+  const requestRoom = vi.fn();
+  const client = createRouterClient(
+    createWindowRoutes(
+      { webContents: host } as BrowserWindow,
+      { attach: vi.fn() } as unknown as LivePage,
+      requestRoom,
+    ),
+  );
+
+  await client.openBrowse();
+
+  expect(windows).toHaveLength(1);
+  expect(windows[0]!.webContents.loadURL).toHaveBeenCalledExactlyOnceWith(BROWSE_HOME);
+  expect(requestRoom).not.toHaveBeenCalled();
 });

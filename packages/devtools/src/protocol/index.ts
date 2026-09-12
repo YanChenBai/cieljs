@@ -11,6 +11,7 @@ export interface TraceEntry {
   runId?: string;
   parentRunId?: string;
   turnId?: string;
+  turnNumber?: number;
   messageId?: string;
   toolCallId?: string;
   model?: { id: string; name: string; provider: string };
@@ -23,6 +24,8 @@ export interface TraceEntry {
   thinking?: string;
   input?: ValueRef;
   output?: ValueRef;
+  error?: ValueRef;
+  schema?: ValueRef;
 }
 
 export interface ValueRef {
@@ -30,9 +33,41 @@ export interface ValueRef {
   path?: string[];
   preview: string;
 }
+
+/** 一次模型调用的用量；只保留展示需要的计数，Pi 的 cost 等字段不进入协议。 */
+export interface TraceUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  /** 缓存写入与读取都算在 total 里，与模型侧口径一致。 */
+  total: number;
+}
+
+export interface DevtoolsUsage {
+  /**
+   * 累计用量：宿主重放存储中的全部记录求和，和「执行记录」里看到的历史同源，
+   * 因此跨宿主重启连续，也不受客户端窗口与「清空视图」影响。
+   */
+  total: TraceUsage;
+  /** 最近一次请求的用量，即当前上下文规模；还没有请求时为 null。 */
+  context: TraceUsage | null;
+}
+
+export interface DevtoolsSession {
+  id: string;
+  startedAt: number;
+  endedAt: number;
+  usage: DevtoolsUsage;
+  turn: number;
+  steps: number;
+}
+
 export interface DevtoolsUpdate {
   entries: TraceEntry[];
   steps: TraceEntry[];
+  usage: DevtoolsUsage;
+  sessions: DevtoolsSession[];
 }
 
 export type TraceEvent = RuntimeRecord;

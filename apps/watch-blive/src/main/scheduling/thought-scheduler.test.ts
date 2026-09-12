@@ -1,8 +1,10 @@
+import type { WakeEvent } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
 import type { Agent } from '@earendil-works/pi-agent-core';
-import { describe, expect, it, vi } from 'vite-plus/test';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { ThoughtScheduler } from './thought-scheduler.ts';
+import { createWakeContext } from './wake.ts';
 
 describe('ThoughtScheduler', () => {
   it.each([
@@ -126,6 +128,103 @@ describe('ThoughtScheduler', () => {
     await closing;
     scheduler.trigger(new Date(3));
     expect(prompt).not.toHaveBeenCalled();
+  });
+});
+
+describe('关键词优先调度', () => {
+  const wait = { minWaitMs: 1500, maxWaitMs: 4000 };
+  let scheduler: ThoughtScheduler;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+  });
+  afterEach(async () => {
+    await scheduler.close();
+    vi.useRealTimers();
+  });
+
+  function setup() {
+    const signal: WakeEvent = { keyword: '夏尔', at: new Date(9000) };
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    const snapshot = vi.fn().mockResolvedValue({ compose: async () => [] });
+    const context = vi.fn((wake?: WakeEvent) => ({
+      role: 'user' as const,
+      content: wake ? createWakeContext(wake) : '普通观察',
+      timestamp: Date.now(),
+    }));
+    scheduler = new ThoughtScheduler({
+      perception: { snapshot },
+      agent: { prompt },
+      context,
+      minimumIntervalMs: 60_000,
+      startedAt: new Date(0),
+    });
+    return { signal, prompt, snapshot, context };
+  }
+
+  it('替换普通冷却定时器，语音结束后仍等满最短时间，再消费一次唤醒上下文', async () => {
+    const { signal, prompt, snapshot, context } = setup();
+    scheduler.trigger(new Date());
+    await vi.advanceTimersByTimeAsync(100);
+    scheduler.trigger(new Date());
+    expect(scheduler.wake(signal, wait)).toBe(true);
+    await vi.advanceTimersByTimeAsync(500);
+    scheduler.trigger(new Date(), 'speechend');
+    await vi.advanceTimersByTimeAsync(999);
+    expect(prompt).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(prompt).toHaveBeenCalledTimes(2);
+    expect(context).toHaveBeenLastCalledWith(signal);
+    expect(snapshot).toHaveBeenLastCalledWith({ startAt: new Date(10001), endAt: new Date(11600) });
+    scheduler.trigger(new Date(11601));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(context).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('没有语音结束时在上限触发，普通观察和重复唤醒不延长等待', async () => {
+    const { signal, prompt } = setup();
+    scheduler.wake(signal, wait);
+    await vi.advanceTimersByTimeAsync(2000);
+    scheduler.trigger(new Date());
+    expect(scheduler.wake(signal, wait)).toBe(false);
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(prompt).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(prompt).toHaveBeenCalledOnce();
+  });
+
+  it('唤醒在当前轮快照生成期间到达时只交给下一轮，不并发调用模型', async () => {
+    const { signal, prompt, snapshot, context } = setup();
+    const composing = Promise.withResolvers<[]>();
+    snapshot.mockResolvedValueOnce({ compose: () => composing.promise });
+    scheduler.trigger(new Date());
+    scheduler.wake(signal, wait);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(prompt).not.toHaveBeenCalled();
+    composing.resolve([]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(prompt).toHaveBeenCalledTimes(2);
+    expect(context).toHaveBeenNthCalledWith(1, undefined);
+    expect(context).toHaveBeenNthCalledWith(2, signal);
+  });
+
+  it('迟到的语音结束仍会重新安排唤醒，不因快照水位丢掉定时器', async () => {
+    const { signal, prompt } = setup();
+    scheduler.trigger(new Date());
+    await vi.advanceTimersByTimeAsync(0);
+    scheduler.wake(signal, wait);
+    scheduler.trigger(new Date(9500), 'speechend');
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(prompt).toHaveBeenCalledTimes(2);
+  });
+
+  it('取消会清除唤醒和待执行定时器', async () => {
+    const { signal, prompt } = setup();
+    scheduler.wake(signal, wait);
+    scheduler.cancel();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(prompt).not.toHaveBeenCalled();
+    expect(scheduler.wake(signal, wait)).toBe(false);
   });
 });
 

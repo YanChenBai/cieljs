@@ -27,7 +27,7 @@ PCM 为交错 s16le；省略格式参数时为 16 kHz 单声道。重采样保�
 ## 独立 KWS 事件
 
 ```ts
-await using kws = await createKWS({ keywords: ['你好小希'], cooldownMs: 1500 });
+await using kws = await createKWS({ keywords: ['你好夏尔'], cooldownMs: 1500 });
 const unsubscribe = kws.on('wake', ({ keyword, at }) => {
   console.log('唤醒', keyword, at);
 });
@@ -46,7 +46,7 @@ unsubscribe();
 await using asr = await createASR({
   model: 'sensevoice-small',
   speaker: false,
-  wake: { keywords: ['你好小希'], preRollMs: 1500, maxListenMs: 15000 },
+  wake: { keywords: ['你好夏尔'], preRollMs: 1500, maxListenMs: 15000 },
 });
 asr.on('wake', event => console.log(event));
 asr.on('result', result => console.log(result.content));

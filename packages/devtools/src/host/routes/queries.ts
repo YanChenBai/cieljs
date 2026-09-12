@@ -8,6 +8,7 @@ import type { DevtoolsHost } from '../host.ts';
 const pageSchema = z.object({
   cursor: z.number().int().nonnegative().optional(),
   limit: z.number().int().min(1).max(300).default(100),
+  sessionId: z.string().min(1).max(300).optional(),
 });
 const idSchema = z.object({ id: z.string().min(1).max(200) });
 
@@ -39,12 +40,13 @@ export function createMessageRoutes(host: DevtoolsHost) {
 function listRecords(
   host: DevtoolsHost,
   category: 'run' | 'step' | 'entry',
-  input: { cursor?: number; limit: number; runId?: string },
+  input: { cursor?: number; limit: number; runId?: string; sessionId?: string },
 ) {
   return host.store.list<TraceEntry>(category, {
     before: input.cursor,
     limit: input.limit,
     runId: input.runId,
+    sessionId: input.sessionId,
   });
 }
 

@@ -12,7 +12,10 @@ const open = shallowRef(props.defaultOpen);
   <Collapsible.Root v-model="open" class="dt-section">
     <Collapsible.Activator class="dt-disclosure">
       <Collapsible.Cue class="dt-cue">›</Collapsible.Cue>
-      {{ title }}
+      <span class="dt-disclosure-title"
+        ><slot name="title">{{ title }}</slot></span
+      >
+      <slot name="trailing" />
     </Collapsible.Activator>
     <Collapsible.Content class="dt-section-content"><slot /></Collapsible.Content>
   </Collapsible.Root>

@@ -19,7 +19,7 @@ export function resolveVoiceprintPath(file: string): string {
 }
 
 export function readVoiceprint(file: string): Float32Array {
-  const data = readFileSync(resolveVoiceprintPath(file));
+  const data = readFileSync(file);
   if (
     data.length < HEADER_SIZE ||
     data.subarray(0, VOICEPRINT_MAGIC.length).toString() !== VOICEPRINT_MAGIC

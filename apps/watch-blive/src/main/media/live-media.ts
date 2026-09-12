@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
+import type { KWS } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
 
 const USER_AGENT =
@@ -12,6 +13,7 @@ export interface LiveMediaOptions {
   input: string;
   live: boolean;
   perception: Perception;
+  kws?: Pick<KWS, 'write'>;
   ffmpegPath?: string;
   onError?: (error: Error) => void;
   onStopped?: (error?: Error) => void;
@@ -105,7 +107,18 @@ export class LiveMedia {
     this.sampleCount += Math.floor(data.byteLength / 2);
     const audio = child.stdout;
     if (audio && 'pause' in audio) audio.pause();
-    const write = Promise.resolve(this.options.perception.asr.write({ data, startAt }));
+    // 同一份 PCM 持续送入 ASR 和独立 KWS，不启用 ASR 唤醒门控。
+    const write = Promise.allSettled([
+      this.options.perception.asr.write({ data, startAt }),
+      this.options.kws?.write({ data, startAt }),
+    ]).then(results => {
+      const failures = results.filter(result => result.status === 'rejected');
+      if (failures.length)
+        throw new AggregateError(
+          failures.map(result => result.reason),
+          '音频处理失败',
+        );
+    });
     this.writes.add(write);
     void write
       .catch(error =>

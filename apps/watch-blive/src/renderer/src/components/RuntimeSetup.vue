@@ -27,7 +27,7 @@ function selectModel(event: Event) {
 </script>
 
 <template>
-  <section class="border-b border-[#ffffff0b] px-4.5 py-4">
+  <section class="border-b border-[#ffffff0b] px-4.5 pt-4 pb-3">
     <div class="section-heading">运行配置</div>
     <label class="my-3 flex flex-col gap-2 text-[11px]">
       听觉模型
@@ -42,9 +42,6 @@ function selectModel(event: Event) {
       </select>
     </label>
     <p v-if="pending === 'switch-model'" class="hint" role="status">正在切换听觉模型…</p>
-    <p v-if="models?.modelsPath" :title="models.modelsPath" class="hint truncate break-all">
-      模型目录：{{ models.modelsPath }}
-    </p>
     <div
       v-if="!configuration?.valid"
       class="my-2 rounded-lg bg-[#442936] px-3 py-2 text-[11px] leading-[1.6] text-[#ffc1d2]"

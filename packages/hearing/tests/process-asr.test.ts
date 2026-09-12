@@ -57,7 +57,7 @@ test('flush 等待尾部结果，跨进程恢复事件时间，close 共享同�
 if (command.type === 'flush') {
  await new Promise(resolve => setTimeout(resolve, 30));
  send({ type: 'result', data: { content: '', events: [{ type: 'applause' }], startAt: new Date(0), endAt: new Date(100) } });
- send({ type: 'wake', data: { keyword: '小希', at: new Date(50) } });
+ send({ type: 'wake', data: { keyword: '夏尔', at: new Date(50) } });
 }
 send({ type: 'ack', id: command.id });
 if (command.type === 'close') break;`);
@@ -71,7 +71,7 @@ if (command.type === 'close') break;`);
   expect(results).toMatchObject([
     { content: '', events: [{ type: 'applause' }], startAt: new Date(0) },
   ]);
-  expect(wakes).toEqual([{ keyword: '小希', at: new Date(50) }]);
+  expect(wakes).toEqual([{ keyword: '夏尔', at: new Date(50) }]);
   const closing = asr.close();
   expect(asr.close()).toBe(closing);
   await closing;

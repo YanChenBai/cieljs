@@ -8,7 +8,7 @@ import { RPCLink } from '@orpc/client/message-port';
 import { createRouterClient } from '@orpc/server';
 import type { RouterClient } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/message-port';
-import { afterEach, expect, it } from 'vite-plus/test';
+import { afterEach, expect, it, vi } from 'vite-plus/test';
 
 import { createDevtoolsClient } from '../client/index.ts';
 import type { TraceEntry } from '../protocol/index.ts';
@@ -16,6 +16,39 @@ import { DevtoolsHost } from './host.ts';
 import { createDevtoolsRouter } from './router.ts';
 import { devtoolsStorage } from './store.ts';
 const cleanup: (() => void | Promise<void>)[] = [];
+
+it('实时订阅持续收到新消息和步骤，后台处理失败时明确报错', async () => {
+  const storage = await Storage.open({ dataDir: 'memory://', modules: [devtoolsStorage] });
+  const host = await DevtoolsHost.open({ storage });
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const client = createRouterClient(createDevtoolsRouter(host));
+    const updates = await client.updates();
+    await updates.next();
+    const next = updates.next();
+    await host.agentListener('live')({
+      type: 'message_end',
+      message: { role: 'user', content: '新消息', timestamp: Date.now() },
+    });
+    await host.flushRecords();
+    const update = await next;
+    if (update.done) throw new Error('实时订阅提前结束');
+    expect(update.value.entries.some(entry => entry.name === 'user')).toBe(true);
+    expect(update.value.steps.some(step => step.name === 'message_end')).toBe(true);
+
+    const failed = expect(updates.next()).rejects.toThrow('Devtools 事件处理失败');
+    const read = vi.spyOn(storage.journal, 'read').mockRejectedValueOnce(new Error('存储读取失败'));
+    await expect(host.flushRecords()).rejects.toThrow('存储读取失败');
+    read.mockRestore();
+    await failed;
+    expect(log).toHaveBeenCalledWith('Devtools 事件处理失败', '存储读取失败');
+  } finally {
+    await host.close().catch(() => {});
+    await storage.close();
+    log.mockRestore();
+  }
+});
+
 async function openHost(capacity?: number, directory = 'memory://') {
   const storage = await Storage.open({ dataDir: directory, modules: [devtoolsStorage] });
   const host = await DevtoolsHost.open({ storage, capacity });
@@ -128,6 +161,35 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
   expect((await pending).done).toBe(true);
 });
 
+it('轮次号按 Agent 运行分配：同一 run 的多轮共用一个号，新 run 递增', async () => {
+  const host = await openHost();
+  const receive = host.agentListener('runs');
+  const message = { role: 'user' as const, content: 'x', timestamp: 0 };
+
+  receive({ type: 'agent_start' });
+  receive({ type: 'turn_start' });
+  receive({ type: 'turn_end', message, toolResults: [] });
+  receive({ type: 'turn_start' });
+  receive({ type: 'turn_end', message, toolResults: [] });
+  receive({ type: 'agent_end', messages: [message] });
+  receive({ type: 'agent_start' });
+  receive({ type: 'turn_start' });
+  await host.flushRecords();
+
+  const steps = await host.store.list<TraceEntry>('step', { sessionId: 'runs' });
+  const numbers = new Map<string, Set<number | undefined>>();
+  for (const step of steps) {
+    const seen = numbers.get(step.runId!) ?? new Set<number | undefined>();
+    seen.add(step.turnNumber);
+    numbers.set(step.runId!, seen);
+  }
+
+  const runs = [...numbers.values()].map(seen => [...seen]);
+  expect(runs).toHaveLength(2);
+  expect(runs.every(seen => seen.length === 1)).toBe(true);
+  expect(new Set(runs.flat())).toEqual(new Set([1, 2]));
+});
+
 it('淘汰后与宿主重启后均可按 ID 回读原始图片', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'ciel-trace-'));
   cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
@@ -167,6 +229,46 @@ it('重放保留消息与宿主记录的顺序，随后新增消息使用更大�
   const after = await reopened.store.list<TraceEntry>('entry');
   expect(after.slice(0, -1)).toEqual(before);
   expect(after.at(-1)!.sequence).toBeGreaterThan(Math.max(...before.map(entry => entry.sequence)));
+});
+
+it('后台重放不阻塞 open()，追平后条目与用量与阻塞重放一致', async () => {
+  const host = await openHost();
+  await host.agentListener('live')({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: [],
+      api: 'openai-completions',
+      provider: 'xiaomi',
+      model: 'mimo-v2.5',
+      stopReason: 'stop',
+      timestamp: 0,
+      usage: {
+        input: 120,
+        output: 20,
+        cacheRead: 800,
+        cacheWrite: 0,
+        totalTokens: 940,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    },
+  });
+  await host.flushRecords();
+  const before = await host.store.list<TraceEntry>('entry');
+  await host.close();
+
+  // 用量只由重放累计：后台重放追平后必须给出与阻塞重放相同的条目和快照。
+  const reopened = await DevtoolsHost.open({ storage: host.storage, awaitReplay: false });
+  cleanup.push(() => reopened.close());
+  await reopened.flushRecords();
+  expect(await reopened.store.list('entry')).toEqual(before);
+  expect(reopened.usage().total).toEqual({
+    input: 120,
+    output: 20,
+    cacheRead: 800,
+    cacheWrite: 0,
+    total: 940,
+  });
 });
 
 it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {

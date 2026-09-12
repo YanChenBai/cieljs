@@ -25,6 +25,7 @@ export function useWatchBlive() {
   const events = shallowRef<{ id: number; time: string; text: string }[]>([]);
   let eventId = 0;
   const state = shallowRef<WatchSnapshot>({ status: 'idle' });
+  const activeSessionId = shallowRef<string>();
   const account = shallowRef<Account>();
   const areas = shallowRef<readonly LiveArea[]>([]);
   const configuration = shallowRef<WatchConfigurationStatus>();
@@ -81,8 +82,14 @@ export function useWatchBlive() {
     }
 
     if (event.type === 'status') state.value = { ...state.value, status: event.status };
-    if (event.type === 'room_opened') state.value = { ...state.value, room: event.room };
-    if (event.type === 'room_closed') state.value = { ...state.value, room: undefined };
+    if (event.type === 'room_opened') {
+      state.value = { ...state.value, room: event.room };
+      activeSessionId.value = event.sessionId;
+    }
+    if (event.type === 'room_closed') {
+      state.value = { ...state.value, room: undefined };
+      activeSessionId.value = undefined;
+    }
     if (event.type === 'error') error.value = describeError(event.message);
   }
 
@@ -129,6 +136,7 @@ export function useWatchBlive() {
   return {
     events,
     state,
+    activeSessionId,
     account,
     areas,
     configuration,

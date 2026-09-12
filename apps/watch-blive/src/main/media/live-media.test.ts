@@ -10,7 +10,7 @@ const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock('node:child_process', () => ({ spawn }));
 beforeEach(() => vi.resetAllMocks());
 
-function setup(live = true) {
+function setup(live = true, kws?: NonNullable<ConstructorParameters<typeof LiveMedia>[0]['kws']>) {
   const child = Object.assign(new EventEmitter(), {
     stdout: new PassThrough(),
     stderr: new PassThrough(),
@@ -32,6 +32,7 @@ function setup(live = true) {
     roomId: 123,
     input: 'https://example.com/live',
     live,
+    kws,
     perception: {
       asr: { write: audioWrite },
       image: { write: imageWrite },
@@ -43,6 +44,27 @@ function setup(live = true) {
   media.start();
   return { media, child, onStopped, onError, onProgress, imageWrite, audioWrite };
 }
+
+it('ASR 推理尚未结束时 KWS 已收到同一块音频，关闭会等待两路写入', async () => {
+  const recognizing = Promise.withResolvers<void>();
+  const detecting = Promise.withResolvers<void>();
+  const kws = { write: vi.fn(() => detecting.promise) };
+  const { media, child, audioWrite } = setup(true, kws);
+  audioWrite.mockReturnValue(recognizing.promise);
+  child.stdout.write(Buffer.alloc(320));
+  expect(kws.write).toHaveBeenCalledOnce();
+  expect(kws.write.mock.calls[0]).toEqual(audioWrite.mock.calls[0]);
+  let closed = false;
+  const closing = media.close().then(() => {
+    closed = true;
+  });
+  recognizing.resolve();
+  await Promise.resolve();
+  expect(closed).toBe(false);
+  detecting.resolve();
+  await closing;
+  expect(closed).toBe(true);
+});
 
 it('加速解码的帧按媒体时间分布，进度支持分块输出', async () => {
   const { media, child, imageWrite, onProgress } = setup(false);

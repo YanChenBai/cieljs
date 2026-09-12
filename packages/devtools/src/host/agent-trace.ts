@@ -114,8 +114,11 @@ export class AgentTrace {
     entry.output = this.recorder.storeValue(entry.id + ':output', event.message);
 
     if (event.type === 'message_end') {
-      const failed = event.message.role === 'assistant' && event.message.stopReason === 'error';
+      const failed =
+        (event.message.role === 'assistant' && event.message.stopReason === 'error') ||
+        (event.message.role === 'toolResult' && event.message.isError);
       entry.status = failed ? 'error' : 'completed';
+      if (failed) entry.error = entry.output;
       entry.endedAt = trace.timestamp;
     }
 
@@ -149,6 +152,7 @@ export class AgentTrace {
     if (event.type === 'tool_execution_end') {
       entry.output = this.recorder.storeValue(entry.id + ':output', event.result);
       entry.status = event.isError ? 'error' : 'completed';
+      if (event.isError) entry.error = entry.output;
       entry.endedAt = trace.timestamp;
       this.tools.delete(event.toolCallId);
     } else {

@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vite-plus/test';
 
+import type { RoomCandidate } from '../../shared/types.ts';
 import {
+  CIEL_PERSONA_PROMPT,
   createCandidateSources,
+  createExplorationQuestion,
   createRoomContext,
   createRoomSources,
   createSystemPrompt,
+  HEARING_PROMPT,
 } from '../prompts';
+import { ROOM_REVISIT_COOLDOWN_MS } from '../room-history.ts';
 
 describe('直播来源', () => {
   it('房间 Session 同时包含房间和主播来源', () => {
@@ -39,6 +44,89 @@ describe('直播来源', () => {
     ]);
 
     expect(sources).toEqual(['bilibili:area:1']);
+  });
+});
+
+describe('探索选房问题', () => {
+  const candidate: RoomCandidate = {
+    roomId: 789,
+    streamerUid: 7890,
+    streamerName: '二号主播',
+    title: '唱歌',
+    areaName: '唱见',
+  };
+  const cooldownMs = ROOM_REVISIT_COOLDOWN_MS;
+
+  it('没有上一段和冷却时只给候选', () => {
+    const question = createExplorationQuestion([candidate], {
+      cooled: [],
+      relaxed: false,
+      cooldownMs,
+    });
+
+    expect(question).toContain('"roomId":789');
+    expect(question).not.toContain('# 上一段观看');
+    expect(question).not.toContain('# 冷却中的房间');
+  });
+
+  it('注入上一段观看的现场事实与离开原因，但不带上一轮评价', () => {
+    const question = createExplorationQuestion([candidate], {
+      previous: {
+        room: {
+          roomId: 123,
+          streamerUid: 456,
+          streamerName: '旧主播',
+          title: '旧标题',
+          description: '',
+          parentAreaName: '娱乐',
+          areaName: '聊天',
+          live: true,
+        },
+        watchedSeconds: 252,
+        reason: '宿主评分判定继续观看价值不足',
+      },
+      cooled: [],
+      relaxed: false,
+      cooldownMs,
+    });
+
+    expect(question).toContain('刚离开：旧主播（房间 123）· 旧标题');
+    expect(question).toContain('分区：娱乐 / 聊天');
+    expect(question).toContain('已观看 4 分 12 秒');
+    expect(question).toContain('宿主评分判定继续观看价值不足');
+    expect(question).toContain('不要选它');
+    expect(question).not.toContain('score');
+    expect(question).not.toContain('confidence');
+  });
+
+  it('列出冷却中的房间与剩余时间', () => {
+    const question = createExplorationQuestion([candidate], {
+      cooled: [
+        { roomId: 123, streamerName: '旧主播', title: '旧标题', leftAt: Date.now() - 3 * 60_000 },
+      ],
+      relaxed: false,
+      cooldownMs,
+    });
+
+    expect(question).toContain('# 冷却中的房间');
+    expect(question).toContain('- 旧主播（房间 123）· 旧标题 · 离开 3 分钟，还有 27 分钟');
+    expect(question).toContain('已从候选中移除');
+    expect(question).not.toContain('冷却已放宽');
+  });
+
+  it('冷却清空候选时说明已放宽，并要求优先考虑最久没看的', () => {
+    const question = createExplorationQuestion([candidate], {
+      cooled: [
+        { roomId: 789, streamerName: '二号主播', title: '唱歌', leftAt: Date.now() - 29 * 60_000 },
+      ],
+      relaxed: true,
+      cooldownMs,
+    });
+
+    expect(question).toContain('冷却已放宽');
+    expect(question).toContain('还有 1 分钟');
+    expect(question).toContain('从早到晚');
+    expect(question).not.toContain('已从候选中移除');
   });
 });
 
@@ -85,6 +173,65 @@ describe('观看模式提示词', () => {
   });
 });
 
+describe('人设提示词', () => {
+  it.each([
+    { type: 'follow' as const, roomId: 1 },
+    { type: 'explore' as const, areaId: 1 },
+    {
+      type: 'recording' as const,
+      roomId: 1,
+      source: { type: 'file' as const, path: '/video.mp4' },
+    },
+  ])('$type 模式的系统提示词带人设与优先级约束', mode => {
+    const text = createSystemPrompt(mode);
+
+    expect(text.indexOf('夏尔（Ciel）')).toBeLessThan(text.indexOf('## 感知'));
+    expect(text).toContain('## 人设边界');
+    expect(text).toContain('任务优先');
+    expect(text).toContain('不改变决策');
+    expect(text).toContain('不污染结构化输出');
+  });
+
+  it('人设不写决策对象，不污染结构化输出', () => {
+    expect(CIEL_PERSONA_PROMPT).not.toContain('"action"');
+    expect(CIEL_PERSONA_PROMPT).not.toContain('"score"');
+    expect(CIEL_PERSONA_PROMPT).not.toContain('{');
+  });
+
+  it('人设声明弹幕与评分规则优先，不改变弹幕行为', () => {
+    expect(CIEL_PERSONA_PROMPT).toContain(
+      '弹幕、评分、切房、记忆与工具调用的规则完整优先于角色设定',
+    );
+    expect(CIEL_PERSONA_PROMPT).toContain('弹幕内容与语气');
+    expect(CIEL_PERSONA_PROMPT).toContain('都不因角色性格而改变');
+  });
+});
+
+describe('感知提示词', () => {
+  it('听觉转写提示词只说明怎么读这一段，不带行为后果', () => {
+    expect(HEARING_PROMPT).toContain('以画面和上文为准');
+    expect(HEARING_PROMPT).toContain('没听清');
+    expect(HEARING_PROMPT).not.toContain('不写入记忆');
+    expect(HEARING_PROMPT).not.toContain('不假装听懂');
+  });
+  it.each([
+    { type: 'follow' as const, roomId: 1 },
+    {
+      type: 'recording' as const,
+      roomId: 1,
+      source: { type: 'file' as const, path: '/video.mp4' },
+    },
+  ])('$type 模式把可疑转写的后果与校准规则写进系统提示词', mode => {
+    const text = createSystemPrompt(mode);
+
+    expect(text).toContain('## 感知');
+    expect(text).toContain('凭空生成');
+    expect(text).toContain('不写入记忆');
+    expect(text).toContain('不假装听懂');
+    expect(text).toContain('不因为一句可疑就否定');
+  });
+});
+
 it.each([
   { type: 'follow' as const, roomId: 1 },
   { type: 'explore' as const, areaId: 1 },
@@ -116,6 +263,8 @@ it.each([
       live: true,
     },
   });
-  expect(context).toContain('有则按记忆规则查重并调用 remember / update');
+  expect(context).not.toContain('# 本轮观看');
+  expect(prompt).toContain('结合本轮画面、语音和互动判断');
+  expect(prompt).toContain('已经发送过的内容不重复发送');
   expect(context).not.toContain('主播近期公开信息');
 });

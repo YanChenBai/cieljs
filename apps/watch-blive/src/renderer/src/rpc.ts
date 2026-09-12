@@ -2,7 +2,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/message-port';
 import type { RouterClient } from '@orpc/server';
 
-import type { WatchRouter } from '../../main/router.ts';
+import type { WatchRouter } from '../../main/application.ts';
 import type { WatchBliveBridge } from '../../shared/ipc.ts';
 
 const channel = new MessageChannel();
@@ -22,6 +22,7 @@ window.addEventListener('beforeunload', () => {
 
 export const watchBridge: WatchBliveBridge = {
   attachLiveWebContents: input => rpc.window.attach(input),
+  openBrowseWindow: () => rpc.window.openBrowse(),
   start: input => rpc.watch.start(input),
   stop: () => rpc.watch.stop(),
   login: () => rpc.account.login(),

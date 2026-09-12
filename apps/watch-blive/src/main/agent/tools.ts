@@ -38,7 +38,7 @@ export class DanmakuRunGate {
 const SendDanmakuSchema = Type.Object({
   action: Type.Union([Type.Literal('send'), Type.Literal('defer')]),
   content: Type.String({ maxLength: 40 }),
-  reason: Type.String({ minLength: 1, maxLength: 120 }),
+  reason: Type.String({ minLength: 1 }),
 });
 
 export const createDanmakuTool = defineTool(
@@ -66,9 +66,13 @@ async function executeDanmaku(
 
   const { room, content } = prepareDanmaku(context, params.content);
 
+  return toolResult(await deliverDanmaku(context, room, content));
+}
+
+async function deliverDanmaku(context: DanmakuToolContext, room: RoomInfo, content: string) {
   if (context.delivery() === 'simulate') {
     context.emit({ type: 'danmaku_simulated', content });
-    return toolResult({ status: 'simulated', content });
+    return { status: 'simulated' as const, content };
   }
 
   const pageResult = await context.livePage.sendDanmaku(content);
@@ -79,7 +83,7 @@ async function executeDanmaku(
 
   context.emit({ type: 'danmaku_delivered', content, roomId: room.roomId });
 
-  return toolResult({ status: 'delivered', content, roomId: room.roomId });
+  return { status: 'delivered' as const, content, roomId: room.roomId };
 }
 
 /** 校验当前访问的发送权限和历史，模拟与真实发送共用同一套约束。 */

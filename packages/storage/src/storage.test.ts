@@ -49,6 +49,27 @@ test('模块迁移隔离、重开幂等，失败迁移回滚并释放数据库',
   }
 }, 30_000);
 
+test('checkpoint 可随时推进，关闭后再推进是空操作', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ciel-storage-'));
+  try {
+    const storage = await Storage.open({ dataDir: directory });
+    await storage.db.execute(sql`CREATE TABLE public.items (id text PRIMARY KEY)`);
+    await storage.db.execute(sql`INSERT INTO public.items VALUES ('kept')`);
+    await storage.checkpoint();
+    await storage.close();
+    // 关闭后周期任务可能还会打一次；不能抛出，也不能复活连接。
+    await storage.checkpoint();
+
+    await using reopened = await Storage.open({ dataDir: directory });
+    expect((await reopened.db.execute(sql`SELECT * FROM public.items`)).rows).toEqual([
+      { id: 'kept' },
+    ]);
+    await reopened.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 30_000);
+
 test('事件和投影原子提交，重复事件不会丢失后注册的投影', async () => {
   await using storage = await Storage.open({ dataDir: 'memory://' });
   const event = {

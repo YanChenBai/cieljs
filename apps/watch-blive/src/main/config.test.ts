@@ -33,6 +33,51 @@ afterEach(async () => {
 });
 
 describe('Watch Blive 配置', () => {
+  it('默认开启夏尔唤醒，支持覆盖等待参数和显式关闭', async () => {
+    const ai = { provider: 'xiaomi', model: 'mimo-v2.5', apiKey: 'secret' };
+    await writeFile(watchConfigFile(), JSON.stringify({ ai }));
+    expect(resolveWatchConfig().wake).toEqual({
+      keywords: ['夏尔'],
+      minWaitMs: 1500,
+      maxWaitMs: 4000,
+      cooldownMs: 15000,
+    });
+    await writeFile(
+      watchConfigFile(),
+      JSON.stringify({ ai, wake: { keywords: ['你好夏尔'], minWaitMs: 2000 } }),
+    );
+    expect(resolveWatchConfig().wake).toMatchObject({ keywords: ['你好夏尔'], minWaitMs: 2000 });
+    await writeFile(watchConfigFile(), JSON.stringify({ ai, wake: false }));
+    expect(resolveWatchConfig().wake).toBe(false);
+  });
+
+  it('忽略旧配置里遗留的应声文案，不再因此报错', async () => {
+    await writeFile(
+      watchConfigFile(),
+      JSON.stringify({
+        ai: { provider: 'xiaomi', model: 'mimo-v2.5', apiKey: 'secret' },
+        wake: { acknowledgment: '在听，稍等我一下' },
+      }),
+    );
+
+    expect(resolveWatchConfig().wake).toMatchObject({ keywords: ['夏尔'], cooldownMs: 15000 });
+  });
+
+  it.each([
+    { keywords: [] },
+    { keywords: [' '] },
+    { minWaitMs: -1 },
+    { minWaitMs: 5000, maxWaitMs: 4000 },
+  ])('拒绝非法唤醒配置 %j', async wake => {
+    await writeFile(
+      watchConfigFile(),
+      JSON.stringify({
+        ai: { provider: 'xiaomi', model: 'mimo-v2.5', apiKey: 'secret' },
+        wake,
+      }),
+    );
+    expect(() => resolveWatchConfig()).toThrow('wake');
+  });
   it('覆盖本次模型地址并保留注册模型及其他能力', async () => {
     const registered = { id: 'mimo-v2.5', baseUrl: 'https://original.example/v1', reasoning: true };
     getModel.mockReturnValueOnce(registered);

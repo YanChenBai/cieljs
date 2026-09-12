@@ -4,25 +4,39 @@ import type { RuntimeReader, RuntimeWriter } from '@cieljs/agent-kit/protocol';
 import type { Storage } from '@cieljs/storage';
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 
-import type { DevtoolsUpdate, TraceEntry, TraceEvent, ValueRef } from '../protocol/index.ts';
+import type {
+  DevtoolsUpdate,
+  DevtoolsSession,
+  DevtoolsUsage,
+  TraceEntry,
+  TraceEvent,
+  ValueRef,
+} from '../protocol/index.ts';
 import { AgentTrace, type AgentTraceMetadata } from './agent-trace.ts';
 import { TraceStore } from './store.ts';
 import { preview } from './trace-content.ts';
 import { createTraceStep } from './trace-step.ts';
+import { TraceUsageTally } from './usage.ts';
 
 /** 宿主保存独立的完整快照；内存列表淘汰不删除磁盘记录。 */
 export class DevtoolsHost implements AsyncDisposable {
   private readonly observers = new Map<string, AgentTrace>();
   private projection = Promise.resolve();
+  private projectionFailure: unknown;
   private cursor = 0;
   private unsubscribe?: () => void;
   private currentTrace?: TraceEvent;
   private currentEntrySequence?: number;
+  private currentTurnNumber?: number;
   private entryOrdinal = 0;
   private readonly entries = new Map<string, TraceEntry>();
   private readonly listeners = new Set<(update: DevtoolsUpdate) => void>();
   private readonly dirty = new Set<string>();
   private readonly stepChanges = new Map<string, TraceEntry>();
+  private readonly tally = new TraceUsageTally();
+  /** 轮次按 Agent 运行分配：同一 run 的所有事件共用一个轮次号。 */
+  private readonly runNumbers = new Map<string, Map<string, number>>();
+  private readonly sessionProgress = new Map<string, { turn: number; steps: Set<string> }>();
   private sequence = 0;
   readonly store: TraceStore;
   private eventSequence = 0;
@@ -51,6 +65,8 @@ export class DevtoolsHost implements AsyncDisposable {
     source?: RuntimeReader;
     writer?: RuntimeWriter;
     capacity?: number;
+    /** 历史重放是否在 open() 内完成。后台重放与之共用 projection 链，顺序和最终状态不变。 */
+    awaitReplay?: boolean;
   }) {
     const host = new DevtoolsHost(
       options.storage,
@@ -63,7 +79,18 @@ export class DevtoolsHost implements AsyncDisposable {
       // 失败保留在 projection 中，由 flushRecords/close 向调用者报告。
       void host.catchUp().catch(() => {});
     });
-    await host.catchUp();
+    if (options.awaitReplay ?? true) {
+      await host.catchUp();
+    } else {
+      // 重放历史随会话数增长，不能在窗口显示前等它跑完；完成后补一次推送，
+      // 让只依赖重放的用量快照也能上屏。
+      void host
+        .catchUp()
+        .catch(() => {})
+        .finally(() => {
+          if (!host.closed) host.scheduleFlush();
+        });
+    }
     return host;
   }
 
@@ -89,24 +116,56 @@ export class DevtoolsHost implements AsyncDisposable {
           }
           this.currentTrace = trace;
           this.currentEntrySequence = previous?.sequence;
+          this.currentTurnNumber = this.resolveTurnNumber(trace);
           this.entryOrdinal = 0;
           this.eventSequence = trace.sequence;
+          this.tally.consume(trace);
           observer.receive(trace);
           this.saveEvent(trace, trace.metadata);
           this.currentTrace = undefined;
           this.currentEntrySequence = undefined;
+          this.currentTurnNumber = undefined;
           await this.store.flush();
           this.cursor = trace.sequence;
         }
       }
     });
+    // 后台失败不能只留在 Promise 链中，否则界面会永久停在旧快照。
+    void this.projection.catch(error => {
+      if (this.projectionFailure) return;
+      this.projectionFailure = error;
+      const cause = error instanceof Error ? (error.cause ?? error) : error;
+      console.error(
+        'Devtools 事件处理失败',
+        cause instanceof Error ? cause.message : String(cause),
+      );
+      this.scheduleFlush();
+    });
     return this.projection;
+  }
+
+  assertHealthy() {
+    if (this.projectionFailure) {
+      throw new Error('Devtools 事件处理失败，请检查主进程日志中的存储错误');
+    }
   }
 
   async flushRecords() {
     await this.writer.flush();
     await this.catchUp();
     await this.store.flush();
+  }
+
+  /** 会话用量的当前快照；重放后即可用，不依赖客户端加载到哪些记录。 */
+  usage(): DevtoolsUsage {
+    return this.tally.snapshot();
+  }
+
+  sessions(): DevtoolsSession[] {
+    return this.tally.sessions().map(session => {
+      const progress = this.sessionProgress.get(session.id);
+      return { ...session, turn: progress?.turn ?? 0, steps: progress?.steps.size ?? 0 };
+    });
   }
 
   subscribe(listener: (update: DevtoolsUpdate) => void) {
@@ -155,10 +214,12 @@ export class DevtoolsHost implements AsyncDisposable {
   private saveEvent(trace: TraceEvent, metadata: AgentTraceMetadata) {
     // 外部日志没有本地事件表记录，保留快照以支持同样的详情引用。
     if (this.source !== this.storage.journal) {
-      this.store.put(trace.id, 'value', trace.sequence, trace);
+      this.store.put(trace.id, 'value', trace.sequence, trace, trace.runId, trace.sessionId);
     }
     const step = createTraceStep(trace, metadata.tools, metadata.model);
-    this.store.put(step.id, 'step', trace.sequence, step, trace.runId);
+    step.turnNumber = this.currentTurnNumber;
+    this.trackSessionProgress(step);
+    this.store.put(step.id, 'step', trace.sequence, step, trace.runId, trace.sessionId);
     this.stepChanges.set(step.id, step);
     this.scheduleFlush();
 
@@ -243,17 +304,26 @@ export class DevtoolsHost implements AsyncDisposable {
       id === `${trace.messageId}:output`;
 
     if (sharedMessage && trace) {
-      this.store.put(id, 'message_reference', this.eventSequence, trace.id);
+      this.store.put(
+        id,
+        'message_reference',
+        this.eventSequence,
+        trace.id,
+        trace.runId,
+        trace.sessionId,
+      );
     } else {
-      this.store.put(id, 'value', this.eventSequence, value);
+      this.store.put(id, 'value', this.eventSequence, value, trace?.runId, trace?.sessionId);
     }
     return { id, preview: preview(value) };
   }
 
   private saveEntry(entry: TraceEntry) {
-    this.store.put(entry.id, 'entry', entry.sequence, entry, entry.runId);
+    entry.turnNumber ??= this.currentTurnNumber;
+    this.tally.touch(entry.sessionId, entry.endedAt ?? entry.startedAt);
+    this.store.put(entry.id, 'entry', entry.sequence, entry, entry.runId, entry.sessionId);
     if (entry.name === 'agent_start') {
-      this.store.put(`run:${entry.id}`, 'run', entry.sequence, entry, entry.runId);
+      this.store.put(`run:${entry.id}`, 'run', entry.sequence, entry, entry.runId, entry.sessionId);
     }
 
     this.entries.set(entry.id, { ...entry });
@@ -269,6 +339,50 @@ export class DevtoolsHost implements AsyncDisposable {
     this.scheduleFlush();
   }
 
+  /** 一轮 = 一次 Agent 运行，所以按 runId 计数；同一 run 的后续事件沿用已分配的号。 */
+  private resolveTurnNumber(trace: TraceEvent) {
+    if (!trace.runId) return;
+
+    const sessionKey = trace.sessionId;
+    let sessionRuns = this.runNumbers.get(sessionKey);
+    if (!sessionRuns) {
+      sessionRuns = new Map();
+      this.runNumbers.set(sessionKey, sessionRuns);
+    }
+
+    const existing = sessionRuns.get(trace.runId);
+    if (existing) return existing;
+
+    const turnNumber = sessionRuns.size + 1;
+    sessionRuns.set(trace.runId, turnNumber);
+    return turnNumber;
+  }
+
+  private trackSessionProgress(step: TraceEntry) {
+    let progress = this.sessionProgress.get(step.sessionId);
+    if (!progress) {
+      progress = { turn: 0, steps: new Set() };
+      this.sessionProgress.set(step.sessionId, progress);
+    }
+
+    if (step.turnNumber) progress.turn = step.turnNumber;
+
+    const scope = JSON.stringify([step.sessionId, step.runId]);
+    const isToolResult = step.kind === 'message' && step.label === 'toolResult';
+    let key = step.id;
+    if ((step.kind === 'tool' || isToolResult) && step.toolCallId) {
+      key = `${scope}:tool:${step.toolCallId}`;
+    } else if (step.kind === 'message' && step.messageId) {
+      key = `${scope}:message:${step.messageId}`;
+    } else if (/^agent_(start|end)$/.test(step.name) && step.runId) {
+      key = `${scope}:agent`;
+    } else if (/^turn_(start|end)$/.test(step.name) && step.turnId) {
+      key = `${scope}:turn:${step.turnId}`;
+    }
+
+    progress.steps.add(key);
+  }
+
   // 将同一批 token 的摘要合并后推送，原始事件已即时落盘，不受节流影响。
   private scheduleFlush() {
     this.timer ??= setTimeout(() => this.flush(), 60);
@@ -281,6 +395,8 @@ export class DevtoolsHost implements AsyncDisposable {
     const update = {
       entries: [...this.dirty].flatMap(id => this.entries.get(id) ?? []),
       steps: [...this.stepChanges.values()],
+      usage: this.tally.snapshot(),
+      sessions: this.sessions(),
     };
 
     this.dirty.clear();

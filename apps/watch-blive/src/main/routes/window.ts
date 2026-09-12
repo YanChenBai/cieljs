@@ -4,6 +4,7 @@ import * as z from 'zod';
 
 import type { LivePage } from '../bilibili/live-page.ts';
 import { isAllowedPageUrl } from '../bilibili/page-executor.ts';
+import { openBrowseWindow } from '../browse-window.ts';
 
 /** guest 必须属于当前窗口，避免渲染进程附加任意页面。 */
 export function createWindowRoutes(
@@ -40,6 +41,11 @@ export function createWindowRoutes(
 
         return { action: 'deny' };
       });
+    }),
+
+    // 顶栏按钮专用：只开浏览窗口，不接受外部 URL，也就不需要额外的白名单校验。
+    openBrowse: os.handler(() => {
+      openBrowseWindow();
     }),
   };
 }

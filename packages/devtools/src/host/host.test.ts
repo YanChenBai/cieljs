@@ -123,8 +123,68 @@ describe('DevTools 按需内容', () => {
     });
   });
 
+  it('模型用量随宿主重放累计，并随更新推给客户端', async () => {
+    const value = await host();
+    vi.useFakeTimers();
+    const listener = vi.fn();
+    value.subscribe(listener);
+    const receive = value.agentListener('live');
+
+    await receive({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [],
+        api: 'openai-completions',
+        provider: 'xiaomi',
+        model: 'mimo-v2.5',
+        stopReason: 'stop',
+        timestamp: 0,
+        usage: {
+          input: 120,
+          output: 20,
+          cacheRead: 800,
+          cacheWrite: 0,
+          totalTokens: 940,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      },
+    });
+    await value.flushRecords();
+    vi.advanceTimersByTime(60);
+
+    expect(value.usage()).toEqual({
+      total: { input: 120, output: 20, cacheRead: 800, cacheWrite: 0, total: 940 },
+      context: { input: 120, output: 20, cacheRead: 800, cacheWrite: 0, total: 940 },
+    });
+    expect(listener.mock.calls.at(-1)?.[0].usage.total.total).toBe(940);
+  });
+
   it('非法分页位置由 oRPC schema 拒绝', async () => {
     const client = createRouterClient(createDevtoolsRouter(await host()));
     await expect(client.steps.list({ cursor: -1 })).rejects.toThrow();
+  });
+
+  it('按 Session 查询并重新回放各自的记录', async () => {
+    const value = await host();
+    await value.agentListener('room:first')({
+      type: 'message_end',
+      message: { role: 'user', content: '第一间房', timestamp: 10 },
+    });
+    await value.agentListener('room:second')({
+      type: 'message_end',
+      message: { role: 'user', content: '第二间房', timestamp: 20 },
+    });
+    await value.flushRecords();
+
+    const client = createRouterClient(createDevtoolsRouter(value));
+    const firstEntries = await client.entries.list({ sessionId: 'room:first' });
+    const secondSteps = await client.steps.list({ sessionId: 'room:second' });
+
+    expect(firstEntries).toHaveLength(1);
+    expect(firstEntries[0]?.sessionId).toBe('room:first');
+    expect(secondSteps).toHaveLength(1);
+    expect(secondSteps[0]?.sessionId).toBe('room:second');
+    expect(value.sessions().map(session => session.id)).toEqual(['room:first', 'room:second']);
   });
 });

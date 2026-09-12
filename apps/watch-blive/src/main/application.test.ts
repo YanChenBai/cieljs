@@ -1,0 +1,130 @@
+import { createRouterClient } from '@orpc/server';
+import type { BrowserWindow } from 'electron';
+import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test';
+
+const mocks = vi.hoisted(() => ({
+  order: [] as string[],
+  openStorage: vi.fn(),
+  openDevtools: vi.fn(),
+  createMcp: vi.fn(),
+  createRuntime: vi.fn(),
+  checkpoint: vi.fn(),
+  account: vi.fn(),
+  start: vi.fn(),
+  stop: vi.fn(),
+  resolveConfig: vi.fn(),
+}));
+
+vi.mock('@cieljs/storage', () => ({ Storage: { open: mocks.openStorage } }));
+vi.mock('@cieljs/devtools/host', () => ({
+  DevtoolsHost: { open: mocks.openDevtools },
+  devtoolsStorage: {},
+  createDevtoolsRouter: () => ({}),
+}));
+vi.mock('@cieljs/mcp', () => ({ createMcp: mocks.createMcp }));
+vi.mock('@cieljs/memory', () => ({ memoryStorage: {} }));
+vi.mock('@cieljs/session', () => ({ sessionStorage: {} }));
+vi.mock('@cieljs/vector', () => ({ vectorStorage: {} }));
+vi.mock('./config.ts', () => ({
+  watchDataDirectory: () => '/watch-test',
+  resolveWatchConfig: mocks.resolveConfig,
+  resolveWatchModel: () => ({ model: { id: 'model' } }),
+}));
+vi.mock('./hearing-settings.ts', () => ({
+  readHearingModel: () => 'sensevoice-small',
+  saveHearingModel: vi.fn(),
+}));
+vi.mock('./routes/setup.ts', () => ({ createSetupRoutes: () => ({}) }));
+vi.mock('./routes/window.ts', () => ({ createWindowRoutes: () => ({}) }));
+vi.mock('./routes/recording.ts', () => ({ createRecordingRoutes: () => ({}) }));
+vi.mock('./bilibili/api.ts', () => ({
+  BilibiliApi: class {
+    areas = async () => [];
+  },
+}));
+vi.mock('./bilibili/live-page.ts', () => ({
+  LivePage: class {
+    account = mocks.account;
+    close() {
+      mocks.order.push('page');
+    }
+  },
+}));
+vi.mock('./runtime.ts', () => ({ createWatchBlive: mocks.createRuntime }));
+
+import { createWatchApplication } from './application.ts';
+
+const window = {} as BrowserWindow;
+let application: Awaited<ReturnType<typeof createWatchApplication>> | undefined;
+function resource(name: string) {
+  return {
+    [Symbol.asyncDispose]: async () => {
+      mocks.order.push(name);
+    },
+  };
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.useFakeTimers();
+  mocks.order.length = 0;
+  mocks.openStorage.mockResolvedValue({ ...resource('storage'), checkpoint: mocks.checkpoint });
+  mocks.openDevtools.mockResolvedValue({ ...resource('devtools'), record: vi.fn() });
+  mocks.createMcp.mockResolvedValue(resource('mcp'));
+  mocks.resolveConfig.mockReturnValue({ wake: false });
+  mocks.createRuntime.mockReturnValue({
+    status: 'idle',
+    start: mocks.start,
+    stop: mocks.stop,
+    onEvent: () => () => mocks.order.push('unsubscribe'),
+    close: async () => {
+      mocks.order.push('runtime');
+    },
+  });
+});
+
+afterEach(async () => {
+  await application?.close();
+  application = undefined;
+  vi.useRealTimers();
+});
+
+it('账号和快照无需 AI 配置，首次观看只创建一次运行时，关闭统一回收', async () => {
+  application = await createWatchApplication(window);
+  const client = createRouterClient(application.router);
+  await client.account.get();
+  expect(await client.watch.snapshot()).toEqual({ status: 'idle', room: undefined });
+  expect(mocks.resolveConfig).not.toHaveBeenCalled();
+
+  await client.watch.start({ mode: { type: 'follow', roomId: 123 } });
+  await client.watch.start({ mode: { type: 'follow', roomId: 456 } });
+  expect(mocks.createRuntime).toHaveBeenCalledOnce();
+  expect(mocks.createRuntime.mock.calls[0]![0].perception.asr).toEqual({
+    model: 'sensevoice-small',
+    bufferSeconds: 30,
+  });
+  const closing = application.close();
+  expect(application.close()).toBe(closing);
+  await closing;
+  expect(mocks.order).toEqual(['unsubscribe', 'runtime', 'page', 'mcp', 'devtools', 'storage']);
+  expect(vi.getTimerCount()).toBe(0);
+  await expect(client.watch.start({ mode: { type: 'follow', roomId: 123 } })).rejects.toThrow(
+    '已关闭',
+  );
+});
+
+it('初始化中途失败时释放已打开资源和 checkpoint 定时器', async () => {
+  mocks.createMcp.mockRejectedValue(new Error('MCP 配置无效'));
+  await expect(createWatchApplication(window)).rejects.toThrow('MCP 配置无效');
+  expect(mocks.order).toEqual(['devtools', 'storage']);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('关闭应用唤醒并结束等待中的事件订阅', async () => {
+  application = await createWatchApplication(window);
+  const stream = await createRouterClient(application.router).watch.events();
+  expect((await stream.next()).value).toEqual({ type: 'status', status: 'idle' });
+  const pending = stream.next();
+  await application.close();
+  expect((await pending).done).toBe(true);
+});

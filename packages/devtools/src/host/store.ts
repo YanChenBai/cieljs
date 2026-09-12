@@ -20,6 +20,13 @@ export const devtoolsStorage: StorageModule = {
  CREATE INDEX records_run ON devtools.records(run_id, category, sequence);
 `,
     },
+    {
+      id: '0002',
+      sql: `
+ ALTER TABLE devtools.records ADD COLUMN session_id text;
+ CREATE INDEX records_session ON devtools.records(session_id, category, sequence);
+`,
+    },
   ],
 };
 
@@ -35,18 +42,26 @@ export class TraceStore {
     );
     return Number(result.rows[0]!.n);
   }
-  put(id: string, category: string, sequence: number, value: unknown, runId?: string) {
+  put(
+    id: string,
+    category: string,
+    sequence: number,
+    value: unknown,
+    runId?: string,
+    sessionId?: string,
+  ) {
     const bytes = serialize(snapshot(value));
     this.pending = this.pending
       .then(async () => {
         await this.storage.db.execute(
-          sql`INSERT INTO devtools.records
-              VALUES (${id}, ${category}, ${sequence}, ${runId ?? null}, ${bytes})
+          sql`INSERT INTO devtools.records (id, category, sequence, run_id, value, session_id)
+              VALUES (${id}, ${category}, ${sequence}, ${runId ?? null}, ${bytes}, ${sessionId ?? null})
               ON CONFLICT (id) DO UPDATE SET
                 category = EXCLUDED.category,
                 sequence = EXCLUDED.sequence,
                 run_id = EXCLUDED.run_id,
-                value = EXCLUDED.value`,
+                value = EXCLUDED.value,
+                session_id = EXCLUDED.session_id`,
         );
       })
       .catch(error => {
@@ -82,6 +97,7 @@ export class TraceStore {
       before?: number;
       limit?: number;
       runId?: string;
+      sessionId?: string;
       ascending?: boolean;
     } = {},
   ): Promise<T[]> {
@@ -92,6 +108,7 @@ export class TraceStore {
             AND sequence > ${options.after ?? 0}
             AND sequence < ${options.before ?? Number.MAX_SAFE_INTEGER}
             AND (${options.runId ?? null}::text IS NULL OR run_id = ${options.runId ?? null})
+            AND (${options.sessionId ?? null}::text IS NULL OR session_id = ${options.sessionId ?? null})
           ORDER BY sequence ${sql.raw(options.ascending ? 'ASC' : 'DESC')}
           LIMIT ${options.limit ?? 100}`,
     );

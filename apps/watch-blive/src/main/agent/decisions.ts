@@ -4,7 +4,7 @@ import { Value } from 'typebox/value';
 
 export const RoomSelectionSchema = Type.Object({
   roomId: Type.Integer({ minimum: 1 }),
-  reason: Type.String({ minLength: 1, maxLength: 160 }),
+  reason: Type.String({ minLength: 1 }),
 });
 
 export const RoomDecisionSchema = Type.Object({
@@ -12,7 +12,7 @@ export const RoomDecisionSchema = Type.Object({
   confidence: Type.Number({ minimum: 0, maximum: 1 }),
   danmakuAction: Type.Union([Type.Literal('send'), Type.Literal('defer')]),
   evidence: Type.Array(Type.String(), { maxItems: 5 }),
-  reason: Type.String({ minLength: 1, maxLength: 240 }),
+  reason: Type.String({ minLength: 1 }),
   score: Type.Number({ minimum: 0, maximum: 100 }),
 });
 

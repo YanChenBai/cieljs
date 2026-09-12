@@ -92,6 +92,18 @@ export class Storage implements AsyncDisposable {
     }
   }
 
+  /**
+   * 主动推进 checkpoint。PGlite 没有后台 checkpointer，进程被强杀（dev 重启、Ctrl+C）
+   * 时下次启动必须重放「上个 checkpoint 之后」的全部 WAL：调用方按周期推进即可把
+   * 恢复窗口限制在一个周期内，而不是整段运行历史。
+   */
+  async checkpoint(): Promise<void> {
+    if (this.closing) {
+      return;
+    }
+    await this.client.exec('CHECKPOINT');
+  }
+
   close(): Promise<void> {
     this.closing ??= this.closeResources();
     return this.closing;

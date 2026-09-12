@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { CielDevtools } from '@cieljs/devtools';
-import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X } from '@lucide/vue';
+import { CielDevtools, type MessageRenderers, type ToolRenderers } from '@cieljs/devtools';
+import {
+  ArrowUp,
+  ExternalLink,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  X,
+} from '@lucide/vue';
 import { Button } from '@vuetify/v0/components';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import type { StartWatchOptions } from '../../shared/types.ts';
 
@@ -11,15 +19,19 @@ import AccountControls from './components/AccountControls.vue';
 import EventTimeline from './components/EventTimeline.vue';
 import FollowRoomDialog from './components/FollowRoomDialog.vue';
 import LiveRoomWebview from './components/LiveRoomWebview.vue';
+import RoomDecisionMessage from './components/RoomDecisionMessage.vue';
 import RuntimeSetup from './components/RuntimeSetup.vue';
+import SendDanmakuToolCall from './components/SendDanmakuToolCall.vue';
+import StreamerHistoryToolCall from './components/StreamerHistoryToolCall.vue';
 import WatchControls from './components/WatchControls.vue';
 import { useSidebar } from './composables/use-sidebar.ts';
 import { useWatchBlive } from './composables/use-watch-blive.ts';
-import { rpc } from './rpc.ts';
+import { rpc, watchBridge } from './rpc.ts';
 
 const {
   events,
   state,
+  activeSessionId,
   account,
   areas,
   configuration,
@@ -44,6 +56,35 @@ const { collapsed, width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyb
   useSidebar();
 const right = useSidebar('right');
 
+const sidebar = ref<HTMLElement>();
+const sidebarScrolled = ref(false);
+
+function updateSidebarScrolled() {
+  sidebarScrolled.value = (sidebar.value?.scrollTop ?? 0) > 0;
+}
+
+function scrollSidebarToTop() {
+  sidebar.value?.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// DevTools 按工具名挑选渲染组件，避免把原始 JSON 直接摆给使用者；用普通常量，不要放进 reactive。
+const toolRenderers: ToolRenderers = {
+  send_danmaku: SendDanmakuToolCall,
+  get_streamer_dynamics: StreamerHistoryToolCall,
+  get_streamer_videos: StreamerHistoryToolCall,
+};
+
+/** 决策协议见 main/agent/decisions.ts 的 RoomDecisionSchema；其余 assistant 内容仍走默认渲染。 */
+const isRoomDecision = (json: unknown): boolean =>
+  typeof json === 'object' && json !== null && 'action' in json && 'score' in json;
+
+const messageRenderers: MessageRenderers = [
+  {
+    match: message => message.name === 'assistant' && isRoomDecision(message.json),
+    component: RoomDecisionMessage,
+  },
+];
+
 const roomTitle = computed(() => {
   const room = state.value.room;
   if (!room) return '一起看看，今天有什么有趣的直播';
@@ -54,6 +95,11 @@ const roomTitle = computed(() => {
 async function startRequestedRoom(options: StartWatchOptions) {
   await start(options);
   if (!error.value) requestedRoomId.value = undefined;
+}
+
+/** 顶栏按钮：开一个独立的 B 站浏览窗口，不占用正在观看的直播 webview。 */
+function openBrowse() {
+  void watchBridge.openBrowseWindow();
 }
 
 const videoProgressLabel = computed(() => {
@@ -101,6 +147,9 @@ const videoProgressLabel = computed(() => {
         </span>
         {{ state.status }}
       </span>
+      <Button.Root class="action icon-button" aria-label="打开 B 站浏览窗口" @click="openBrowse">
+        <ExternalLink :size="16" />
+      </Button.Root>
       <Button.Root
         class="action icon-button"
         :aria-expanded="!right.collapsed.value"
@@ -121,37 +170,48 @@ const videoProgressLabel = computed(() => {
       }"
       :style="{ '--sidebar-width': `${width}px`, '--devtools-width': `${right.width.value}px` }"
     >
-      <aside
-        v-show="!collapsed"
-        id="watch-sidebar"
-        class="flex min-h-0 max-w-[560px] min-w-[260px] flex-col overflow-auto"
-      >
-        <AccountControls
-          :account="account"
-          :pending="pending"
-          :ready="ready"
-          @login="login"
-          @logout="logout"
-          @refresh="refreshAccount"
-        />
-        <RuntimeSetup
-          :configuration="configuration"
-          :models="hearingModels"
-          :pending="pending"
-          @install-models="installHearingModels"
-          @select-model="selectHearingModel"
-        />
-        <WatchControls
-          :areas="areas"
-          :active="active"
-          :pending="pending"
-          :ready="!!configuration?.valid && !!hearingModels?.valid"
-          :live-page-ready="ready"
-          @start="start"
-          @stop="stop"
-        />
-        <EventTimeline :events="events" />
-      </aside>
+      <div v-show="!collapsed" class="relative flex min-h-0 max-w-[560px] min-w-[260px] flex-col">
+        <aside
+          id="watch-sidebar"
+          ref="sidebar"
+          class="flex min-h-0 flex-1 flex-col overflow-auto"
+          @scroll.passive="updateSidebarScrolled"
+        >
+          <AccountControls
+            :account="account"
+            :pending="pending"
+            :ready="ready"
+            @login="login"
+            @logout="logout"
+            @refresh="refreshAccount"
+          />
+          <RuntimeSetup
+            :configuration="configuration"
+            :models="hearingModels"
+            :pending="pending"
+            @install-models="installHearingModels"
+            @select-model="selectHearingModel"
+          />
+          <WatchControls
+            :areas="areas"
+            :active="active"
+            :pending="pending"
+            :ready="!!configuration?.valid && !!hearingModels?.valid"
+            :live-page-ready="ready"
+            @start="start"
+            @stop="stop"
+          />
+          <EventTimeline :events="events" />
+        </aside>
+        <Button.Root
+          v-if="sidebarScrolled"
+          class="text-muted hover:text-foreground absolute bottom-3 left-1/2 z-20 grid size-7 -translate-x-1/2 cursor-pointer place-items-center rounded-full border border-[#ffffff1a] bg-[#27272a] shadow-[0_4px_12px_#00000059] transition-colors hover:bg-[#3f3f46]"
+          aria-label="回到侧边栏顶部"
+          @click="scrollSidebarToTop"
+        >
+          <ArrowUp :size="14" />
+        </Button.Root>
+      </div>
       <div
         v-show="!collapsed"
         class="resize-handle my-2 rounded-lg"
@@ -235,7 +295,13 @@ const videoProgressLabel = computed(() => {
           id="watch-devtools"
           class="min-h-0 min-w-0 overflow-hidden"
         >
-          <CielDevtools :client="rpc.devtools" :auto-scroll="active" />
+          <CielDevtools
+            :client="rpc.devtools"
+            :session-id="activeSessionId"
+            :auto-scroll="active"
+            :tool-renderers="toolRenderers"
+            :message-renderers="messageRenderers"
+          />
         </aside>
       </div>
     </main>

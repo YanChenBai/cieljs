@@ -1,12 +1,15 @@
+import type { WakeEvent } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
 import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
+
+import type { WatchWakeOptions } from './wake.ts';
 
 export interface ThoughtSchedulerOptions {
   perception: Pick<Perception, 'snapshot'>;
   agent: Pick<Agent, 'prompt'>;
   minimumIntervalMs: number;
   startedAt: Date;
-  context: () => AgentMessage;
+  context: (wake?: WakeEvent) => AgentMessage;
   beforeRun?: () => void;
   afterRun?: () => Promise<void> | void;
   onRunStarted?: (triggerCount: number) => void;
@@ -18,6 +21,7 @@ interface PendingWindow {
   startAt: Date;
   endAt: Date;
   triggerCount: number;
+  wake?: WakeEvent;
 }
 
 export class ThoughtScheduler {
@@ -28,18 +32,27 @@ export class ThoughtScheduler {
   private timer?: ReturnType<typeof setTimeout>;
   private closed = false;
   private finishing = false;
+  private wakeWindow?: { signal: WakeEvent; minAt: number; maxAt: number; speechEnded: boolean };
 
   constructor(private readonly options: ThoughtSchedulerOptions) {
     this.capturedThrough = options.startedAt.getTime() - 1;
   }
 
-  trigger(at = new Date()): void {
+  trigger(at = new Date(), reason: 'observation' | 'speechend' = 'observation'): void {
     if (this.closed) {
       return;
     }
 
+    if (this.wakeWindow && reason === 'speechend' && at >= this.wakeWindow.signal.at) {
+      this.wakeWindow.speechEnded = true;
+      this.clearTimer();
+    }
+
     // 迟到或同一毫秒的触发不能倒退已消费的快照边界。
-    if (at.getTime() <= this.capturedThrough) return;
+    if (at.getTime() <= this.capturedThrough) {
+      this.schedule();
+      return;
+    }
 
     const startAt = this.pending?.startAt ?? new Date(this.capturedThrough + 1);
     const triggerCount = (this.pending?.triggerCount ?? 0) + 1;
@@ -50,9 +63,34 @@ export class ThoughtScheduler {
     this.schedule();
   }
 
+  /** 唤醒时间来自音频，等待期限使用接收时钟；迟到的 KWS 事件也不能被普通快照水位丢弃。 */
+  wake(
+    event: WakeEvent,
+    options: Required<Pick<WatchWakeOptions, 'minWaitMs' | 'maxWaitMs'>>,
+  ): boolean {
+    if (this.closed || this.finishing || this.wakeWindow) return false;
+    const now = Date.now();
+    this.wakeWindow = {
+      signal: event,
+      minAt: now + options.minWaitMs,
+      maxAt: now + options.maxWaitMs,
+      speechEnded: false,
+    };
+    this.pending ??= {
+      startAt: new Date(this.capturedThrough + 1),
+      endAt: new Date(Math.max(now, this.capturedThrough + 1)),
+      triggerCount: 0,
+    };
+    this.pending.triggerCount += 1;
+    this.clearTimer();
+    this.schedule();
+    return true;
+  }
+
   cancel(): void {
     this.closed = true;
     this.pending = undefined;
+    this.wakeWindow = undefined;
 
     if (this.timer) {
       clearTimeout(this.timer);
@@ -91,7 +129,10 @@ export class ThoughtScheduler {
       return;
     }
 
-    const delay = Math.max(0, this.lastRunAt + this.options.minimumIntervalMs - Date.now());
+    const wake = this.wakeWindow;
+    let dueAt = this.lastRunAt + this.options.minimumIntervalMs;
+    if (wake) dueAt = wake.speechEnded ? wake.minAt : wake.maxAt;
+    const delay = Math.max(0, dueAt - Date.now());
 
     if (delay === 0) {
       this.startRun();
@@ -112,6 +153,15 @@ export class ThoughtScheduler {
     }
 
     this.pending = undefined;
+    if (this.wakeWindow) {
+      window.wake = this.wakeWindow.signal;
+      // 等待后再截取尾段，不能把快照停留在关键词起点。
+      window.endAt = new Date(
+        Math.max(Date.now(), window.endAt.getTime(), window.startAt.getTime()),
+      );
+      this.capturedThrough = Math.max(this.capturedThrough, window.endAt.getTime());
+      this.wakeWindow = undefined;
+    }
     this.lastRunAt = Date.now();
     this.options.beforeRun?.();
     this.options.onRunStarted?.(window.triggerCount);
@@ -135,7 +185,7 @@ export class ThoughtScheduler {
         return;
       }
 
-      await this.options.agent.prompt([...messages, this.options.context()]);
+      await this.options.agent.prompt([...messages, this.options.context(window.wake)]);
       await this.options.afterRun?.();
       this.options.onRunFinished?.(Date.now() - startedAt);
     } catch (error) {
@@ -146,11 +196,15 @@ export class ThoughtScheduler {
         return;
       }
       if (toError(error).message.includes('content_filter')) {
-        this.closed = true;
-        this.pending = undefined;
+        this.cancel();
       }
       this.options.onError?.(toError(error));
     }
+  }
+
+  private clearTimer(): void {
+    clearTimeout(this.timer);
+    this.timer = undefined;
   }
 }
 

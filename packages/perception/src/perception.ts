@@ -22,7 +22,7 @@ const DEFAULT_SAMPLE_INTERVAL_MS = 6_666;
 const DEFAULT_DIFFERENCE_THRESHOLD = 0.03;
 const DEFAULT_MAX_FRAMES = 9;
 const DEFAULT_HEARING_PROMPT = '以下是按时间排列的听觉转写，请结合说话人理解。';
-const DEFAULT_VISION_PROMPT = '以下画面按来源合并，编号顺序与采集时间一致。';
+const DEFAULT_VISION_PROMPT = '以下画面按来源多帧合并，编号顺序与采集时间一致。';
 
 export function createPerception(options: PerceptionOptions = {}): Perception {
   return new PerceptionRuntime(options);

@@ -97,7 +97,7 @@ export type WatchEvent =
       totalSeconds?: number;
     }
   | { type: 'status'; status: WatchStatus }
-  | { type: 'room_opened'; room: RoomInfo }
+  | { type: 'room_opened'; room: RoomInfo; sessionId: string }
   | { type: 'room_closed'; roomId: number; reason: string }
   | { type: 'exploration_started'; areaId: number }
   | { type: 'room_selected'; roomId: number; reason: string }

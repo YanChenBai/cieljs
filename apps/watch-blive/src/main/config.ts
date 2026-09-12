@@ -28,6 +28,19 @@ const watchConfigSchema = z.object({
       periodicObservationMs: z.number().int().min(1_000).default(10_000),
     })
     .prefault({}),
+  wake: z
+    .union([
+      z.literal(false),
+      z
+        .object({
+          keywords: z.array(z.string().trim().min(1)).min(1).default(['夏尔']),
+          minWaitMs: z.number().int().nonnegative().default(1500),
+          maxWaitMs: z.number().int().nonnegative().default(4000),
+          cooldownMs: z.number().int().nonnegative().default(15000),
+        })
+        .refine(value => value.maxWaitMs >= value.minWaitMs, 'maxWaitMs 不能小于 minWaitMs'),
+    ])
+    .prefault({}),
   ffmpegPath: z.string().trim().min(1).optional(),
 });
 
@@ -103,7 +116,7 @@ export function prepareWatchResources() {
   const root = watchDataDirectory();
   process.env.CIEL_DATA_DIR = root;
 
-  for (const name of ['electron', 'models', 'cache', 'logs']) {
+  for (const name of ['electron', 'models', 'voiceprints', 'cache', 'logs']) {
     mkdirSync(join(root, name), { recursive: true });
   }
 

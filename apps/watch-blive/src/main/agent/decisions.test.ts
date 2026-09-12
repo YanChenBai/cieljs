@@ -109,6 +109,22 @@ describe('parseDecision', () => {
   });
 });
 
+it('理由不设长度上限，长理由不拖垮选房与房间决策', () => {
+  const reason = '主播正在讲的内容和当前分区不一致。'.repeat(20);
+  const selection = { roomId: 22650610, reason };
+  const decision = {
+    action: 'explore',
+    confidence: 0.9,
+    danmakuAction: 'defer',
+    evidence: ['主播在解释为什么换游戏'],
+    reason,
+    score: 30,
+  };
+
+  expect(parseDecision(JSON.stringify(selection), RoomSelectionSchema)).toEqual(selection);
+  expect(parseDecision(JSON.stringify(decision), RoomDecisionSchema)).toEqual(decision);
+});
+
 it('接受分析文字后的裸选房 JSON，并保留理由中的括号和转义', () => {
   const selection = { roomId: 22650610, reason: '庆典 {互动} 与 "新衣"' };
   expect(

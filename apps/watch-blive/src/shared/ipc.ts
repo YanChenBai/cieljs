@@ -34,6 +34,7 @@ export interface WatchSnapshot {
 
 export interface WatchBliveBridge {
   attachLiveWebContents(input: { id: number }): Promise<void>;
+  openBrowseWindow(): Promise<void>;
   start(options: StartWatchOptions): Promise<void>;
   stop(): Promise<void>;
   login(): Promise<Account>;

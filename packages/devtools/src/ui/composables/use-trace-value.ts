@@ -3,12 +3,12 @@ import { shallowRef, watch } from 'vue';
 import type { DevtoolsClient } from '../../client/index.ts';
 import type { TraceEntry } from '../../protocol/index.ts';
 
-export type TraceSection = 'input' | 'output' | 'raw';
+export type TraceSection = 'input' | 'output' | 'raw' | 'error' | 'schema';
 
 /** 仅加载当前查看的内容；切换记录或版本时取消旧请求，避免旧响应覆盖新选择。 */
 export function useTraceValue(
-  client: () => DevtoolsClient,
-  entry: () => TraceEntry,
+  client: () => DevtoolsClient | undefined,
+  entry: () => TraceEntry | undefined,
   section: () => TraceSection | undefined,
 ) {
   const value = shallowRef<unknown>();
@@ -16,7 +16,10 @@ export function useTraceValue(
   const loading = shallowRef(false);
 
   watch(
-    () => [client(), entry().id, entry().revision, section()] as const,
+    () => {
+      const key = section();
+      return [client(), entry()?.id, entry()?.revision, key, key && entry()?.[key]?.id] as const;
+    },
     async ([nextClient, nextId, , nextSection], previous, onCleanup) => {
       const controller = new AbortController();
       onCleanup(() => controller.abort());
@@ -29,14 +32,17 @@ export function useTraceValue(
       error.value = '';
       loading.value = false;
 
+      const target = entry();
       const key = section();
-      const reference = key ? entry()[key] : undefined;
+      if (!nextClient || !target || !key) return;
+
+      const reference = target[key];
       if (!reference) return;
 
       loading.value = true;
 
       try {
-        const result = await client().values.get(reference, { signal: controller.signal });
+        const result = await nextClient.values.get(reference, { signal: controller.signal });
         if (!controller.signal.aborted) value.value = result;
       } catch (cause) {
         if (!controller.signal.aborted) error.value = String(cause);

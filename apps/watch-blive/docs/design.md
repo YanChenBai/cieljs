@@ -114,6 +114,7 @@ apps/watch-blive/
       config.ts
       prompts/index.ts
       room-score-policy.ts
+      room-history.ts
       ipc.ts
       scheduling/
         thought-scheduler.ts
@@ -167,6 +168,7 @@ apps/watch-blive/
 | `main/agent/tools.ts`                     | `send_danmaku` 工具及其宿主侧权限检查                                |
 | `main/agent/decisions.ts`                 | 探索选择、房间判断的 TypeBox Schema 与解析                           |
 | `main/room-score-policy.ts`               | 纯确定性的多轮评分切换策略                                           |
+| `main/room-history.ts`                    | 进程内的房间冷却登记与候选过滤，避免刚离开就重进                     |
 | `main/prompts/index.ts`                   | Ciel 身份、直播互动规则、模式规则和动态房间上下文                    |
 | `preload/index.ts`                        | 通过 `contextBridge` 暴露最小 `watchBlive` API                       |
 | `renderer/components/LiveRoomWebview.vue` | 持有 `<webview>` DOM，并在 attach 后上报 WebContents ID              |
@@ -231,7 +233,7 @@ function createWatchBlive(options: WatchBliveOptions): WatchBlive;
 
 ### 6.1 BrowserWindow 与 guest 安全配置
 
-应用只创建一个 Electron `BrowserWindow`。本地 Vue renderer 和远程 Bilibili guest 运行在不同 renderer 进程中：
+应用创建一个主 Electron `BrowserWindow`，另有一个按需创建、可独立关闭的 B 站浏览窗口。本地 Vue renderer 和远程 Bilibili guest 运行在不同 renderer 进程中：
 
 ```ts
 new BrowserWindow({
@@ -262,6 +264,16 @@ Vue 模板中嵌入一个持久化 guest：
 - 主进程为 guest session 设置权限请求处理器，只允许直播实际需要且已经确认的权限。
 - 只允许 HTTPS 的 Bilibili 登录、主页与直播域名导航；其他 URL 默认拒绝。
 - Electron 官方不推荐将 `<webview>` 作为通用网页嵌入方案，但本应用明确需要 DOM 内嵌和 guest WebContents ID，因此接受其稳定性风险，并用集成测试锁定当前 Electron 版本行为。
+
+顶栏「打开 B 站浏览窗口」按钮按需创建独立浏览窗口（`src/main/browse-window.ts`）：
+
+- 单例：重复点击只把已有窗口提到前台，不会重置它正在浏览的页面。
+- 复用 `persist:watch-blive` 分区，因此与观看页共享登录 Cookie；`logout()` 清空分区存储时会同时登出它。
+- 不挂 preload，并强制 `sandbox: true`、`webviewTag: false`——它加载远端页面，不参与控制路由。
+- 导航复用 `isAllowedPageUrl` 白名单：站内链接留在本窗口，站外一律拒绝。
+- 主窗口关闭时一并销毁，否则 `window-all-closed` 不会触发，会留下只剩浏览器的孤儿进程。
+
+浏览窗口不改变 guest 的任何导航行为：guest 内点击分区、全部直播与个人空间链接仍在原 webview 内浏览。
 
 ### 6.2 WebContents ID 交接
 
@@ -453,6 +465,7 @@ await perception.image?.write({
 ```ts
 createPerception({
   retentionMs: 5 * 60_000,
+  hearingPrompt: HEARING_PROMPT,
   vision: {
     sampleIntervalMs: 6_666,
     differenceThreshold: 0.03,
@@ -462,6 +475,8 @@ createPerception({
 ```
 
 `retentionMs` 表示可用于快照的时间窗口，不表示每轮都会把五分钟的全部原始帧交给模型；视觉仍经过采样、差异过滤和最多九帧合成。
+
+`hearingPrompt` 来自 `prompts/perception.ts`，紧贴在听觉转写之前，只说这一段数据怎么读；可靠性前提与行为后果在系统提示词里（见 12.5）。感知实例由宿主内部创建，`createPerception` 不对外注入。
 
 ### 7.2 思考触发与合并
 
@@ -495,6 +510,8 @@ speechend / periodic tick
 3. 已观察时长及探索模式是否已经允许切换。
 4. 当前房间最近真实发送的弹幕。
 5. 本轮触发原因（语音结束或周期观察）。
+
+每轮上下文只带随现场变化的数据。判断规则和行为约束不按轮重复注入，统一放在系统提示词里；只有必须在读到数据当场的判读动作（听觉转写怎么读）才跟着数据走。记忆判断这条规则因此只留在系统提示词的记忆小节，不再作为独立段落每轮重复。
 
 ## 8. Ciel Session 与记忆边界
 
@@ -628,18 +645,22 @@ host score policy says switch?
 ```ts
 const RoomSelectionSchema = Type.Object({
   roomId: Type.Integer({ minimum: 1 }),
-  reason: Type.String({ minLength: 1, maxLength: 160 }),
+  reason: Type.String({ minLength: 1 }),
 });
 ```
 
-宿主还必须检查 `roomId` 存在于本轮查询结果中。若选择无效，允许把校验错误和同一候选列表反馈一次；再次无效则结束本轮探索并在 10 秒后重新查询，避免无限工具循环。
+宿主还必须检查 `roomId` 存在于本轮查询结果中。选择无效或校验失败只报告错误：当前房间、Session 和媒体都保持原状，探索模式由下一轮评分在冷却结束后再次决定是否切房，不做无限工具循环。
 
 候选过滤：
 
-- 排除当前房间。
-- 排除最近刚离开的房间，默认冷却 30 分钟。
+- 排除当前房间；探索模式切房时它同时就是刚离开的房间。
+- 排除最近刚离开的房间，默认冷却 30 分钟。切房、下播、停止、打开失败都计入冷却，冷却由宿主在进程内维护。
 - 排除未开播或打开失败的候选。
 - 每次重新探索都查询新列表，不能只复用旧 room ID。
+
+冷却是宿主的硬保证，不依赖模型配合：被排除的房间不进入候选，归属校验也会拒绝模型选回它们。选房问题里随现场变化地带上「上一段观看」（主播、房间号、标题、分区、已观看时长、离开原因）和「冷却中的房间」；「离开后 30 分钟内不重进同一个房间」是行为约束，写在选房系统提示词里，不按轮重复注入。
+
+冷却若会把候选清空就放宽：仍然排除当前房间，其余房间按离开时间从早到晚交回给模型，并在问题里说明本分区没有别的候选。宁可回到更早看过的房间，也好过小分区的探索模式周期性报错。
 
 ## 10. 房间评分策略
 
@@ -779,6 +800,17 @@ Bilibili 公共互动规则
 
 表情标签是否仍被 Bilibili 接受需要在真实页面验证；无效标签应从白名单移除，不能让 Agent 自行发明新标签。
 
+### 12.5 感知可靠性
+
+听觉转写由 ASR 生成，字词、谐音、人名和专有名词都可能不准，音乐、噪音、空场与多人抢话处还会凭空生成内容。规则按「跟数据走的」和「会话内恒真的」切开：
+
+- `HEARING_PROMPT`：由宿主交给感知层，跟着每次听觉转写走，只说这一段数据怎么读——以画面和上文为准，对得上的按原意理解，读不通或与现场矛盾的按「没听清」处理。
+- `PERCEPTION_RULES`：进入直播与录播的系统提示词，每会话注入一次，承载恒真的部分——识别错误与凭空生成的前提、读不懂的内容不发弹幕、不下结论、不写入记忆、不编造解释，以及不假装听懂、不因一处可疑否定已印证的现场。
+
+切分依据是注入频率：系统提示词整个会话只出现一次，本地提示词每个带转写的快照都会重复。因此只把必须在读到数据当场的判读动作留在本地，后果与校准规则全部上移。同一套划分对视觉同样成立：`visionPrompt` 只描述画面块的结构。
+
+两层都只要求按内容可疑程度处理，不因为一句可疑转写就整体否定画面与上下文已经印证的现场。提示词靠的是判断依据，不是丢弃整轮感知。
+
 ## 13. 运行时状态机
 
 ```text
@@ -796,12 +828,14 @@ starting ── needs login ──▶ awaiting-login
                                │ ready
                                ▼
                             watching
-                               │ switch
+                               │ 选中新房间后 switch
                                ▼
-                            exploring
+                            opening
 
 any active state ── close ──▶ closing ──▶ closed
 ```
+
+切房不先离开当前房间：只有选中房间、开始 `openRoom` 时才由内部 `closeVisit('switch')` 关闭当前访问。选房失败只报告错误，状态留在 `watching`，房间、Session 和媒体都不动。
 
 `WatchStatus` 应是可辨识状态，而不是多个可能互相矛盾的布尔值。每次状态变化通过 `onEvent` 对外发布，至少包含：
 
@@ -818,18 +852,19 @@ any active state ── close ──▶ closing ──▶ closed
 
 ## 14. 错误与恢复
 
-| 场景                     | 行为                                                       |
-| ------------------------ | ---------------------------------------------------------- |
-| 未登录且请求真实弹幕     | 工具明确失败，运行时进入/提示 `awaiting-login`，不伪装发送 |
-| 页面还未 ready           | 等待有限次数 readiness probe；超时后报告 page 错误         |
-| 页面导航发生变化         | generation 失效，拒绝旧页面执行结果和旧发送结果            |
-| FFmpeg 异常退出          | 当前访问尝试有限次数重连；探索模式持续失败后重新探索       |
-| 感知图片失败             | 发布错误但不永久阻断后续图片任务                           |
-| 模型调用失败             | 保留当前房间，按调度器退避重试，不重复执行未确认动作       |
-| Agent JSON 不符合 Schema | 记录结构化错误；房间评分不生效，不能切换                   |
-| 候选选择不在列表         | 同一轮纠正一次，仍失败则延迟后重新查询                     |
-| 单推房间下播             | 只重试同一房间，不进入探索                                 |
-| 关闭中仍有页面执行       | generation/AbortSignal 拒绝结果，等待受管任务 settle       |
+| 场景                     | 行为                                                          |
+| ------------------------ | ------------------------------------------------------------- |
+| 未登录且请求真实弹幕     | 工具明确失败，运行时进入/提示 `awaiting-login`，不伪装发送    |
+| 页面还未 ready           | 等待有限次数 readiness probe；超时后报告 page 错误            |
+| 页面导航发生变化         | generation 失效，拒绝旧页面执行结果和旧发送结果               |
+| FFmpeg 异常退出          | 当前访问尝试有限次数重连；探索模式持续失败后重新探索          |
+| 感知图片失败             | 发布错误但不永久阻断后续图片任务                              |
+| 模型调用失败             | 保留当前房间，按调度器退避重试，不重复执行未确认动作          |
+| Agent JSON 不符合 Schema | 记录结构化错误；房间评分不生效，不能切换                      |
+| 选房失败或房间不在候选   | 只报告错误；当前房间、Session 和媒体保持不变，留在 `watching` |
+| 候选只剩当前房间         | 只报告错误，不重进同一个房间；由下一轮评分再决定是否切房      |
+| 单推房间下播             | 只重试同一房间，不进入探索                                    |
+| 关闭中仍有页面执行       | generation/AbortSignal 拒绝结果，等待受管任务 settle          |
 
 ## 15. 安全边界
 

@@ -1,6 +1,7 @@
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 
 import type { TraceEntry, TraceEvent } from '../protocol/index.ts';
+import { messageContent } from './trace-content.ts';
 
 /** 每个原始事件对应一个不可变步骤，sequence 同时用于分页与客户端去重。 */
 export function createTraceStep(
@@ -25,11 +26,30 @@ export function createTraceStep(
     raw: { id: trace.id, preview: trace.event.type },
     revision: trace.sequence,
   };
-  // 步骤表示事件已经发生；运行中状态由可变的消息/工具摘要记录维护。
-  if (trace.event.type === 'tool_execution_end' && trace.event.isError) step.status = 'error';
+  if (trace.event.type.endsWith('_start') || trace.event.type.endsWith('_update')) {
+    step.status = 'running';
+    step.endedAt = undefined;
+  }
   attachContentReferences(step, trace);
+  const errorPath = eventErrorPath(trace.event);
+  if (errorPath) {
+    step.status = 'error';
+    step.error = { id: trace.id, path: ['event', ...errorPath], preview: '错误详情' };
+  }
   attachDisplayMetadata(step, trace.event, tools, model);
   return step;
+}
+
+function eventErrorPath(event: AgentEvent): string[] | undefined {
+  if (event.type === 'tool_execution_end' && event.isError) return ['result'];
+  if ('message' in event && messageFailed(event.message)) return ['message'];
+  if (event.type === 'turn_end' && event.toolResults.some(messageFailed)) return ['toolResults'];
+  if (event.type === 'agent_end' && event.messages.some(messageFailed)) return ['messages'];
+}
+
+function messageFailed(message: Extract<AgentEvent, { type: 'message_end' }>['message']) {
+  if (message.role === 'assistant') return message.stopReason === 'error';
+  return message.role === 'toolResult' && message.isError;
 }
 
 function eventKind(event: AgentEvent): TraceEntry['kind'] {
@@ -46,6 +66,11 @@ function attachContentReferences(step: TraceEntry, trace: TraceEvent) {
   if (outputKey) step.output = { id: trace.id, path: ['event', outputKey], preview: '完整内容' };
   if ('args' in trace.event)
     step.input = { id: trace.id, path: ['event', 'args'], preview: '参数' };
+  if ('message' in trace.event) {
+    const content = messageContent(trace.event.message);
+    step.text = content.text;
+    step.thinking = content.thinking;
+  }
 }
 
 function attachDisplayMetadata(
@@ -55,9 +80,17 @@ function attachDisplayMetadata(
   model?: Agent['state']['model'],
 ) {
   if ('toolName' in event) {
-    const tool = tools?.find(tool => tool.name === event.toolName);
+    const toolIndex = tools?.findIndex(tool => tool.name === event.toolName) ?? -1;
+    const tool = tools?.[toolIndex];
     step.label = tool?.label ?? event.toolName;
     step.description = tool?.description;
+    if (toolIndex >= 0 && tool && 'parameters' in tool) {
+      step.schema = {
+        id: step.raw!.id,
+        path: ['metadata', 'tools', String(toolIndex), 'parameters'],
+        preview: '工具参数 Schema',
+      };
+    }
   }
   if ('message' in event) {
     step.label = event.message.role;

@@ -1,7 +1,7 @@
 import type { DevtoolsHost } from '@cieljs/devtools/host';
-import type { ASRModelId } from '@cieljs/hearing';
+import { createKWS, type ASRModelId, type KWS } from '@cieljs/hearing';
 import type { McpTools } from '@cieljs/mcp';
-import { createPerception, type Perception, type PerceptionOptions } from '@cieljs/perception';
+import { createPerception, type PerceptionOptions } from '@cieljs/perception';
 import type { Ciel, CielSession } from '@cieljs/runtime';
 import type { Storage } from '@cieljs/storage';
 import type { Api, Model } from '@earendil-works/pi-ai';
@@ -23,10 +23,16 @@ import { BilibiliApi } from './bilibili/api.ts';
 import { LivePage } from './bilibili/live-page.ts';
 import { LiveStatusMonitor } from './bilibili/live-status-monitor.ts';
 import { readRoomLiveStatus } from './bilibili/live-status.ts';
+import { watchDataDirectory } from './config.ts';
 import { LiveMedia } from './media/live-media.ts';
-import { ROOM_REVIEW_AFTER_MS } from './prompts/index.ts';
+import { HEARING_PROMPT, ROOM_REVIEW_AFTER_MS } from './prompts/index.ts';
+import { RoomHistory } from './room-history.ts';
 import { RoomScorePolicy } from './room-score-policy.ts';
 import { RoomVisit } from './room-visit.ts';
+import { resolveWakeOptions, type WatchWakeOptions } from './scheduling/wake.ts';
+import { loadVoiceprints } from './voiceprints.ts';
+
+export type { WatchWakeOptions } from './scheduling/wake.ts';
 
 export interface WatchBliveOptions {
   mcp?: McpTools;
@@ -39,14 +45,15 @@ export interface WatchBliveOptions {
   api?: BilibiliApi;
   ffmpegPath?: string;
   perception?: PerceptionOptions;
-  createPerception?: (options: PerceptionOptions) => Perception;
   periodicObservationMs?: number;
   minimumThinkIntervalMs?: number;
+  wake?: WatchWakeOptions;
 }
 
 export interface WatchBlive {
   readonly status: WatchStatus;
   readonly room?: RoomInfo;
+  readonly sessionId?: string;
 
   start(options: StartWatchOptions): Promise<void>;
   stop(): Promise<void>;
@@ -79,8 +86,10 @@ class WatchBliveRuntime implements WatchBlive {
   private readonly api: BilibiliApi;
   private readonly danmakuGate = new DanmakuRunGate();
   private readonly scorePolicy = new RoomScorePolicy();
+  private readonly roomHistory = new RoomHistory();
 
   constructor(private readonly options: WatchBliveOptions) {
+    if (options.wake) resolveWakeOptions(options.wake);
     this.api = options.api ?? new BilibiliApi();
   }
 
@@ -100,6 +109,10 @@ class WatchBliveRuntime implements WatchBlive {
 
   get room(): RoomInfo | undefined {
     return this.visit?.room;
+  }
+
+  get sessionId(): string | undefined {
+    return this.visit?.session.id;
   }
 
   onEvent(listener: (event: WatchEvent) => void): () => void {
@@ -287,13 +300,18 @@ class WatchBliveRuntime implements WatchBlive {
     });
   }
 
-  private async explore(areaId: number, signal: AbortSignal): Promise<void> {
+  /**
+   * 选房失败不影响当前观看：选到房间后才由 openRoom 关闭当前访问，
+   * 失败时原样抛出，房间、会话和媒体都保持原状，等冷却结束再决定是否切房。
+   */
+  private async explore(areaId: number, signal: AbortSignal, from?: RoomVisit): Promise<void> {
     signal.throwIfAborted();
-    await this.closeVisit('explore');
-    signal.throwIfAborted();
+    // 触发选房后已经离开该房间（下播、手动停止或另一次切换），放弃这次结果。
+    if (from && this.visit !== from) return;
     const ciel = this.requireCiel();
 
-    this.setStatus('exploring');
+    // 已有房间时保持 watching：选房期间原房间继续观看，权限和评分规则都不中断。
+    if (!this.visit) this.setStatus('exploring');
     this.emit({ type: 'exploration_started', areaId });
 
     const room = await selectExplorationRoom({
@@ -301,10 +319,40 @@ class WatchBliveRuntime implements WatchBlive {
       signal,
       ciel,
       api: this.api,
+      // 只有评分判定切房时才有 from；下播路径的房间已经在 closeVisit 时进了冷却，不必再描述一遍。
+      previous: from
+        ? {
+            room: from.room,
+            watchedSeconds: Math.floor((Date.now() - from.startedAt) / 1_000),
+            reason: '宿主评分判定继续观看价值不足',
+          }
+        : undefined,
+      cooling: this.roomHistory.cooling(),
       devtools: this.options.devtools,
       emit: event => this.emit(event),
     });
-    await this.openRoom(room, signal);
+
+    try {
+      await this.openRoom(room, signal);
+    } catch (error) {
+      // 已开播但页面没起来也算「刚试过这个房间」，下一轮探索不该立刻又把它捞回来。
+      this.roomHistory.record(room);
+      throw error;
+    }
+  }
+
+  private createPerception(retentionMs = this.options.perception?.retentionMs ?? 60_000) {
+    const options = this.options.perception;
+    return createPerception({
+      vision: { sampleIntervalMs: 6_666, differenceThreshold: 0.03, maxFrames: 9 },
+      hearingPrompt: HEARING_PROMPT,
+      ...options,
+      retentionMs,
+      asr: {
+        ...options?.asr,
+        speaker: loadVoiceprints(this.options.dataDir ?? watchDataDirectory()),
+      },
+    });
   }
 
   private async openRoom(room: RoomInfo, signal: AbortSignal): Promise<void> {
@@ -319,15 +367,9 @@ class WatchBliveRuntime implements WatchBlive {
 
     const generation = ++this.visitGeneration;
     let session: CielSession | undefined;
-    const perception = (this.options.createPerception ?? createPerception)({
-      vision: { sampleIntervalMs: 6_666, differenceThreshold: 0.03, maxFrames: 9 },
-      retentionMs: 60_000,
-      ...this.options.perception,
-    });
+    let kws: KWS | undefined;
 
-    perception.asr.on('result', e => {
-      console.log(e);
-    });
+    const perception = this.createPerception();
 
     try {
       await this.options.livePage.open(room.roomId, signal);
@@ -338,6 +380,8 @@ class WatchBliveRuntime implements WatchBlive {
         createRoomSessionOptions(room, new Date(startedAt)),
       );
       const playUrl = await this.api.playUrl(room.roomId);
+      const wake = this.options.wake ? resolveWakeOptions(this.options.wake) : undefined;
+      if (wake) kws = await createKWS({ keywords: wake.keywords, cooldownMs: wake.cooldownMs });
       signal.throwIfAborted();
       const monitor = this.createLiveStatusMonitor(room.roomId, generation, signal);
       this.liveStatusMonitor = monitor;
@@ -346,6 +390,7 @@ class WatchBliveRuntime implements WatchBlive {
         input: playUrl,
         live: true,
         perception,
+        kws,
         ffmpegPath: this.options.ffmpegPath,
         onError: error => this.emitError('media', error),
         onStopped: error => monitor.mediaStopped(error),
@@ -359,6 +404,7 @@ class WatchBliveRuntime implements WatchBlive {
         session,
         perception,
         media,
+        wake: wake && kws ? { kws, options: wake } : undefined,
         minimumThinkIntervalMs: this.options.minimumThinkIntervalMs ?? 5_000,
         periodicObservationMs: this.options.periodicObservationMs ?? 30_000,
         canSwitch: () => this.canSwitch(startedAt),
@@ -369,14 +415,14 @@ class WatchBliveRuntime implements WatchBlive {
       this.visit = visit;
       visit.start();
       this.setStatus('watching');
-      this.emit({ type: 'room_opened', room });
+      this.emit({ type: 'room_opened', room, sessionId: session.id });
       monitor.start();
     } catch (error) {
       this.options.livePage.close();
       if (this.visit?.generation === generation) {
         await this.closeVisit('open_failed');
       } else {
-        await Promise.all([session?.close(), perception.close()]);
+        await Promise.all([kws?.close(), session?.close(), perception.close()]);
       }
       throw error;
     }
@@ -394,12 +440,8 @@ class WatchBliveRuntime implements WatchBlive {
 
     const generation = ++this.visitGeneration;
     let session: CielSession | undefined;
-    const perception = (this.options.createPerception ?? createPerception)({
-      vision: { sampleIntervalMs: 6_666, differenceThreshold: 0.03, maxFrames: 9 },
-      ...this.options.perception,
-      // 视频在预处理完成后统一读取，保留整段感知；上限使用 Date 的有效毫秒范围。
-      retentionMs: 8_640_000_000_000_000,
-    });
+    // 视频在预处理完成后统一读取，保留整段感知；上限使用 Date 的有效毫秒范围。
+    const perception = this.createPerception(8_640_000_000_000_000);
 
     try {
       const startedAt = Date.now();
@@ -445,7 +487,7 @@ class WatchBliveRuntime implements WatchBlive {
       this.emit({ type: 'video_progress', stage: 'extracting' });
       visit.start();
       this.setStatus('watching');
-      this.emit({ type: 'room_opened', room });
+      this.emit({ type: 'room_opened', room, sessionId: session.id });
     } catch (error) {
       if (this.visit?.generation === generation) {
         await this.closeVisit('open_failed');
@@ -517,7 +559,7 @@ class WatchBliveRuntime implements WatchBlive {
     }
 
     // 不在 afterRun 内等待切房，否则 closeVisit 会等待当前调度任务自身。
-    void this.enqueue(() => this.explore(mode.areaId, signal)).catch(error => {
+    void this.enqueue(() => this.explore(mode.areaId, signal, visit)).catch(error => {
       if (!signal.aborted) {
         this.emitError('explore', error);
       }
@@ -616,6 +658,9 @@ class WatchBliveRuntime implements WatchBlive {
     if (!visit) {
       return;
     }
+
+    // 任何一次离开都算「刚试过这个房间」，切房、下播、停止都一样，不按原因过滤。
+    this.roomHistory.record(visit.room);
 
     if (this.startOptions?.mode.type !== 'recording') {
       this.options.livePage.close();

@@ -1,5 +1,5 @@
 import type { DevtoolsHost } from '@cieljs/devtools/host';
-import type { ASRModelId } from '@cieljs/hearing';
+import type { ASRModelId, KWS, WakeEvent } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
 import type { CielSession } from '@cieljs/runtime';
 
@@ -7,6 +7,7 @@ import type { RoomInfo, WatchEvent, WatchMode } from '../shared/types.ts';
 import type { LiveMedia } from './media/live-media.ts';
 import { createRoomContext, type SentDanmaku } from './prompts/index.ts';
 import { ThoughtScheduler } from './scheduling/thought-scheduler.ts';
+import { createWakeContext, type WatchWakeOptions } from './scheduling/wake.ts';
 
 interface RoomVisitOptions {
   devtools?: DevtoolsHost;
@@ -17,6 +18,10 @@ interface RoomVisitOptions {
   session: CielSession;
   perception: Perception;
   media: LiveMedia;
+  wake?: {
+    kws: KWS;
+    options: Required<WatchWakeOptions>;
+  };
   minimumThinkIntervalMs: number;
   periodicObservationMs: number;
   canSwitch: () => boolean;
@@ -35,6 +40,10 @@ export class RoomVisit {
   private unsubscribeAgent?: () => void;
   private unsubscribePerceptionError?: () => void;
   private unsubscribeTranscript?: () => void;
+  private unsubscribeWake?: () => void;
+  private unsubscribeWakeError?: () => void;
+  private lastWakeAt = -Infinity;
+  private cancelled = false;
 
   constructor(private readonly options: RoomVisitOptions) {
     this.scheduler = new ThoughtScheduler({
@@ -42,15 +51,16 @@ export class RoomVisit {
       agent: options.session.agent,
       minimumIntervalMs: options.minimumThinkIntervalMs,
       startedAt: new Date(options.startedAt),
-      context: () => ({
+      context: wake => ({
         role: 'user',
-        content: createRoomContext({
-          room: options.room,
-          mode: options.mode,
-          startedAt: options.startedAt,
-          history: this.history,
-          canSwitch: options.canSwitch(),
-        }),
+        content:
+          createRoomContext({
+            room: options.room,
+            mode: options.mode,
+            startedAt: options.startedAt,
+            history: this.history,
+            canSwitch: options.canSwitch(),
+          }) + (wake ? createWakeContext(wake) : ''),
         timestamp: Date.now(),
       }),
       beforeRun: options.beforeRun,
@@ -82,7 +92,11 @@ export class RoomVisit {
     if (this.options.mode.type === 'recording') {
       this.unsubscribeTranscript = this.options.perception.asr.on('result', result => {
         const events = result.events?.map(event => event.type).join('、');
-        const content = [result.content, events ? `声音事件（模型识别）：${events}` : '']
+        const content = [
+          result.content,
+          result.speaker,
+          events ? `声音事件（模型识别）：${events}` : '',
+        ]
           .filter(Boolean)
           .join('\n');
         if (!content) return;
@@ -92,19 +106,37 @@ export class RoomVisit {
           .padStart(2, '0')}`;
         this.options.devtools?.recordMessage(`视频语音 · ${timestamp}`, content, this.session.id);
       });
+      this.options.media.start();
+      return;
     }
-    this.options.media.start();
-    if (this.options.mode.type === 'recording') return;
+    if (this.options.wake) {
+      this.unsubscribeWake = this.options.wake.kws.on('wake', event => this.handleWake(event));
+      this.unsubscribeWakeError = this.options.wake.kws.on('error', error =>
+        this.options.emit({ type: 'error', stage: 'wake', error }),
+      );
+    }
     this.unsubscribeSpeechEnd = this.options.perception.on('speechend', ({ at }) =>
-      this.scheduler.trigger(at),
+      this.scheduler.trigger(at, 'speechend'),
     );
     this.periodicTimer = setInterval(
       () => this.scheduler.trigger(new Date()),
       this.options.periodicObservationMs,
     );
+    this.options.media.start();
+  }
+
+  /** 唤醒只把这一轮提前并带上唤醒上下文，宿主不替 Ciel 发言；冷却内的重复命中直接合并。 */
+  private handleWake(event: WakeEvent): void {
+    const wake = this.options.wake;
+    if (!wake || this.cancelled || Date.now() - this.lastWakeAt < wake.options.cooldownMs) return;
+    if (!this.scheduler.wake(event, wake.options)) return;
+    this.lastWakeAt = Date.now();
+    this.options.devtools?.recordMessage('关键词唤醒', createWakeContext(event), this.session.id);
   }
 
   cancel(): void {
+    this.cancelled = true;
+    this.unsubscribeWake?.();
     this.scheduler.cancel();
     this.session.agent.abort();
   }
@@ -134,6 +166,8 @@ export class RoomVisit {
   }
 
   private async closeResources() {
+    this.cancelled = true;
+    this.unsubscribeWake?.();
     clearInterval(this.periodicTimer);
     this.unsubscribeSpeechEnd?.();
 
@@ -143,6 +177,7 @@ export class RoomVisit {
     this.unsubscribePerceptionError?.();
     const media = await Promise.allSettled([this.options.media.close()]);
     const remaining = await Promise.allSettled([
+      this.options.wake?.kws.close(),
       this.options.perception.close(),
       this.options.session.close(),
     ]);
@@ -150,6 +185,7 @@ export class RoomVisit {
       .filter(result => result.status === 'rejected')
       .map(result => result.reason);
     this.unsubscribeTranscript?.();
+    this.unsubscribeWakeError?.();
 
     if (failures.length) {
       throw new AggregateError(failures, `直播间 ${this.room.roomId} 关闭失败`);

@@ -1,4 +1,5 @@
 import type { WatchMode } from '../../shared/types.ts';
+import { PERCEPTION_RULES } from './perception.ts';
 
 export const ROOM_REVIEW_AFTER_MS = 45_000;
 export const BILIBILI_EMOJI_TAGS = [
@@ -37,6 +38,8 @@ export function createModePrompt(mode: Extract<WatchMode, { type: 'recording' }>
 # 录播模式
 
 你正在观看用户提供的录播。禁止发送、模拟或建议发送弹幕，也不调用 send_danmaku。持续理解视频内容，结合画面、语音、主播背景和已有记忆做摘要与分析，并将亲历确认且值得长期保留的信息写入对应记忆。
+
+${PERCEPTION_RULES}
 
 每轮输出简洁的阶段性观察；录播结束时形成一份覆盖主题、关键内容、值得记住的信息与仍不确定之处的总结。不要评分，也不要做切房决策。
 
