@@ -144,10 +144,11 @@ vi.mock('sherpa-onnx-node', () => {
 });
 
 const { ASR } = await import('../src/asr.ts');
+const modelsPath = 'models';
 
 describe('ASR', () => {
   it('切换模型完成旧尾段并保留结果监听和新音频时间', async () => {
-    const asr = new ASR({ speaker: false });
+    const asr = new ASR({ modelsPath, speaker: false });
     const results: import('../src/types.ts').ASRResult[] = [];
     asr.on('result', result => results.push(result));
     await asr.write({ data: Buffer.alloc(32_000), startAt: new Date(0) });
@@ -176,6 +177,7 @@ describe('ASR', () => {
 
   it('把自定义分段窗口传入 VAD，并保持未配置时的默认值', async () => {
     const asr = new ASR({
+      modelsPath,
       speaker: false,
       vad: { minSilenceDuration: 0.8, maxSpeechDuration: 15 },
     });
@@ -186,7 +188,7 @@ describe('ASR', () => {
       30,
     );
     await asr.close();
-    const defaults = new ASR({ speaker: false });
+    const defaults = new ASR({ modelsPath, speaker: false });
     expect(vadConstructor).toHaveBeenLastCalledWith(
       expect.objectContaining({
         tenVad: expect.objectContaining({ minSilenceDuration: 0.5, maxSpeechDuration: 10 }),
@@ -197,13 +199,15 @@ describe('ASR', () => {
   });
 
   it('拒绝无效或超过缓存容量的分段窗口', () => {
-    expect(() => new ASR({ vad: { minSilenceDuration: 0 } })).toThrow('positive');
-    expect(() => new ASR({ vad: { maxSpeechDuration: Number.NaN } })).toThrow('positive');
-    expect(() => new ASR({ vad: { maxSpeechDuration: 30 } })).toThrow('audio buffer');
+    expect(() => new ASR({ modelsPath, vad: { minSilenceDuration: 0 } })).toThrow('positive');
+    expect(() => new ASR({ modelsPath, vad: { maxSpeechDuration: Number.NaN } })).toThrow(
+      'positive',
+    );
+    expect(() => new ASR({ modelsPath, vad: { maxSpeechDuration: 30 } })).toThrow('audio buffer');
   });
 
   it('emits timestamped final results with a stable speaker', () => {
-    const asr = new ASR();
+    const asr = new ASR({ modelsPath });
     const results: import('../src/types.ts').ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
@@ -226,7 +230,7 @@ describe('ASR', () => {
   });
 
   it('emits input errors without throwing from write', () => {
-    const asr = new ASR();
+    const asr = new ASR({ modelsPath });
     const errors: Error[] = [];
     asr.on('error', error => errors.push(error));
 
@@ -241,7 +245,7 @@ describe('ASR', () => {
   it('drops transcripts that still hit the token limit after shorter retries', () => {
     recognizerResult.text = 'language Chinese<asr_text>未完成';
     recognizerResult.tokens = Array.from({ length: 256 }, () => 'token');
-    const asr = new ASR();
+    const asr = new ASR({ modelsPath });
     const results: import('../src/types.ts').ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
@@ -254,7 +258,7 @@ describe('ASR', () => {
   it('drops excessively repetitive transcripts', () => {
     recognizerResult.text = `language Chinese<asr_text>啊，这个点都是广东人。${'这啊，'.repeat(80)}`;
     recognizerResult.tokens = [];
-    const asr = new ASR();
+    const asr = new ASR({ modelsPath });
     const results: import('../src/types.ts').ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
@@ -268,7 +272,7 @@ describe('ASR', () => {
     recognizerResult.splitRetry = true;
     recognizerResult.text = 'language Chinese<asr_text>恢复';
     recognizerResult.vadSamples = 160_000;
-    const asr = new ASR();
+    const asr = new ASR({ modelsPath });
     const results: import('../src/types.ts').ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
@@ -284,7 +288,7 @@ describe('ASR', () => {
     recognizerResult.splitRetry = true;
     recognizerResult.text = 'language Chinese<asr_text>恢复';
     recognizerResult.vadSamples = 160_000;
-    const asr = new ASR();
+    const asr = new ASR({ modelsPath });
     const results: import('../src/types.ts').ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
@@ -299,6 +303,7 @@ describe('ASR', () => {
 it('SenseVoice 事件窗口不依赖 VAD，空文本事件保留且 flush 不重复输出', async () => {
   recognizerResult.text = '';
   const asr = new ASR({
+    modelsPath,
     model: 'sensevoice-small',
     mode: 'events',
     speaker: false,

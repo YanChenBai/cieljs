@@ -53,17 +53,17 @@ export class NativeASR {
       throw new Error('Selected ASR model does not support audio events');
 
     // 先准备新识别器，失败时旧模型仍可继续；尾段必须由旧模型完成。
-    const recognizer = definition.create();
+    const recognizer = definition.create(this.options.modelsPath);
     this.flush();
     this.recognizer = recognizer;
     this.currentModel = model;
   }
 
-  constructor(options: ASROptions = {}) {
+  constructor(private readonly options: ASROptions) {
     validateOptions(options);
     this.currentModel = options.model ?? DEFAULT_ASR_MODEL;
 
-    const models = createAudioConfig(options.vad);
+    const models = createAudioConfig(options.modelsPath, options.vad);
     const bufferSeconds = options.bufferSeconds ?? DEFAULT_BUFFER_SECONDS;
     this.bufferCapacity = Math.ceil(bufferSeconds * SAMPLE_RATE);
     this.buffer = new CircularBuffer(this.bufferCapacity);
@@ -71,7 +71,7 @@ export class NativeASR {
     if (!model) throw new Error(`Unsupported ASR model: ${options.model}`);
     if (options.mode === 'events' && !model.events)
       throw new Error('Selected ASR model does not support audio events');
-    this.recognizer = model.create();
+    this.recognizer = model.create(options.modelsPath);
     this.eventWindow = Math.round((options.eventWindowSeconds ?? 5) * SAMPLE_RATE);
     if (options.mode !== 'events') this.vad = new Vad(models.vad, bufferSeconds);
     this.windowSize = models.vad.tenVad?.windowSize ?? VAD_WINDOW_SIZE;
@@ -228,9 +228,13 @@ export class ASR implements AsyncDisposable {
   private readonly backend: NativeASR | ProcessASR;
   private readonly gate?: WakeGate;
 
-  constructor(options: ASROptions = {}) {
+  constructor(options: ASROptions) {
     this.backend = process.versions.electron ? new ProcessASR(options) : new NativeASR(options);
-    if (options.wake) this.gate = new WakeGate(this.backend, options.wake);
+    if (options.wake)
+      this.gate = new WakeGate(this.backend, {
+        ...options.wake,
+        modelsPath: options.modelsPath,
+      });
   }
 
   async setModel(model: ASRModelId): Promise<void> {
@@ -319,11 +323,12 @@ function validateOptions(options: ASROptions): void {
 }
 
 export async function createASR(
-  options: ASROptions = {},
-  prepare: InstallModelsOptions = {},
+  options: ASROptions,
+  prepare: Omit<InstallModelsOptions, 'modelsPath'> = {},
 ): Promise<ASR> {
   await installModels({ ...prepare, ...options });
-  if (options.wake && !options.wake.modelPath) await installKWSModels(prepare);
+  if (options.wake && !options.wake.modelPath)
+    await installKWSModels({ ...prepare, modelsPath: options.modelsPath });
   const asr = new ASR(options);
   try {
     await asr.flush();

@@ -46,5 +46,5 @@ export type CielSession = RuntimeSession;
 export type CielStatus = RuntimeStatus;
 export type OpenSessionOptions = OpenRuntimeSessionOptions;
 
-export type { InvestigateOptions, InvestigationResult } from '@cieljs/runtime';
+export type { InvestigateOptions, InvestigationResult, InvestigationTarget } from '@cieljs/runtime';
 export type { SessionSources } from '@cieljs/runtime';

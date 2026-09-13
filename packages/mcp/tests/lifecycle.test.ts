@@ -8,6 +8,7 @@ const { clients, connect, listTools, close } = vi.hoisted(() => ({
   listTools: vi.fn(async () => ({ tools: [] })),
   close: vi.fn(async (_name: string) => {}),
 }));
+const options = { cwd: '.', configFile: 'mcp.json' };
 vi.mock('@modelcontextprotocol/client', () => ({
   Client: class {
     constructor(private readonly options: { name: string }) {
@@ -41,12 +42,12 @@ test.each(['connect', 'listTools'])('%s 失败时回收尚未登记的客户端'
   const failure = new Error(stage);
   const method = stage === 'connect' ? connect : listTools;
   method.mockRejectedValueOnce(failure);
-  await expect(Mcp.open()).rejects.toBe(failure);
+  await expect(Mcp.open(options)).rejects.toBe(failure);
   expect(close).toHaveBeenCalledExactlyOnceWith('ciel:first');
 });
 
 test('逆序关闭且失败不阻断其他客户端，重复调用共享 Promise', async () => {
-  const mcp = await Mcp.open();
+  const mcp = await Mcp.open(options);
   expect(close).not.toHaveBeenCalled();
   const failure = new Error('close');
   close.mockRejectedValueOnce(failure);
@@ -63,7 +64,7 @@ test('第二个服务启动失败时回收全部客户端，并保留清理错�
   const closingError = new Error('close');
   listTools.mockResolvedValueOnce({ tools: [] }).mockRejectedValueOnce(openingError);
   close.mockRejectedValueOnce(closingError);
-  await expect(Mcp.open()).rejects.toMatchObject({
+  await expect(Mcp.open(options)).rejects.toMatchObject({
     name: 'SuppressedError',
     error: closingError,
     suppressed: openingError,
@@ -72,7 +73,7 @@ test('第二个服务启动失败时回收全部客户端，并保留清理错�
 });
 
 test('重复关闭会等待正在进行的客户端清理', async () => {
-  const mcp = await Mcp.open();
+  const mcp = await Mcp.open(options);
   let release = () => {};
   const pending = new Promise<void>(resolve => {
     release = resolve;

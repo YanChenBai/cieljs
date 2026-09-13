@@ -2,6 +2,7 @@ import { RPCHandler } from '@orpc/server/message-port';
 import { ipcMain, type BrowserWindow, type IpcMainEvent, type MessagePortMain } from 'electron';
 
 import { createWatchApplication } from './application.ts';
+import { isInvestigationWindowContents } from './investigation-window.ts';
 
 export const WATCH_RPC_CHANNEL = 'watch-blive:rpc';
 
@@ -41,11 +42,12 @@ export async function registerWatchBliveIpc(mainWindow: BrowserWindow) {
 
   // 仅主窗口的主 frame 可建立连接，直播 guest 不能访问控制路由。
   const connect = (event: IpcMainEvent) => {
+    const isMainWindow = !mainWindow.isDestroyed() && event.sender === mainWindow.webContents;
+    const isInvestigationWindow = isInvestigationWindowContents(event.sender);
     const trusted =
-      !mainWindow.isDestroyed() &&
-      event.sender === mainWindow.webContents &&
-      event.senderFrame === mainWindow.webContents.mainFrame &&
-      event.senderFrame.url === mainWindow.webContents.getURL();
+      (isMainWindow || isInvestigationWindow) &&
+      event.senderFrame === event.sender.mainFrame &&
+      event.senderFrame.url === event.sender.getURL();
     if (!trusted || event.ports.length !== 1) {
       for (const port of event.ports) port.close();
       return;

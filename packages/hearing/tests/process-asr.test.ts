@@ -41,7 +41,7 @@ if (command.type === 'init') {
 send({ type: 'ack', id: command.id });
 if (command.type === 'close') break;`);
   const asr = new ProcessASR(
-    { vad: { minSilenceDuration: 0.8, maxSpeechDuration: 15 } },
+    { modelsPath: '/models', vad: { minSilenceDuration: 0.8, maxSpeechDuration: 15 } },
     'asr',
     url,
   );
@@ -61,7 +61,7 @@ if (command.type === 'flush') {
 }
 send({ type: 'ack', id: command.id });
 if (command.type === 'close') break;`);
-  const asr = new ProcessASR({}, 'asr', url);
+  const asr = new ProcessASR({ modelsPath: '/models' }, 'asr', url);
   const results: unknown[] = [];
   const wakes: unknown[] = [];
   asr.on('result', result => results.push(result));
@@ -79,7 +79,7 @@ if (command.type === 'close') break;`);
 
 test('启动失败和意外退出拒绝请求，并能完成关闭', async () => {
   const url = await worker('process.exit(1);');
-  const asr = new ProcessASR({}, 'asr', url);
+  const asr = new ProcessASR({ modelsPath: '/models' }, 'asr', url);
   await expect(asr.flush()).rejects.toThrow('exited');
   await expect(asr.close()).rejects.toThrow('exited');
 });

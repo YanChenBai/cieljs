@@ -45,6 +45,7 @@ import type { SpeechEndEvent } from '../src/types.ts';
 test('speechend publishes a frozen snapshot with the matching ASR result', async () => {
   const perception = createPerception({
     asr: {
+      modelsPath: '/models',
       speaker: [{ name: 'alice', file: 'alice.voiceprint' }],
     },
     vision: false,
@@ -67,6 +68,7 @@ test('speechend publishes a frozen snapshot with the matching ASR result', async
   const messages = await event.snapshot.compose();
 
   expect(asr.options).toEqual({
+    modelsPath: '/models',
     speaker: [{ name: 'alice', file: 'alice.voiceprint' }],
   });
   expect(event.result).toMatchObject({ content: '测试内容', speaker: 'alice' });
@@ -89,7 +91,7 @@ test('speechend publishes a frozen snapshot with the matching ASR result', async
 });
 
 test('未传入 context 时使用包内默认听觉提示词', async () => {
-  const perception = createPerception({ vision: false });
+  const perception = createPerception({ asr: { modelsPath: '/models' }, vision: false });
   const asr = perception.asr as unknown as InstanceType<typeof MockASR>;
   const published = new Promise<SpeechEndEvent>(resolve => perception.on('speechend', resolve));
   const result = {
@@ -119,7 +121,7 @@ test('未传入 context 时使用包内默认听觉提示词', async () => {
 });
 
 test('speechend still publishes without recognized text and close is idempotent', async () => {
-  const perception = createPerception({ vision: false });
+  const perception = createPerception({ asr: { modelsPath: '/models' }, vision: false });
   const asr = perception.asr as unknown as InstanceType<typeof MockASR>;
   const published = new Promise<SpeechEndEvent>(resolve => perception.on('speechend', resolve));
 

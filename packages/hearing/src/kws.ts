@@ -11,7 +11,7 @@ import sherpaOnnx from 'sherpa-onnx-node';
 import type { KeywordSpotter, OnlineStream } from 'sherpa-onnx-node';
 
 import { AudioNormalizer } from './audio.ts';
-import { resolveModelsPath, SAMPLE_RATE } from './constants.ts';
+import { SAMPLE_RATE } from './constants.ts';
 import { installFile, type InstallModelsOptions } from './download.ts';
 import { ProcessASR } from './process-asr.ts';
 import type { ASREventMap, ASRSegment, Unsubscribe } from './types.ts';
@@ -25,6 +25,7 @@ const FILES = {
 } as const;
 
 export interface KWSOptions {
+  modelsPath: string;
   keywords: readonly (string | { text: string; tokens: readonly string[] })[];
   /** 使用本地 sherpa 模型文件时跳过默认模型下载。 */
   modelPath?: string;
@@ -61,7 +62,7 @@ export class NativeKWS {
       throw new Error('Invalid KWS threshold');
     if (!Number.isFinite(options.score ?? 1) || (options.score ?? 1) <= 0)
       throw new Error('Invalid KWS score');
-    const directory = options.modelPath ?? path.join(resolveModelsPath(), 'kws', MODEL);
+    const directory = options.modelPath ?? path.join(options.modelsPath, 'kws', MODEL);
     for (const file of Object.values(FILES)) {
       if (!isFile(path.join(directory, file)))
         throw new Error(`Missing KWS model file: ${file}. Run createKWS() to prepare models.`);
@@ -197,9 +198,9 @@ export class KWS implements AsyncDisposable {
 
 export async function createKWS(
   options: KWSOptions,
-  prepare: InstallModelsOptions = {},
+  prepare: Omit<InstallModelsOptions, 'modelsPath'> = {},
 ): Promise<KWS> {
-  if (!options.modelPath) await installKWSModels(prepare);
+  if (!options.modelPath) await installKWSModels({ ...prepare, modelsPath: options.modelsPath });
   const kws = new KWS(options);
   try {
     await kws.flush();
@@ -210,8 +211,8 @@ export async function createKWS(
   }
 }
 
-export async function installKWSModels(options: InstallModelsOptions = {}): Promise<string> {
-  const directory = path.join(resolveModelsPath(), 'kws', MODEL);
+export async function installKWSModels(options: InstallModelsOptions): Promise<string> {
+  const directory = path.join(options.modelsPath, 'kws', MODEL);
   const missing = Object.values(FILES).filter(
     file => options.force || !isFile(path.join(directory, file)),
   );

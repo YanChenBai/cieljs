@@ -3,10 +3,12 @@ import { KWS } from './kws.ts';
 import type { KWSOptions, WakeEvent } from './kws.ts';
 import type { ASRSegment, ASRStream } from './types.ts';
 
-export interface WakeOptions extends KWSOptions {
+export interface WakeOptions extends Omit<KWSOptions, 'modelsPath'> {
   preRollMs?: number;
   maxListenMs?: number;
 }
+
+type ResolvedWakeOptions = WakeOptions & Pick<KWSOptions, 'modelsPath'>;
 
 /** 唤醒只控制送入 ASR 的音频；KWS 持续监听并独立发出事件。 */
 export class WakeGate {
@@ -21,7 +23,7 @@ export class WakeGate {
 
   constructor(
     private readonly asr: Pick<ASRStream, 'write' | 'flush' | 'on' | 'close'>,
-    private readonly options: WakeOptions,
+    private readonly options: ResolvedWakeOptions,
   ) {
     const preRollMs = options.preRollMs ?? 1_500;
     const maxListenMs = options.maxListenMs ?? 15_000;

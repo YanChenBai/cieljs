@@ -10,7 +10,7 @@ export interface QwenEmbeddingOptions {
    *
    * 相对路径相对于当前工作目录。
    */
-  cacheDir?: string;
+  cacheDir: string;
 
   /**
    * 最终输出向量维度。

@@ -15,7 +15,12 @@ import type { BilibiliApi } from './bilibili/api.ts';
 import type { LivePage } from './bilibili/live-page.ts';
 import type { LiveMediaOptions } from './media/live-media.ts';
 import { createPerceptionContext } from './prompts/index.ts';
-import { createWatchBlive, type WatchBlive, type WatchWakeOptions } from './runtime.ts';
+import {
+  createWatchBlive,
+  type WatchBlive,
+  type WatchBliveOptions,
+  type WatchWakeOptions,
+} from './runtime.ts';
 import { loadVoiceprints } from './voiceprints.ts';
 
 const mocks = vi.hoisted(() => ({
@@ -74,7 +79,7 @@ let faux: ReturnType<typeof registerFauxProvider>;
 function setup(
   devtools?: DevtoolsHost,
   wake?: WatchWakeOptions,
-  perceptionOptions?: PerceptionOptions,
+  perceptionOptions?: WatchBliveOptions['perception'],
   thinkingLevel?: ThinkingLevel,
 ) {
   faux = registerFauxProvider();
@@ -119,11 +124,12 @@ function setup(
     streamerDynamics: vi.fn().mockResolvedValue([]),
     streamerVideos: vi.fn().mockResolvedValue([]),
   };
-  vi.mocked(createPerception).mockImplementation((options = {}) => {
-    mocks.perceptionOptions.push(options);
+  vi.mocked(createPerception).mockImplementation(options => {
+    mocks.perceptionOptions.push(options!);
     return perception;
   });
   runtime = createWatchBlive({
+    dataDir: 'C:\\watch-blive',
     devtools,
     storage,
     model: faux.getModel(),
@@ -301,6 +307,7 @@ describe('观看生命周期', () => {
       expect(mocks.perceptionOptions.at(-1)?.asr).toEqual({
         model: 'sensevoice-small',
         bufferSeconds: 30,
+        modelsPath: 'C:\\watch-blive\\models',
         speaker: [{ name: '弥生', file: '/voices/弥生.voiceprint' }],
       });
       await runtime.stop();
@@ -458,10 +465,10 @@ describe('观看生命周期', () => {
     const investigation = Promise.withResolvers<unknown>();
     mocks.investigate.mockReturnValue(investigation.promise);
     const starting = runtime.start({ mode: { type: 'explore', areaId: 1 } });
-    const rejected = expect(starting).rejects.toThrow();
+    const rejected = starting.catch(error => error);
     await vi.waitFor(() => expect(mocks.investigate).toHaveBeenCalled());
     expect(mocks.investigate.mock.calls[0][0]).toMatchObject({
-      spaceId: 'bilibili:exploration',
+      target: { type: 'global' },
       crossSpace: true,
     });
     const stopping = runtime.stop();
@@ -472,7 +479,7 @@ describe('观看生命周期', () => {
         content: [{ type: 'text', text: '{"roomId":123,"reason":"聊天"}' }],
       },
     });
-    await rejected;
+    expect(await rejected).toBeInstanceOf(Error);
     await stopping;
     expect(page.open).not.toHaveBeenCalled();
   });

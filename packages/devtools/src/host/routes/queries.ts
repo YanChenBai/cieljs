@@ -3,6 +3,7 @@ import * as z from 'zod';
 
 import type { TraceEntry } from '../../protocol/index.ts';
 import type { DevtoolsHost } from '../host.ts';
+import type { DevtoolsRouterOptions } from '../router.ts';
 
 // 游标采用记录序号，翻页期间新写入的记录不会挤占历史页的位置。
 const pageSchema = z.object({
@@ -12,19 +13,23 @@ const pageSchema = z.object({
 });
 const idSchema = z.object({ id: z.string().min(1).max(200) });
 
-export function createRunRoutes(host: DevtoolsHost) {
-  return { list: os.input(pageSchema).handler(({ input }) => listRecords(host, 'run', input)) };
+export function createRunRoutes(host: DevtoolsHost, options: DevtoolsRouterOptions = {}) {
+  return {
+    list: os.input(pageSchema).handler(({ input }) => listRecords(host, 'run', input, options)),
+  };
 }
 
-export function createStepRoutes(host: DevtoolsHost) {
-  return { list: os.input(pageSchema).handler(({ input }) => listRecords(host, 'step', input)) };
+export function createStepRoutes(host: DevtoolsHost, options: DevtoolsRouterOptions = {}) {
+  return {
+    list: os.input(pageSchema).handler(({ input }) => listRecords(host, 'step', input, options)),
+  };
 }
 
-export function createEntryRoutes(host: DevtoolsHost) {
+export function createEntryRoutes(host: DevtoolsHost, options: DevtoolsRouterOptions = {}) {
   return {
     list: os
       .input(pageSchema.extend({ runId: z.string().optional() }))
-      .handler(({ input }) => listRecords(host, 'entry', input)),
+      .handler(({ input }) => listRecords(host, 'entry', input, options)),
     get: os.input(idSchema).handler(({ input }) => readEntry(host, input.id)),
   };
 }
@@ -41,13 +46,18 @@ function listRecords(
   host: DevtoolsHost,
   category: 'run' | 'step' | 'entry',
   input: { cursor?: number; limit: number; runId?: string; sessionId?: string },
+  options: DevtoolsRouterOptions,
 ) {
-  return host.store.list<TraceEntry>(category, {
-    before: input.cursor,
-    limit: input.limit,
-    runId: input.runId,
-    sessionId: input.sessionId,
-  });
+  if (input.sessionId && options.session && !options.session(input.sessionId)) return [];
+
+  return host.store
+    .list<TraceEntry>(category, {
+      before: input.cursor,
+      limit: input.limit,
+      runId: input.runId,
+      sessionId: input.sessionId,
+    })
+    .then(entries => entries.filter(entry => options.session?.(entry.sessionId) ?? true));
 }
 
 async function readEntry(host: DevtoolsHost, id: string) {

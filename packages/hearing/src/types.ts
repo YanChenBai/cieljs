@@ -10,6 +10,7 @@ export interface SpeakerProfile {
 }
 
 export interface ASROptions {
+  modelsPath: string;
   wake?: WakeOptions;
   model?: ASRModelId;
   mode?: 'transcription' | 'events';

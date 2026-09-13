@@ -2,14 +2,16 @@ import { os, ORPCError } from '@orpc/server';
 
 import type { DevtoolsUpdate, TraceEntry } from '../../protocol/index.ts';
 import type { DevtoolsHost } from '../host.ts';
+import type { DevtoolsRouterOptions } from '../router.ts';
 
-export function createUpdatesProcedure(host: DevtoolsHost) {
-  return os.handler(({ signal }) => subscribeUpdates(host, signal));
+export function createUpdatesProcedure(host: DevtoolsHost, options: DevtoolsRouterOptions = {}) {
+  return os.handler(({ signal }) => subscribeUpdates(host, options, signal));
 }
 
 /** 先订阅再读快照，读取期间到达的变更留在队列中，避免初始化丢事件。 */
 async function* subscribeUpdates(
   host: DevtoolsHost,
+  options: DevtoolsRouterOptions,
   requestSignal?: AbortSignal,
 ): AsyncGenerator<DevtoolsUpdate> {
   // 宿主关闭与客户端取消都必须唤醒等待中的订阅。
@@ -21,8 +23,12 @@ async function* subscribeUpdates(
   const changed = new Map<string, TraceEntry>();
   const steps = new Map<string, TraceEntry>();
   const notify = (update: DevtoolsUpdate) => {
-    for (const entry of update.entries) changed.set(entry.id, entry);
-    for (const step of update.steps) steps.set(step.id, step);
+    for (const entry of update.entries) {
+      if (options.session?.(entry.sessionId) ?? true) changed.set(entry.id, entry);
+    }
+    for (const step of update.steps) {
+      if (options.session?.(step.sessionId) ?? true) steps.set(step.id, step);
+    }
     dirty = true;
     wake?.();
   };
@@ -33,11 +39,13 @@ async function* subscribeUpdates(
     checkHealth(host);
     const initial = host.usage();
     let sent = JSON.stringify(initial);
+    const initialEntries = await host.store.list<TraceEntry>('entry', { limit: 300 });
+    const initialSteps = await host.store.list<TraceEntry>('step', { limit: 300 });
     yield {
-      entries: await host.store.list<TraceEntry>('entry', { limit: 300 }),
-      steps: await host.store.list<TraceEntry>('step', { limit: 300 }),
+      entries: initialEntries.filter(entry => options.session?.(entry.sessionId) ?? true),
+      steps: initialSteps.filter(step => options.session?.(step.sessionId) ?? true),
       usage: initial,
-      sessions: host.sessions(),
+      sessions: visibleSessions(host, options),
     };
     while (!signal.aborted) {
       checkHealth(host);
@@ -56,7 +64,7 @@ async function* subscribeUpdates(
         const current = JSON.stringify(usage);
         if (entries.length || stepEntries.length || current !== sent) {
           sent = current;
-          yield { entries, steps: stepEntries, usage, sessions: host.sessions() };
+          yield { entries, steps: stepEntries, usage, sessions: visibleSessions(host, options) };
         }
       } else await pending;
     }
@@ -64,6 +72,10 @@ async function* subscribeUpdates(
     unsubscribe();
     signal.removeEventListener('abort', abort);
   }
+}
+
+function visibleSessions(host: DevtoolsHost, options: DevtoolsRouterOptions) {
+  return host.sessions().filter(session => options.session?.(session.id) ?? true);
 }
 
 function checkHealth(host: DevtoolsHost) {

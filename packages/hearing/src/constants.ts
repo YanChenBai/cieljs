@@ -1,16 +1,10 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 export const SAMPLE_RATE = 16_000;
 export const VAD_WINDOW_SIZE = 256;
 export const DEFAULT_BUFFER_SECONDS = 30;
 export const DEFAULT_SPEAKER_THRESHOLD = 0.6;
 export const DEFAULT_MAX_SPEAKERS = 8;
-
-export const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
-
-export const MODELS_DIR = 'models' as const;
-export const VOICEPRINTS_DIR = 'voiceprints' as const;
 
 export const ASR_DIR = 'asr' as const;
 export const VAD_DIR = 'vad' as const;
@@ -26,34 +20,22 @@ export const SPEAKER_MODEL = 'model.onnx' as const;
 
 export const TOKENIZER_FILES = ['merges.txt', 'tokenizer_config.json', 'vocab.json'] as const;
 
-export function resolveDataPath(): string {
-  return process.env.CIEL_DATA_DIR?.trim() || path.join(process.cwd(), '.ciel');
+export function resolveAsrPath(modelsPath: string): string {
+  return path.join(modelsPath, ASR_DIR, ASR_MODEL_SUBDIR);
 }
 
-export function resolveModelsPath(): string {
-  return path.join(resolveDataPath(), MODELS_DIR);
+export function resolveVadPath(modelsPath: string): string {
+  return path.join(modelsPath, VAD_DIR, VAD_MODEL);
 }
 
-export function resolveVoiceprintsPath(): string {
-  return path.join(resolveDataPath(), VOICEPRINTS_DIR);
+export function resolveSpeakerPath(modelsPath: string): string {
+  return path.join(modelsPath, SPEAKER_DIR, SPEAKER_MODEL);
 }
 
-export function resolveAsrPath(): string {
-  return path.join(resolveModelsPath(), ASR_DIR, ASR_MODEL_SUBDIR);
-}
-
-export function resolveVadPath(): string {
-  return path.join(resolveModelsPath(), VAD_DIR, VAD_MODEL);
-}
-
-export function resolveSpeakerPath(): string {
-  return path.join(resolveModelsPath(), SPEAKER_DIR, SPEAKER_MODEL);
-}
-
-export function resolveModelPaths() {
+export function resolveModelPaths(modelsPath: string) {
   return {
-    asr: resolveAsrPath(),
-    vad: resolveVadPath(),
-    speaker: resolveSpeakerPath(),
+    asr: resolveAsrPath(modelsPath),
+    vad: resolveVadPath(modelsPath),
+    speaker: resolveSpeakerPath(modelsPath),
   } as const;
 }

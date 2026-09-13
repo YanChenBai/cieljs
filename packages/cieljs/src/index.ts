@@ -6,6 +6,7 @@ export type {
   CielStatus,
   DefineCielOptions,
   InvestigateOptions,
+  InvestigationTarget,
   InvestigationResult,
   InvestigationStorageOptions,
   MemoryStorageOptions,

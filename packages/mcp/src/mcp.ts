@@ -24,7 +24,7 @@ export class Mcp implements McpRuntime, AsyncDisposable {
 
   private constructor(private readonly cwd: string) {}
 
-  static async open(options: McpOptions = {}): Promise<Mcp> {
+  static async open(options: McpOptions): Promise<Mcp> {
     const loaded = await loadMcpConfig(options);
     await using disposables = new AsyncDisposableStack();
     const mcp = disposables.use(new Mcp(loaded.cwd));
@@ -105,7 +105,7 @@ export class Mcp implements McpRuntime, AsyncDisposable {
   }
 }
 
-export async function createMcp(options: McpOptions = {}): Promise<Mcp> {
+export async function createMcp(options: McpOptions): Promise<Mcp> {
   return Mcp.open(options);
 }
 

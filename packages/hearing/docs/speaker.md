@@ -8,7 +8,7 @@
 magic "CIELVP01" + uint32 维度 + float32[] embedding
 ```
 
-读取时重新归一化，维度必须与 speaker 模型一致。文件放在包目录下的 `voiceprints/`，路径会被限制在该目录内，禁止逃逸到目录之外。
+读取时重新归一化，维度必须与 speaker 模型一致。声纹文件放在哪里由调用方决定，`SpeakerProfile.file` 传入完整路径。
 
 ## 注册说话人
 
@@ -16,6 +16,7 @@ magic "CIELVP01" + uint32 维度 + float32[] embedding
 
 ```ts
 const asr = new ASR({
+  modelsPath: '/path/to/models',
   speaker: [{ name: 'alice', file: 'alice.voiceprint' }],
 });
 ```

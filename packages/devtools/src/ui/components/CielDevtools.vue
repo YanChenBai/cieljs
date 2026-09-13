@@ -1,16 +1,15 @@
 <script setup lang="ts">
 import { Button, Tabs } from '@vuetify/v0/components';
-import { computed, onMounted, shallowRef, watch } from 'vue';
+import { computed, shallowRef, watch } from 'vue';
 
 import type { DevtoolsClient } from '../../client/index.ts';
 import { useDevtools } from '../composables/use-devtools.ts';
-import { vFollowScroll } from '../directives/follow-scroll.ts';
 import type { MessageRenderers } from '../message-renderers.ts';
 import type { ToolRenderers } from '../tool-renderers.ts';
 import { indexToolCalls, conversationEntries, type ToolCallRecord } from '../utils/tool-calls.ts';
 import ContentRenderer from './content/ContentRenderer.vue';
 import JsonView from './content/JsonView.vue';
-import MessageView from './conversation/MessageView.vue';
+import AgentConversation from './conversation/AgentConversation.vue';
 import ExecutionView from './execution/ExecutionView.vue';
 import SessionStatusBar from './session/SessionStatusBar.vue';
 import SessionToolbar from './session/SessionToolbar.vue';
@@ -45,16 +44,6 @@ const {
 } = useDevtools(props.client);
 
 const query = shallowRef('');
-const conversation = shallowRef<HTMLElement>();
-
-/** 滚回最新消息；落到底部后 vFollowScroll 会自己恢复跟随。 */
-function jumpToBottom() {
-  const element = conversation.value;
-  if (!element) return;
-
-  element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
-}
-
 // 复用上一次的索引：流式期间 entries 频繁变化，Map 实例不变才能让未受影响的消息卡片跳过重渲染。
 let indexed: Map<string, ToolCallRecord> | undefined;
 const toolCalls = computed(() => (indexed = indexToolCalls(entries.value, indexed)));
@@ -75,33 +64,6 @@ watch(
   },
   { immediate: true },
 );
-
-/**
- * 进入对话面板时落到最新消息。面板切走期间内容仍在增长，回来时浏览器又会把滚动位置
- * 恢复成旧值，所以连续几帧校正；用户之前主动滚离底部时保持原位，不打扰。
- */
-function stickToBottom() {
-  const element = conversation.value;
-  if (!element || element.hasAttribute('data-detached')) return;
-
-  let remaining = 6;
-  const step = () => {
-    const target = conversation.value;
-    if (!target) return;
-
-    target.scrollTop = target.scrollHeight;
-    if (--remaining > 0) requestAnimationFrame(step);
-  };
-  step();
-}
-
-onMounted(() => {
-  if (tab.value === 'conversation') stickToBottom();
-});
-
-watch(tab, value => {
-  if (value === 'conversation') stickToBottom();
-});
 </script>
 
 <template>
@@ -163,43 +125,29 @@ watch(tab, value => {
         </ExecutionView>
       </Tabs.Panel>
       <Tabs.Panel value="conversation" class="dt-conversation-panel">
-        <div
+        <AgentConversation
           :key="selectedSessionId"
-          ref="conversation"
-          v-follow-scroll="autoScroll"
-          class="dt-conversation"
+          :client="client"
+          :messages="messages"
+          :tool-calls="toolCalls"
+          :auto-scroll="autoScroll"
+          :active="tab === 'conversation'"
+          empty-text="开始观看后，对话会出现在这里。"
+          :tool-renderers="toolRenderers"
+          :message-renderers="messageRenderers"
         >
-          <p v-if="!messages.length" class="dt-empty">开始观看后，对话会出现在这里。</p>
-          <MessageView
-            v-for="entry in messages"
-            :key="entry.id"
-            :client="client"
-            :entry="entry"
-            :tool-calls="toolCalls"
-            :tool-renderers="toolRenderers"
-            :message-renderers="messageRenderers"
-          >
-            <template #content="scope">
-              <slot name="content" v-bind="scope">
-                <ContentRenderer
-                  :value="scope.value"
-                  :final="entry.status !== 'running'"
-                  :client="client"
-                  :tool-calls="toolCalls"
-                  :tool-renderers="toolRenderers"
-                />
-              </slot>
-            </template>
-          </MessageView>
-        </div>
-        <Button.Root
-          class="dt-button dt-jump-bottom"
-          aria-label="返回底部"
-          title="返回底部"
-          @click="jumpToBottom"
-        >
-          返回底部
-        </Button.Root>
+          <template #content="scope">
+            <slot name="content" v-bind="scope">
+              <ContentRenderer
+                :value="scope.value"
+                :final="scope.entry.status !== 'running'"
+                :client="client"
+                :tool-calls="toolCalls"
+                :tool-renderers="toolRenderers"
+              />
+            </slot>
+          </template>
+        </AgentConversation>
       </Tabs.Panel>
       <SessionStatusBar :session="selectedSession" />
     </Tabs.Root>

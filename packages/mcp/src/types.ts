@@ -84,18 +84,14 @@ export interface McpOptions {
   /**
    * Ciel 项目根目录。
    *
-   * 默认 process.cwd()。
    */
-  cwd?: string;
+  cwd: string;
 
   /**
    * MCP 配置路径。
    *
-   * 默认：
-   *
-   * .ciel/mcp.json
    */
-  configFile?: string;
+  configFile: string;
 
   /**
    * 配置不存在时是否报错。

@@ -30,10 +30,13 @@
 使用 `@cieljs/runtime` 时，传入已连接的 MCP 实例：
 
 ```ts
-import { defineCiel } from '@cieljs/runtime';
+import { defineCiel } from 'cieljs';
 import { createMcp } from '@cieljs/mcp';
 
-await using mcp = await createMcp();
+await using mcp = await createMcp({
+  cwd: process.cwd(),
+  configFile: '.ciel/mcp.json',
+});
 
 const ciel = defineCiel({
   // ...
@@ -49,7 +52,10 @@ await ciel.close();
 ```ts
 import { createMcp } from '@cieljs/mcp';
 
-const mcp = await createMcp();
+const mcp = await createMcp({
+  cwd: process.cwd(),
+  configFile: '.ciel/mcp.json',
+});
 
 const tools = [...mcp.tools];
 
@@ -160,7 +166,7 @@ MCP Server 默认继承 Ciel 项目的 cwd，可用 `cwd` 指定相对路径；`
 
 ## 配置位置与可选性
 
-默认从 `.ciel/mcp.json` 加载，可以用 `createMcp({ configFile, cwd })` 指定其他位置：
+MCP 不决定配置目录，调用方必须显式传入项目目录和配置文件：
 
 ```ts
 const mcp = await createMcp({

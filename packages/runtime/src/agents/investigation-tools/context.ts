@@ -1,19 +1,26 @@
 import type { MemoryManager } from '@cieljs/memory';
 import type { SessionManager } from '@cieljs/session';
 
+import type { InvestigationTarget } from '../../types.ts';
+
 export interface InvestigationToolOptions {
   sessionManager: SessionManager;
   memoryManager: MemoryManager;
-  spaceId: string;
+  investigationSessionId: string;
+  target: InvestigationTarget;
+  memoryAccess?: 'read' | 'read-write';
   crossSpace?: boolean;
   resolveSources: () => string[];
 }
 
 export function createInvestigationToolContext(options: InvestigationToolOptions) {
+  const targetSpaceId = options.target.type === 'space' ? options.target.spaceId : 'global';
+
   return {
     options,
-    sessionSpace: options.sessionManager.space(options.spaceId),
-    memorySpace: options.memoryManager.space(options.spaceId),
+    targetSpaceId,
+    sessionSpace: options.sessionManager.space(targetSpaceId),
+    memorySpace: options.memoryManager.space(targetSpaceId),
   };
 }
 export type InvestigationToolContext = ReturnType<typeof createInvestigationToolContext>;

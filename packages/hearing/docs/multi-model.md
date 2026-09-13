@@ -4,7 +4,11 @@
 import { ASR_MODELS, createASR, createKWS } from '@cieljs/hearing';
 
 console.log(Object.keys(ASR_MODELS));
-await using asr = await createASR({ model: 'sensevoice-small', speaker: false });
+await using asr = await createASR({
+  modelsPath: '/path/to/models',
+  model: 'sensevoice-small',
+  speaker: false,
+});
 asr.on('result', result => console.log(result));
 await asr.write({ data: pcm, sampleRate: 48_000, channels: 2, startAt: new Date() });
 await asr.flush();
@@ -27,7 +31,11 @@ PCM 为交错 s16le；省略格式参数时为 16 kHz 单声道。重采样保�
 ## 独立 KWS 事件
 
 ```ts
-await using kws = await createKWS({ keywords: ['你好夏尔'], cooldownMs: 1500 });
+await using kws = await createKWS({
+  modelsPath: '/path/to/models',
+  keywords: ['你好夏尔'],
+  cooldownMs: 1500,
+});
 const unsubscribe = kws.on('wake', ({ keyword, at }) => {
   console.log('唤醒', keyword, at);
 });
@@ -44,9 +52,14 @@ unsubscribe();
 
 ```ts
 await using asr = await createASR({
+  modelsPath: '/path/to/models',
   model: 'sensevoice-small',
   speaker: false,
-  wake: { keywords: ['你好夏尔'], preRollMs: 1500, maxListenMs: 15000 },
+  wake: {
+    keywords: ['你好夏尔'],
+    preRollMs: 1500,
+    maxListenMs: 15000,
+  },
 });
 asr.on('wake', event => console.log(event));
 asr.on('result', result => console.log(result.content));
@@ -57,7 +70,7 @@ await asr.write({ data: pcm16k, startAt: new Date() });
 
 ## 下载和扩展
 
-资源放在 `CIEL_DATA_DIR/models`，默认 `cwd/.ciel/models`。Watch Blive 开发时使用 cwd，打包后显式设置为 `homedir/.ciel`。所选模型的注册项维护资源和创建函数；共享 VAD 与 speaker 按需下载。`speaker: false` 跳过声纹模型，events 模式跳过 VAD。下载使用临时文件和重试；同进程相同目标的下载合并。
+资源放在调用方通过 `modelsPath` 指定的目录。Watch Blive 与 Chorus 在各自的应用组合层决定实际路径。所选模型的注册项维护资源和创建函数；共享 VAD 与 speaker 按需下载。`speaker: false` 跳过声纹模型，events 模式跳过 VAD。下载使用临时文件和重试；同进程相同目标的下载合并。
 
 模型资源准备完成后可调用 `await asr.setModel(model)`，旧模型先完成尾段，随后继续使用原有事件订阅与声纹追踪。Electron 中切换和音频写入按 worker 命令顺序执行。Watch Blive 可在运行配置中实时切换，缺少资源时下载完成后应用。
 

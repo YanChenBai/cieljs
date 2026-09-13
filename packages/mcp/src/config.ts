@@ -1,10 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { isAbsolute, resolve, join } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 
 import type { McpConfig, McpOptions, McpServerConfig } from './types.ts';
-
-export const DEFAULT_MCP_CONFIG_FILE = join(homedir(), '.ciel', 'mcp.json');
 
 export interface LoadedMcpConfig {
   config: McpConfig;
@@ -12,10 +9,10 @@ export interface LoadedMcpConfig {
   configFile: string;
 }
 
-export async function loadMcpConfig(options: McpOptions = {}): Promise<LoadedMcpConfig> {
-  const cwd = resolve(options.cwd ?? process.cwd());
+export async function loadMcpConfig(options: McpOptions): Promise<LoadedMcpConfig> {
+  const cwd = resolve(options.cwd);
 
-  const configFile = resolveConfigFile(cwd, options.configFile ?? DEFAULT_MCP_CONFIG_FILE);
+  const configFile = resolveConfigFile(cwd, options.configFile);
 
   let text: string;
 

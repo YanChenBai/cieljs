@@ -41,8 +41,27 @@ export interface OpenRuntimeSessionOptions {
   sources?: SessionSources;
 }
 
-export interface InvestigateOptions extends OpenRuntimeSessionOptions {
+export type InvestigationTarget =
+  | { type: 'global' }
+  | {
+      type: 'space';
+      spaceId: string;
+      /** 需要完整分析的普通 Session；与 Investigation 自身的 sessionId 无关。 */
+      sessionId?: string;
+    };
+
+export interface InvestigateOptions {
+  /** 续接 Investigation 自身的独立会话。 */
+  sessionId?: string;
+  target: InvestigationTarget;
   question: string | AgentMessage[];
+  /** 默认只读；写权限始终限制在 target 指定的层级。 */
+  memoryAccess?: 'read' | 'read-write';
+  /** 单次调查可以覆盖宿主默认提示词，避免不同调查用途互相污染。 */
+  systemPrompt?: string;
+  /** 允许只读检索目标之外的 Space。 */
+  crossSpace?: boolean;
+  sources?: SessionSources;
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent, context: { tools: AgentTool[]; model: Model<Api> }) => void;
 }

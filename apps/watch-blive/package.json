@@ -23,6 +23,7 @@
     "@cieljs/agent-kit": "workspace:*",
     "@cieljs/devtools": "workspace:*",
     "@cieljs/hearing": "workspace:*",
+    "@cieljs/investigation": "workspace:*",
     "@cieljs/mcp": "workspace:*",
     "@cieljs/memory": "workspace:*",
     "@cieljs/model-kit": "workspace:*",

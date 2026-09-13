@@ -243,13 +243,13 @@
   bottom: 12px;
   display: none;
   transform: translateX(-50%);
-  padding: 4px 11px;
+  padding: 6px 12px;
   border: 1px solid var(--dt-border);
   border-radius: 999px;
   background: var(--dt-raised);
   color: var(--dt-accent);
-  font-size: 11px;
-  box-shadow: 0 2px 10px #00000059;
+  font-size: 12px;
+  box-shadow: none;
 }
 .dt-jump-latest {
   z-index: 2;
@@ -630,6 +630,9 @@
 }
 .dt-message .dt-tool-call .dt-json {
   padding: 8px 10px;
+  border: 1px solid var(--dt-border);
+  border-radius: 8px;
+  overflow: auto;
   background: var(--dt-raised);
 }
 .dt-tool-call {
@@ -708,6 +711,11 @@
 /* 原始事件的 JSON 树。库自带的是浅色皮肤，这里按 --dt-* 重新上色。
    左侧行号沟槽由库自己按位数写 inline padding-left 到 .vjs-tree，不要再补内边距。 */
 .dt-json {
+  padding: 8px 10px;
+  border: 1px solid var(--dt-border);
+  border-radius: 8px;
+  overflow: auto;
+  background: var(--dt-raised);
   user-select: text;
 }
 .dt-json-toolbar {
@@ -719,14 +727,7 @@
   gap: 6px;
   margin-bottom: 8px;
   padding: 2px 0;
-  background: var(--dt-background);
-}
-/* 滚动容器自带内边距，top: 0 只会贴到内容盒顶、内容从上方露出来；
-   用负偏移抵消内边距，并横向铺满底色，JSON 工具条才真正贴住滚动口。 */
-.dt-payload .dt-json-toolbar {
-  top: calc(-1 * var(--dt-payload-padding, 0px));
-  margin-inline: calc(-1 * var(--dt-payload-padding, 0px));
-  padding-inline: var(--dt-payload-padding, 0px);
+  background: var(--dt-raised);
 }
 .dt-json-note {
   color: var(--dt-muted);
@@ -752,8 +753,14 @@
   background-color: #ffffff08;
 }
 .ciel-devtools .dt-json .vjs-node-index {
+  min-width: 2ch;
   color: var(--dt-muted);
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.ciel-devtools .dt-json .vjs-tree-node {
+  min-width: max-content;
 }
 .ciel-devtools .dt-json .vjs-indent-unit.has-line {
   border-left-color: var(--dt-border);
@@ -1033,8 +1040,7 @@
   line-height: 1.8;
 }
 .ciel-devtools .dt-message .dt-content .code-block-container {
-  border: 0;
-  border-bottom: 1px solid var(--dt-border);
-  border-radius: 0;
+  border: 1px solid var(--dt-border);
+  border-radius: 8px;
   padding: 10px 12px;
 }

@@ -1,8 +1,11 @@
 import path from 'node:path';
 
 import sherpaOnnx from 'sherpa-onnx-node';
-import type { OfflineRecognizerResult } from 'sherpa-onnx-node';
-import type { OfflineRecognizerConfig } from 'sherpa-onnx-node';
+import type {
+  OfflineRecognizer as OfflineRecognizerInstance,
+  OfflineRecognizerConfig,
+  OfflineRecognizerResult,
+} from 'sherpa-onnx-node';
 
 import {
   SAMPLE_RATE,
@@ -18,8 +21,11 @@ const MAX_TRANSCRIPTION_RETRY_DEPTH = 2;
 const MIN_TRANSCRIPTION_RETRY_SAMPLES = SAMPLE_RATE * 4;
 
 export class Qwen3Recognizer {
-  private runtime = new sherpaOnnx.OfflineRecognizer(createQwen3Config());
+  private runtime: OfflineRecognizerInstance;
   private readonly maxNewTokens = 64;
+  constructor(modelsPath: string) {
+    this.runtime = new sherpaOnnx.OfflineRecognizer(createQwen3Config(modelsPath));
+  }
   transcribe(samples: Float32Array) {
     return { content: this.recognize(samples) };
   }
@@ -85,8 +91,8 @@ function joinTranscriptParts(parts: readonly string[]): string {
   }, '');
 }
 
-export function createQwen3Config(): OfflineRecognizerConfig {
-  const paths = resolveModelPaths();
+export function createQwen3Config(modelsPath: string): OfflineRecognizerConfig {
+  const paths = resolveModelPaths(modelsPath);
   return {
     featConfig: {
       sampleRate: SAMPLE_RATE,

@@ -27,6 +27,7 @@
 import { ASR } from '@cieljs/hearing';
 
 const asr = new ASR({
+  modelsPath: '/path/to/models',
   bufferSeconds: 30,
   vad: {
     minSilenceDuration: 0.5,
@@ -67,6 +68,7 @@ asr.flush();
 
 ```ts
 const asr = new ASR({
+  modelsPath: '/path/to/models',
   speaker: [{ name: 'alice', file: 'alice.voiceprint' }],
   speakerThreshold: 0.6,
   maxSpeakers: 8,
@@ -83,7 +85,7 @@ vp run @cieljs/hearing#install-model -- --force
 vp run @cieljs/hearing#voiceprint -- --output alice.voiceprint 1.wav 2.wav 3.wav
 ```
 
-模型和声纹放在 `CIEL_DATA_DIR` 下，默认 `~/.ciel`。运行时完全使用 Node，不需要 Python。详见[模型配置](./docs/models.md)。
+模型目录由调用方通过 `modelsPath` 显式传入，声纹文件路径也由上层应用决定。运行时完全使用 Node，不需要 Python。详见[模型配置](./docs/models.md)。
 
 ## 开发
 

@@ -76,10 +76,28 @@ class CielInstance implements Ciel {
         this.currentStatus = 'running';
       }
     } catch (error) {
+      const cleanupResults = await Promise.allSettled([
+        this.runtime?.close(),
+        this.resources?.[Symbol.asyncDispose](),
+      ]);
+      const cleanupFailures = cleanupResults
+        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+        .map(result => result.reason);
+
+      this.runtime = undefined;
+      this.resources = undefined;
       this.startPromise = undefined;
 
       if (this.currentStatus !== 'closing') {
         this.currentStatus = 'idle';
+      }
+
+      if (cleanupFailures.length) {
+        throw new SuppressedError(
+          new AggregateError(cleanupFailures, 'Ciel 启动回滚失败'),
+          error,
+          'Ciel 启动失败且回滚时发生错误',
+        );
       }
 
       throw error;

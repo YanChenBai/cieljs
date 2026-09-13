@@ -98,7 +98,8 @@ test('跨 Space 读取需要授权，读取不会扩大房间写入权限', asyn
     const investigationOptions = {
       sessionManager: sessions,
       memoryManager: memory,
-      spaceId: 'exploration',
+      investigationSessionId: 'chat-1',
+      target: { type: 'space' as const, spaceId: 'exploration' },
       resolveSources: () => ['streamer:2'],
     };
     const restricted = createInvestigationTools(investigationOptions);
@@ -113,6 +114,38 @@ test('跨 Space 读取需要授权，读取不会扩大房间写入权限', asyn
       '一起听音乐',
     );
     expect(allowed.some(tool => /remember|update|archive/.test(tool.name))).toBe(false);
+
+    const writable = createInvestigationTools({
+      ...investigationOptions,
+      memoryAccess: 'read-write',
+      crossSpace: true,
+    });
+    expect(writable.some(tool => tool.name === 'remember_current_space_long_term_memory')).toBe(
+      true,
+    );
+    expect(writable.some(tool => tool.name === 'remember_global_memory')).toBe(false);
+    const rememberSpace = writable.find(
+      tool => tool.name === 'remember_current_space_long_term_memory',
+    )!;
+    const rememberedSpace = await rememberSpace.execute('remember-space', {
+      content: '调查补充的房间记忆',
+    });
+    expect(JSON.stringify(rememberedSpace.details)).toContain('investigation:chat-1');
+
+    const global = createInvestigationTools({
+      ...investigationOptions,
+      target: { type: 'global' },
+      memoryAccess: 'read-write',
+    });
+    expect(global.some(tool => tool.name === 'remember_global_memory')).toBe(true);
+    expect(global.some(tool => tool.name === 'remember_current_space_long_term_memory')).toBe(
+      false,
+    );
+    const rememberGlobal = global.find(tool => tool.name === 'remember_global_memory')!;
+    const rememberedGlobal = await rememberGlobal.execute('remember-global', {
+      content: '调查补充的全局记忆',
+    });
+    expect(JSON.stringify(rememberedGlobal.details)).toContain('investigation:chat-1');
     await local.close();
     await shared.close();
   } finally {

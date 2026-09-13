@@ -19,7 +19,7 @@ import { createSetupRoutes } from './setup.ts';
 
 it('已安装模型立即应用，缺失模型下载完成后才替换当前模型', async () => {
   const apply = vi.fn(async () => {});
-  const client = createRouterClient(createSetupRoutes(apply));
+  const client = createRouterClient(createSetupRoutes('/models', apply));
   mocks.check.mockResolvedValueOnce({ valid: true, missingFiles: [], modelsPath: '/models' });
   await client.selectHearingModel('sensevoice-small');
   expect(apply).toHaveBeenCalledWith('sensevoice-small');
@@ -42,7 +42,7 @@ it('已安装模型立即应用，缺失模型下载完成后才替换当前模�
 it('后台安装立即返回、并发去重，失败原因可读取且允许重试', async () => {
   const download = Promise.withResolvers<string>();
   mocks.install.mockReturnValueOnce(download.promise);
-  const client = createRouterClient(createSetupRoutes());
+  const client = createRouterClient(createSetupRoutes('/models'));
   expect(await client.installHearingModels()).toMatchObject({ installing: true });
   await client.installHearingModels();
   expect(mocks.install).toHaveBeenCalledTimes(1);

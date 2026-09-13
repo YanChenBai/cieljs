@@ -36,7 +36,7 @@ describe('qwen', () => {
   });
 
   test('应该创建默认 Qwen Embedding', () => {
-    const embedding = qwen();
+    const embedding = qwen({ cacheDir: '.cache' });
 
     expect(embedding.model).toBe(QWEN_EMBEDDING_MODEL);
     expect(embedding.dimensions).toBe(QWEN_EMBEDDING_DIMENSIONS);
@@ -45,6 +45,7 @@ describe('qwen', () => {
 
   test('应该支持 MRL 输出维度', () => {
     const embedding = qwen({
+      cacheDir: '.cache',
       dimensions: 512,
     });
 
@@ -79,7 +80,7 @@ describe('qwen', () => {
 
   test('加载失败后应该允许重试并共享成功的推理管线', async () => {
     pipeline.mockRejectedValueOnce(new TypeError('fetch failed'));
-    const embedding = qwen({ dimensions: 2 });
+    const embedding = qwen({ cacheDir: '.cache', dimensions: 2 });
 
     await expect(embedding.embed('首次加载', { purpose: 'query' })).rejects.toThrow('fetch failed');
     await Promise.all([
@@ -92,6 +93,7 @@ describe('qwen', () => {
 
   test('应该支持自定义 batchSize', () => {
     const embedding = qwen({
+      cacheDir: '.cache',
       batchSize: 64,
     });
 
@@ -116,6 +118,7 @@ describe('qwen', () => {
   test('应该拒绝零维向量', () => {
     expect(() =>
       qwen({
+        cacheDir: '.cache',
         dimensions: 0,
       }),
     ).toThrow('dimensions 必须是 1 到 1024 的整数');
@@ -124,6 +127,7 @@ describe('qwen', () => {
   test('应该拒绝超过原始向量维度', () => {
     expect(() =>
       qwen({
+        cacheDir: '.cache',
         dimensions: 1025,
       }),
     ).toThrow('dimensions 必须是 1 到 1024 的整数');
@@ -132,6 +136,7 @@ describe('qwen', () => {
   test('应该拒绝非整数维度', () => {
     expect(() =>
       qwen({
+        cacheDir: '.cache',
         dimensions: 512.5,
       }),
     ).toThrow('dimensions 必须是 1 到 1024 的整数');
@@ -140,12 +145,14 @@ describe('qwen', () => {
   test('应该复用 agent-kit 的 batchSize 校验', () => {
     expect(() =>
       qwen({
+        cacheDir: '.cache',
         batchSize: 0,
       }),
     ).toThrow('batchSize 必须是 1 到 1000 的整数');
 
     expect(() =>
       qwen({
+        cacheDir: '.cache',
         batchSize: 1001,
       }),
     ).toThrow('batchSize 必须是 1 到 1000 的整数');

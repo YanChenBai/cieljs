@@ -1,32 +1,27 @@
-import { join } from 'node:path';
+import { describe, expect, it } from 'vite-plus/test';
 
-import { describe, expect, it, vi } from 'vite-plus/test';
-
-import { resolveDataPath } from '../src/constants.ts';
 import { createAudioConfig } from '../src/models.ts';
 import { createQwen3Config } from '../src/models/qwen3.ts';
 
 describe('createAudioConfig', () => {
-  it('未指定数据目录时使用当前工作目录', () => {
-    vi.stubEnv('CIEL_DATA_DIR', '');
-    try {
-      expect(resolveDataPath()).toBe(join(process.cwd(), '.ciel'));
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
   it('使用 Qwen3-ASR-1.7B INT8 与 TEN-VAD', () => {
-    const config = createAudioConfig();
+    const config = createAudioConfig('/models');
 
-    expect(createQwen3Config().modelConfig?.qwen3Asr).toMatchObject({
+    expect(createQwen3Config('/models').modelConfig?.qwen3Asr).toMatchObject({
       hotwords: '',
       maxNewTokens: 64,
       maxTotalLen: 512,
     });
-    expect(createQwen3Config().modelConfig?.qwen3Asr?.convFrontend).toMatch(/conv_frontend\.onnx$/);
-    expect(createQwen3Config().modelConfig?.qwen3Asr?.encoder).toMatch(/encoder\.int8\.onnx$/);
-    expect(createQwen3Config().modelConfig?.qwen3Asr?.decoder).toMatch(/decoder\.int8\.onnx$/);
-    expect(createQwen3Config().modelConfig?.qwen3Asr?.tokenizer).toMatch(/tokenizer$/);
+    expect(createQwen3Config('/models').modelConfig?.qwen3Asr?.convFrontend).toMatch(
+      /conv_frontend\.onnx$/,
+    );
+    expect(createQwen3Config('/models').modelConfig?.qwen3Asr?.encoder).toMatch(
+      /encoder\.int8\.onnx$/,
+    );
+    expect(createQwen3Config('/models').modelConfig?.qwen3Asr?.decoder).toMatch(
+      /decoder\.int8\.onnx$/,
+    );
+    expect(createQwen3Config('/models').modelConfig?.qwen3Asr?.tokenizer).toMatch(/tokenizer$/);
     expect(config.vad.sileroVad).toBeUndefined();
     expect(config.vad.tenVad).toMatchObject({
       threshold: 0.25,
@@ -38,19 +33,11 @@ describe('createAudioConfig', () => {
     expect(config.vad.tenVad?.model).toMatch(/ten-vad\.int8\.onnx$/);
   });
 
-  it('在创建配置时读取最新的 CIEL_DATA_DIR', () => {
-    const previous = process.env.CIEL_DATA_DIR;
-    try {
-      process.env.CIEL_DATA_DIR = 'C:\\ciel-first';
-      const first = createAudioConfig();
-      process.env.CIEL_DATA_DIR = 'C:\\ciel-second';
-      const second = createAudioConfig();
+  it('使用调用方提供的模型目录', () => {
+    const first = createAudioConfig('C:\\ciel-first\\models');
+    const second = createAudioConfig('C:\\ciel-second\\models');
 
-      expect(first.vad.tenVad?.model).toContain('ciel-first');
-      expect(second.vad.tenVad?.model).toContain('ciel-second');
-    } finally {
-      if (previous === undefined) delete process.env.CIEL_DATA_DIR;
-      else process.env.CIEL_DATA_DIR = previous;
-    }
+    expect(first.vad.tenVad?.model).toContain('ciel-first');
+    expect(second.vad.tenVad?.model).toContain('ciel-second');
   });
 });

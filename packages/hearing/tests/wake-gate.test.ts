@@ -46,7 +46,12 @@ function backend() {
 
 test('待机不转写，唤醒时回放缓存，达到最长聆听时间重新待机', async () => {
   const { stream, writes } = backend();
-  const gate = new WakeGate(stream, { keywords: ['夏尔'], preRollMs: 200, maxListenMs: 200 });
+  const gate = new WakeGate(stream, {
+    modelsPath: '/models',
+    keywords: ['夏尔'],
+    preRollMs: 200,
+    maxListenMs: 200,
+  });
   await gate.write({ data: Buffer.alloc(32_000), startAt: new Date(0) });
   expect(state.writes).toBe(10);
   expect(writes.map(chunk => chunk.startAt.getTime())).toEqual([0, 100, 200, 300]);
@@ -57,7 +62,7 @@ test('待机不转写，唤醒时回放缓存，达到最长聆听时间重新�
 test('没有唤醒时 flush 不把缓存交给 ASR', async () => {
   state.wakeAt = -1;
   const { stream, writes } = backend();
-  const gate = new WakeGate(stream, { keywords: ['夏尔'] });
+  const gate = new WakeGate(stream, { modelsPath: '/models', keywords: ['夏尔'] });
   await gate.write({ data: Buffer.alloc(32_000), startAt: new Date(0) });
   await gate.flush();
   expect(writes).toEqual([]);

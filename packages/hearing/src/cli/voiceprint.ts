@@ -17,6 +17,7 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
     allowPositionals: true,
     options: {
       output: { type: 'string', short: 'o' },
+      'models-path': { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
     },
     strict: true,
@@ -29,6 +30,8 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
 
   const output = values.output;
   if (!output) fail('--output is required');
+  const modelsPath = values['models-path'];
+  if (!modelsPath) fail('--models-path is required');
   if (positionals.length === 0) fail('at least one WAV sample is required');
   await Promise.all(positionals.map(file => access(file)));
 
@@ -40,7 +43,7 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
     type: 'voiceprint';
   };
   try {
-    const extractor = new SpeakerEmbeddingExtractor(createAudioConfig().speaker);
+    const extractor = new SpeakerEmbeddingExtractor(createAudioConfig(modelsPath).speaker);
     const embeddings = positionals.map(file => computeEmbedding(extractor, file));
     const target = writeVoiceprint(output, averageEmbeddings(embeddings));
     result = {
@@ -73,8 +76,7 @@ function computeEmbedding(
 
 function printHelp(): void {
   process.stdout.write(
-    'Usage: vp run @cieljs/hearing#voiceprint -- --output <file> <sample.wav...>\n\n' +
-      "The voiceprint is written into the package's voiceprints/ directory.\n",
+    'Usage: vp run @cieljs/hearing#voiceprint -- --models-path <directory> --output <file> <sample.wav...>\n',
   );
 }
 

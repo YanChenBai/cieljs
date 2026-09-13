@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises';
 
 import type { SpeakerEmbeddingExtractorConfig, VadConfig } from 'sherpa-onnx-node';
 
-import { SAMPLE_RATE, resolveModelPaths, resolveModelsPath } from './constants.ts';
+import { SAMPLE_RATE, resolveModelPaths } from './constants.ts';
 import { modelFiles } from './registry.ts';
 import type { ASROptions } from './types.ts';
 
@@ -19,8 +19,8 @@ export interface ConfigurationCheck {
   readonly valid: boolean;
 }
 
-export function createAudioConfig(vad: ASROptions['vad'] = {}): ModelConfig {
-  const paths = resolveModelPaths();
+export function createAudioConfig(modelsPath: string, vad: ASROptions['vad'] = {}): ModelConfig {
+  const paths = resolveModelPaths(modelsPath);
 
   return {
     vad: {
@@ -45,7 +45,7 @@ export function createAudioConfig(vad: ASROptions['vad'] = {}): ModelConfig {
 }
 
 export async function checkConfiguration(
-  options: Pick<ASROptions, 'model' | 'speaker' | 'mode'> = {},
+  options: Pick<ASROptions, 'modelsPath' | 'model' | 'speaker' | 'mode'>,
 ): Promise<ConfigurationCheck> {
   const requiredFiles = modelFiles(options).map(file => file.target);
 
@@ -54,7 +54,7 @@ export async function checkConfiguration(
   const missingFiles = requiredFiles.filter((_file, index) => !fileStates[index]);
 
   return {
-    modelsPath: resolveModelsPath(),
+    modelsPath: options.modelsPath,
     missingFiles,
     valid: missingFiles.length === 0,
   };

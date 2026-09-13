@@ -157,13 +157,13 @@ describe('defineCiel', () => {
 
     const firstInvestigation = await ciel.investigate({
       sessionId: 'investigation:1',
-      spaceId: 'livestream',
+      target: { type: 'space', spaceId: 'livestream', sessionId: session.id },
       sources: () => [roomId],
       question: '以前发生过什么？',
     });
     const secondInvestigation = await ciel.investigate({
       sessionId: 'investigation:1',
-      spaceId: 'livestream',
+      target: { type: 'space', spaceId: 'livestream', sessionId: session.id },
       sources: () => [roomId],
       question: '再核对一次。',
     });

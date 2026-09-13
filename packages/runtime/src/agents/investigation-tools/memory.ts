@@ -10,19 +10,28 @@ export const createSearchMemoryTool = defineTool(
     query: Type.String({ minLength: 1 }),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
   }),
-  ({ options, memorySpace }: InvestigationToolContext) => ({
+  ({ options, memorySpace, targetSpaceId }: InvestigationToolContext) => ({
     name: 'search_memory',
     label: '搜索记忆',
     description:
-      '只读搜索当前空间记忆与全局长期记忆。spaceId 和当前 sources 由宿主注入，结果是可能过时的历史资料。',
+      options.target.type === 'global'
+        ? '只读搜索全部空间与全局长期记忆。调查目标和来源由宿主注入，结果是可能过时的历史资料。'
+        : '只读搜索目标空间记忆与全局长期记忆。调查目标和来源由宿主注入，结果是可能过时的历史资料。',
     execute: async ({ query, limit = 8 }, { signal }) => {
       const sources = options.resolveSources();
+
+      if (options.target.type === 'global') {
+        const memories = await options.memoryManager.searchAll(query, { limit, signal });
+
+        return investigationResult({ target: options.target, sources, memories });
+      }
+
       const [space, global] = await Promise.all([
         memorySpace.search(query, { limit, signal }),
         options.memoryManager.global.search(query, { limit, signal }),
       ]);
 
-      return investigationResult({ spaceId: options.spaceId, sources, space, global });
+      return investigationResult({ spaceId: targetSpaceId, sources, space, global });
     },
   }),
 );
@@ -32,19 +41,27 @@ export const createReadMemoryTool = defineTool(
     id: Type.String({ minLength: 1 }),
     layer: memoryLayer,
   }),
-  ({ options, memorySpace }: InvestigationToolContext) => ({
+  ({ options, memorySpace, targetSpaceId }: InvestigationToolContext) => ({
     name: 'read_memory',
     label: '读取记忆',
     description:
-      '按 ID 只读获取当前空间或全局长期记忆。不能读取其他空间，也不能创建、更新或归档记忆。',
+      options.target.type === 'global'
+        ? '按 ID 只读获取任意空间或全局长期记忆。'
+        : '按 ID 只读获取目标空间或全局长期记忆；不能用它读取其他空间。',
     execute: async ({ id, layer }, { signal }) => {
       signal?.throwIfAborted();
       const sources = options.resolveSources();
-      const store = layer === 'global' ? options.memoryManager.global : memorySpace;
-      const memory = await store.get(id);
+      let memory;
+
+      if (options.target.type === 'global') {
+        memory = await options.memoryManager.getAny(id);
+      } else {
+        const store = layer === 'global' ? options.memoryManager.global : memorySpace;
+        memory = await store.get(id);
+      }
       signal?.throwIfAborted();
 
-      return investigationResult({ spaceId: options.spaceId, sources, memory });
+      return investigationResult({ spaceId: targetSpaceId, sources, memory });
     },
   }),
 );

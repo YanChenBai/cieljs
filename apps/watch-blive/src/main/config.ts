@@ -118,7 +118,6 @@ export function watchDataDirectory() {
 
 export function prepareWatchResources() {
   const root = watchDataDirectory();
-  process.env.CIEL_DATA_DIR = root;
 
   for (const name of ['electron', 'models', 'voiceprints', 'cache', 'logs']) {
     mkdirSync(join(root, name), { recursive: true });

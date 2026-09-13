@@ -9,7 +9,7 @@ vp run @cieljs/hearing#install-model
 vp run @cieljs/hearing#install-model -- --force
 ```
 
-安装器下载三组模型并写入 `CIEL_DATA_DIR/models/`；未配置 `CIEL_DATA_DIR` 时默认使用 `~/.ciel/models/`：
+安装器下载三组模型并写入调用方通过 `modelsPath` 指定的目录：
 
 | 目录                       | 模型                                | 来源                                              |
 | -------------------------- | ----------------------------------- | ------------------------------------------------- |
@@ -45,7 +45,7 @@ voiceprints/...
 ```ts
 import { checkConfiguration } from '@cieljs/hearing';
 
-const check = await checkConfiguration();
+const check = await checkConfiguration({ modelsPath: '/path/to/models' });
 // { modelsPath, missingFiles, valid }
 ```
 

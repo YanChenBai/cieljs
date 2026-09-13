@@ -5,6 +5,7 @@ import { app, BrowserWindow } from 'electron';
 import { isAllowedPageUrl } from './bilibili/page-executor.ts';
 import { closeBrowseWindow } from './browse-window.ts';
 import { prepareWatchResources, migrateWatchResources } from './config.ts';
+import { closeInvestigationWindow } from './investigation-window.ts';
 import { registerWatchBliveIpc } from './ipc.ts';
 import { browserUserAgent } from './user-agent.ts';
 
@@ -71,6 +72,7 @@ async function createWindow(): Promise<void> {
       .finally(() => {
         // 浏览窗口若还开着，window-all-closed 不会触发，应用会变成只剩浏览器的孤儿进程。
         closeBrowseWindow();
+        closeInvestigationWindow();
         mainWindow.destroy();
       });
   });

@@ -23,7 +23,7 @@ const DEFAULT_SAMPLE_INTERVAL_MS = 6_666;
 const DEFAULT_DIFFERENCE_THRESHOLD = 0.03;
 const DEFAULT_MAX_FRAMES = 9;
 
-export function createPerception(options: PerceptionOptions = {}): Perception {
+export function createPerception(options: PerceptionOptions): Perception {
   return new PerceptionRuntime(options);
 }
 

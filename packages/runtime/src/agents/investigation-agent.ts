@@ -4,7 +4,7 @@ import type { AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-age
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { streamSimple } from '@earendil-works/pi-ai/compat';
 
-import type { InvestigationResult } from '../types.ts';
+import type { InvestigationResult, InvestigationTarget } from '../types.ts';
 import { createInvestigationContextTransformer } from './context.ts';
 import { createInvestigationTools } from './investigation-tools.ts';
 import { ManagedAgent } from './managed-agent.ts';
@@ -20,7 +20,8 @@ export async function runInvestigation(options: {
   investigationManager: SessionManager;
   memoryManager: MemoryManager;
   sessionId?: string;
-  spaceId: string;
+  target: InvestigationTarget;
+  memoryAccess?: 'read' | 'read-write';
   crossSpace?: boolean;
   resolveSources: () => string[];
   question: string | AgentMessage[];
@@ -29,7 +30,8 @@ export async function runInvestigation(options: {
 }): Promise<InvestigationResult> {
   options.signal?.throwIfAborted();
 
-  const investigationSpace = options.investigationManager.space(options.spaceId);
+  const targetSpaceId = options.target.type === 'space' ? options.target.spaceId : 'global';
+  const investigationSpace = options.investigationManager.space(targetSpaceId);
   const initialSources = options.resolveSources();
   const session = await investigationSpace.session({
     id: options.sessionId,
@@ -47,7 +49,9 @@ export async function runInvestigation(options: {
     ...createInvestigationTools({
       sessionManager: options.sessionManager,
       memoryManager: options.memoryManager,
-      spaceId: options.spaceId,
+      investigationSessionId: session.id,
+      target: options.target,
+      memoryAccess: options.memoryAccess,
       crossSpace: options.crossSpace,
       resolveSources: options.resolveSources,
     }),
@@ -62,7 +66,7 @@ export async function runInvestigation(options: {
     prepareRun: resolveAndRefreshSources,
     beforeToolCall: resolveAndRefreshSources,
     transformContext: createInvestigationContextTransformer({
-      spaceId: options.spaceId,
+      target: options.target,
       resolveSources: options.resolveSources,
       refreshSources,
     }),

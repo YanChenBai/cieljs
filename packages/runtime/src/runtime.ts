@@ -112,13 +112,17 @@ export class Runtime implements AsyncDisposable {
     const investigation = runInvestigation({
       model: this.options.model,
       apiKey: this.options.apiKey,
-      systemPrompt: this.options.investigation?.systemPrompt ?? this.options.systemPrompt,
+      systemPrompt:
+        options.systemPrompt ??
+        this.options.investigation?.systemPrompt ??
+        this.options.systemPrompt,
       tools: this.options.investigation?.tools ?? [],
       sessionManager: this.options.sessionManager,
       investigationManager: this.options.investigationManager,
       memoryManager: this.options.memoryManager,
       sessionId: options.sessionId,
-      spaceId: options.spaceId,
+      target: options.target,
+      memoryAccess: options.memoryAccess,
       crossSpace: options.crossSpace,
       resolveSources,
       question: options.question,

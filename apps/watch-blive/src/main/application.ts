@@ -20,6 +20,7 @@ import { BilibiliApi } from './bilibili/api.ts';
 import { LivePage } from './bilibili/live-page.ts';
 import { resolveWatchConfig, resolveWatchModel, watchDataDirectory } from './config.ts';
 import { readHearingModel, saveHearingModel } from './hearing-settings.ts';
+import { createInvestigationRoutes } from './routes/investigation.ts';
 import { createRecordingRoutes } from './routes/recording.ts';
 import { createSetupRoutes } from './routes/setup.ts';
 import { createWindowRoutes } from './routes/window.ts';
@@ -49,9 +50,10 @@ const startSchema = z.object({
 /** 固定观看场景的资源与路由共享同一生命周期，初始化失败按逆序回收。 */
 export async function createWatchApplication(mainWindow: BrowserWindow) {
   await using resources = new AsyncDisposableStack();
+  const dataDirectory = watchDataDirectory();
   const storage = resources.use(
     await Storage.open({
-      dataDir: join(watchDataDirectory(), 'storage'),
+      dataDir: join(dataDirectory, 'storage'),
       modules: [sessionStorage, memoryStorage, vectorStorage, devtoolsStorage],
     }),
   );
@@ -72,7 +74,10 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
   // 历史重放留给后台：它随会话数增长，不能排在窗口显示前面。
   const devtools = resources.use(await DevtoolsHost.open({ storage, awaitReplay: false }));
   const mcp = resources.use(
-    await createMcp({ configFile: join(watchDataDirectory(), 'mcp.json') }),
+    await createMcp({
+      cwd: dataDirectory,
+      configFile: join(dataDirectory, 'mcp.json'),
+    }),
   );
 
   const livePage = new LivePage();
@@ -80,10 +85,19 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
   const api = new BilibiliApi();
   const listeners = new Set<(event: WatchBridgeEvent) => void>();
   let runtime: WatchBlive | undefined;
-  const dataDirectory = watchDataDirectory();
   let hearingModel = readHearingModel(dataDirectory);
   let unsubscribe: (() => void) | undefined;
   const lifetimeController = new AbortController();
+
+  const investigation = createInvestigationRoutes({
+    storage,
+    mcp,
+    api,
+    resolveModel: () => resolveWatchModel(resolveWatchConfig()),
+    current: () => ({ room: runtime?.room, sessionId: runtime?.sessionId }),
+    history: () => devtools.sessions(),
+  });
+  resources.defer(() => investigation.close());
 
   function requireRuntime() {
     if (lifetimeController.signal.aborted) throw new Error('Watch Blive 已关闭');
@@ -124,9 +138,17 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
   }
 
   // 显式使用公开 DevtoolsRouter，避免声明推断泄漏构建产物的私有类型。
-  const devtoolsRouter: DevtoolsRouter = createDevtoolsRouter(devtools);
+  const isInvestigationSession = (sessionId: string) => sessionId.startsWith('investigation:');
+  const devtoolsRouter: DevtoolsRouter = createDevtoolsRouter(devtools, {
+    session: sessionId => !isInvestigationSession(sessionId),
+  });
+  const investigationDevtoolsRouter: DevtoolsRouter = createDevtoolsRouter(devtools, {
+    session: isInvestigationSession,
+  });
   const router = {
     devtools: devtoolsRouter,
+    investigationDevtools: investigationDevtoolsRouter,
+    investigation: investigation.router,
     account: {
       get: os.handler(() => livePage.account()),
       login: os.handler(async ({ signal }) => {
@@ -180,17 +202,21 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
         }
       }),
     },
-    setup: createSetupRoutes(async model => {
-      const previous = hearingModel;
-      await runtime?.setHearingModel(model);
-      try {
-        saveHearingModel(dataDirectory, model);
-      } catch (error) {
-        await runtime?.setHearingModel(previous);
-        throw error;
-      }
-      hearingModel = model;
-    }, hearingModel),
+    setup: createSetupRoutes(
+      join(dataDirectory, 'models'),
+      async model => {
+        const previous = hearingModel;
+        await runtime?.setHearingModel(model);
+        try {
+          saveHearingModel(dataDirectory, model);
+        } catch (error) {
+          await runtime?.setHearingModel(previous);
+          throw error;
+        }
+        hearingModel = model;
+      },
+      hearingModel,
+    ),
     recording: createRecordingRoutes(mainWindow),
     window: createWindowRoutes(mainWindow, livePage, roomId => {
       for (const listener of listeners) listener({ type: 'room_requested', roomId });

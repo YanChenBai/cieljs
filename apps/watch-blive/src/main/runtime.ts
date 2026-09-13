@@ -1,5 +1,7 @@
+import { join } from 'node:path';
+
 import type { DevtoolsHost } from '@cieljs/devtools/host';
-import { createKWS, type ASRModelId, type KWS } from '@cieljs/hearing';
+import { createKWS, type ASRModelId, type ASROptions, type KWS } from '@cieljs/hearing';
 import type { McpTools } from '@cieljs/mcp';
 import { createPerception, type PerceptionOptions } from '@cieljs/perception';
 import type { Storage } from '@cieljs/storage';
@@ -24,7 +26,6 @@ import { BilibiliApi } from './bilibili/api.ts';
 import { LivePage } from './bilibili/live-page.ts';
 import { LiveStatusMonitor } from './bilibili/live-status-monitor.ts';
 import { readRoomLiveStatus } from './bilibili/live-status.ts';
-import { watchDataDirectory } from './config.ts';
 import { LiveMedia } from './media/live-media.ts';
 import { createPerceptionContext, ROOM_REVIEW_AFTER_MS } from './prompts/index.ts';
 import { RoomHistory } from './room-history.ts';
@@ -42,10 +43,12 @@ export interface WatchBliveOptions {
   model: Model<Api>;
   apiKey?: string;
   livePage: LivePage;
-  dataDir?: string;
+  dataDir: string;
   api?: BilibiliApi;
   ffmpegPath?: string;
-  perception?: PerceptionOptions;
+  perception?: Omit<PerceptionOptions, 'asr'> & {
+    asr?: Omit<ASROptions, 'modelsPath'>;
+  };
   periodicObservationMs?: number;
   minimumThinkIntervalMs?: number;
   /** 单轮思考的时间预算；省略表示不限制。 */
@@ -366,7 +369,8 @@ class WatchBliveRuntime implements WatchBlive {
       retentionMs,
       asr: {
         ...options?.asr,
-        speaker: loadVoiceprints(this.options.dataDir ?? watchDataDirectory()),
+        modelsPath: join(this.options.dataDir, 'models'),
+        speaker: loadVoiceprints(this.options.dataDir),
       },
     });
   }
@@ -398,7 +402,12 @@ class WatchBliveRuntime implements WatchBlive {
       this.applyThinkingLevel(session);
       const playUrl = await this.api.playUrl(room.roomId);
       const wake = this.options.wake ? resolveWakeOptions(this.options.wake) : undefined;
-      if (wake) kws = await createKWS({ keywords: wake.keywords, cooldownMs: wake.cooldownMs });
+      if (wake)
+        kws = await createKWS({
+          modelsPath: join(this.options.dataDir, 'models'),
+          keywords: wake.keywords,
+          cooldownMs: wake.cooldownMs,
+        });
       signal.throwIfAborted();
       const monitor = this.createLiveStatusMonitor(room.roomId, generation, signal);
       this.liveStatusMonitor = monitor;

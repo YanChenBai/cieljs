@@ -14,7 +14,9 @@ it('重建设置路由后恢复已保存模型，后续切换可以覆盖保存'
     expect(readHearingModel(directory)).toBe('qwen3-asr-1.7b-int8');
     saveHearingModel(directory, 'sensevoice-small');
     const restored = readHearingModel(directory);
-    const client = createRouterClient(createSetupRoutes(undefined, restored));
+    const client = createRouterClient(
+      createSetupRoutes(join(directory, 'models'), undefined, restored),
+    );
     expect(await client.hearingModels()).toMatchObject({
       model: 'sensevoice-small',
       activeModel: 'sensevoice-small',

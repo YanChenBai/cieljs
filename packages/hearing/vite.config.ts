@@ -6,7 +6,7 @@ export default defineConfig({
       build: 'vp pack',
       test: {
         command: 'vp test',
-        env: ['CIEL_DATA_DIR', 'CIEL_NODE_EXECUTABLE'],
+        env: ['CIEL_NODE_EXECUTABLE'],
         output: [],
         input: [{ auto: true }, '!dist/**', '!**/*.tsbuildinfo'],
       },

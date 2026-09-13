@@ -13,6 +13,7 @@ import { watchConfigurationStatus } from '../config.ts';
 
 /** 安装任务由主进程持有，刷新页面不会重复下载或丢失错误。 */
 export function createSetupRoutes(
+  modelsPath: string,
   onModel: (model: ASRModelId) => Promise<void> = async () => {},
   initialModel: ASRModelId = DEFAULT_ASR_MODEL,
 ) {
@@ -30,7 +31,7 @@ export function createSetupRoutes(
 
   async function status() {
     return {
-      ...(await checkConfiguration({ model })),
+      ...(await checkConfiguration({ modelsPath, model })),
       model,
       activeModel,
       availableModels: Object.keys(ASR_MODELS) as ASRModelId[],
@@ -52,7 +53,7 @@ export function createSetupRoutes(
           model = input;
           error = undefined;
           progress = undefined;
-          if ((await checkConfiguration({ model })).valid) await activate();
+          if ((await checkConfiguration({ modelsPath, model })).valid) await activate();
         } catch (cause) {
           error = cause instanceof Error ? cause.message : String(cause);
           throw cause;
@@ -67,6 +68,7 @@ export function createSetupRoutes(
         error = undefined;
         progress = undefined;
         installation = installModels({
+          modelsPath,
           model,
           onProgress: value => {
             progress = value;

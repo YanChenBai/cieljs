@@ -17,7 +17,10 @@ export interface ModelInstallProgress {
   message?: string;
 }
 
-export interface InstallModelsOptions extends Pick<ASROptions, 'model' | 'speaker' | 'mode'> {
+export interface InstallModelsOptions extends Pick<
+  ASROptions,
+  'modelsPath' | 'model' | 'speaker' | 'mode'
+> {
   force?: boolean;
   retries?: number;
   retryDelayMs?: number;

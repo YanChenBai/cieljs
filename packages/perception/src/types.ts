@@ -2,7 +2,7 @@ import type { ASR, ASROptions, ASRResult, Unsubscribe } from '@cieljs/hearing';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export interface PerceptionOptions {
-  readonly asr?: ASROptions;
+  readonly asr: ASROptions;
   readonly vision?: false | VisionOptions;
   readonly context?: PerceptionContext;
   readonly retentionMs?: number;

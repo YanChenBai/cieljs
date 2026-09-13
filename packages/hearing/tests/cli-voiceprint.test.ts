@@ -70,7 +70,15 @@ describe('createVoiceprint', () => {
     const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {
-      await createVoiceprint(['--output', 'alice.voiceprint', '1.wav', '2.wav', '3.wav']);
+      await createVoiceprint([
+        '--models-path',
+        '/models',
+        '--output',
+        'alice.voiceprint',
+        '1.wav',
+        '2.wav',
+        '3.wav',
+      ]);
     } finally {
       write.mockRestore();
     }

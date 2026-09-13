@@ -1,5 +1,3 @@
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 // packages/embedding/src/qwen.ts
 
 import {
@@ -43,7 +41,7 @@ export const DEFAULT_QWEN_EMBEDDING_BATCH_SIZE = 32;
 export const DEFAULT_QWEN_QUERY_INSTRUCTION =
   'Given a retrieval query, retrieve relevant documents that answer the query.';
 
-export function qwen(options: QwenEmbeddingOptions = {}): ResolvedEmbeddingProvider {
+export function qwen(options: QwenEmbeddingOptions): ResolvedEmbeddingProvider {
   const dimensions = options.dimensions ?? QWEN_EMBEDDING_DIMENSIONS;
   const batchSize = options.batchSize ?? DEFAULT_QWEN_EMBEDDING_BATCH_SIZE;
   const dtype = options.dtype ?? 'q8';
@@ -53,7 +51,7 @@ export function qwen(options: QwenEmbeddingOptions = {}): ResolvedEmbeddingProvi
 
   const loadExtractor = () =>
     pipeline('feature-extraction', QWEN_EMBEDDING_SOURCE, {
-      cache_dir: options.cacheDir ?? join(homedir(), '.ciel', 'cache', 'embedding'),
+      cache_dir: options.cacheDir,
       dtype,
       device: options.device,
     });

@@ -3,19 +3,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { resolveVoiceprintsPath } from './constants.ts';
-
 const VOICEPRINT_MAGIC = 'CIELVP01';
 const HEADER_SIZE = VOICEPRINT_MAGIC.length + Uint32Array.BYTES_PER_ELEMENT;
 
 export function resolveVoiceprintPath(file: string): string {
-  const root = path.resolve(resolveVoiceprintsPath());
-  const target = path.resolve(root, file);
-  const relative = path.relative(root, target);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(`Voiceprint must be inside ${root}: ${file}`);
-  }
-  return target;
+  return path.resolve(file);
 }
 
 export function readVoiceprint(file: string): Float32Array {

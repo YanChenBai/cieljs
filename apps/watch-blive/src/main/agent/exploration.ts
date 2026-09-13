@@ -61,7 +61,7 @@ export async function selectExplorationRoom(options: {
   }
 
   const result = await ciel.investigate({
-    spaceId: 'bilibili:exploration',
+    target: { type: 'global' },
     signal,
     crossSpace: true,
     sources: createCandidateSources(areaId, filtered.candidates),

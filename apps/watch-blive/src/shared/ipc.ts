@@ -35,6 +35,7 @@ export interface WatchSnapshot {
 export interface WatchBliveBridge {
   attachLiveWebContents(input: { id: number }): Promise<void>;
   openBrowseWindow(): Promise<void>;
+  openInvestigationWindow(): Promise<void>;
   start(options: StartWatchOptions): Promise<void>;
   stop(): Promise<void>;
   /** 手动压缩当前会话上下文；返回是否产生了新的压缩摘要。 */

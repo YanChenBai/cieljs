@@ -121,12 +121,16 @@ class ChorusRuntime implements Chorus {
   private async startRuntime(): Promise<void> {
     try {
       const config = this.options.config;
+      const dataDir = resolve(this.options.dataDir ?? join(homedir(), '.ciel'));
 
       this.tts = this.options.tts ?? this.createDefaultTts();
       this.perception =
         this.options.perception ??
         createPerception({
-          asr: config.perception.asr,
+          asr: {
+            ...config.perception.asr,
+            modelsPath: join(dataDir, 'models'),
+          },
           retentionMs: config.perception.retentionMs,
         });
       this.input = this.options.input ?? createAudioInput(config.audio.input);
@@ -155,7 +159,7 @@ class ChorusRuntime implements Chorus {
       });
 
       this.storage = await Storage.open({
-        dataDir: join(resolve(this.options.dataDir ?? join(homedir(), '.ciel')), 'storage'),
+        dataDir: join(dataDir, 'storage'),
         modules: [sessionStorage, memoryStorage, vectorStorage],
       });
       if (config.embedding) {
@@ -170,8 +174,11 @@ class ChorusRuntime implements Chorus {
       }
 
       if (config.mcp.enabled && !this.mcp) {
-        const { enabled: _, ...options } = config.mcp;
-        this.mcp = await createMcp(options);
+        this.mcp = await createMcp({
+          cwd: dataDir,
+          configFile: join(dataDir, 'mcp.json'),
+          required: config.mcp.required,
+        });
       }
 
       this.ciel = defineCiel({

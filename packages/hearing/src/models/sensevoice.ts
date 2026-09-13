@@ -1,24 +1,31 @@
 import path from 'node:path';
 
 import sherpaOnnx from 'sherpa-onnx-node';
-import type { OfflineRecognizerResult } from 'sherpa-onnx-node';
+import type {
+  OfflineRecognizer as OfflineRecognizerInstance,
+  OfflineRecognizerResult,
+} from 'sherpa-onnx-node';
 
-import { resolveModelsPath, SAMPLE_RATE } from '../constants.ts';
+import { SAMPLE_RATE } from '../constants.ts';
 
 export class SenseVoiceRecognizer {
-  private readonly runtime = new sherpaOnnx.OfflineRecognizer({
-    featConfig: { sampleRate: SAMPLE_RATE, featureDim: 80 },
-    modelConfig: {
-      senseVoice: {
-        model: path.join(resolveModelsPath(), 'asr/sensevoice-small/model.int8.onnx'),
-        language: 'auto',
-        useInverseTextNormalization: 1,
+  private readonly runtime: OfflineRecognizerInstance;
+
+  constructor(modelsPath: string) {
+    this.runtime = new sherpaOnnx.OfflineRecognizer({
+      featConfig: { sampleRate: SAMPLE_RATE, featureDim: 80 },
+      modelConfig: {
+        senseVoice: {
+          model: path.join(modelsPath, 'asr/sensevoice-small/model.int8.onnx'),
+          language: 'auto',
+          useInverseTextNormalization: 1,
+        },
+        tokens: path.join(modelsPath, 'asr/sensevoice-small/tokens.txt'),
+        numThreads: 2,
+        provider: 'cpu',
       },
-      tokens: path.join(resolveModelsPath(), 'asr/sensevoice-small/tokens.txt'),
-      numThreads: 2,
-      provider: 'cpu',
-    },
-  });
+    });
+  }
 
   transcribe(samples: Float32Array) {
     const stream = this.runtime.createStream();

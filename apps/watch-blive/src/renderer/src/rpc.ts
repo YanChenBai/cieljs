@@ -23,6 +23,7 @@ window.addEventListener('beforeunload', () => {
 export const watchBridge: WatchBliveBridge = {
   attachLiveWebContents: input => rpc.window.attach(input),
   openBrowseWindow: () => rpc.window.openBrowse(),
+  openInvestigationWindow: () => rpc.window.openInvestigation(),
   start: input => rpc.watch.start(input),
   stop: () => rpc.watch.stop(),
   compactContext: () => rpc.watch.compact(),

@@ -2,7 +2,7 @@ import { Storage } from '@cieljs/storage';
 import { createRouterClient } from '@orpc/server';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
-import type { TraceEntry } from '../protocol/index.ts';
+import type { DevtoolsUpdate, TraceEntry } from '../protocol/index.ts';
 import { DevtoolsHost } from './host.ts';
 import { createDevtoolsRouter } from './router.ts';
 import { devtoolsStorage } from './store.ts';
@@ -213,5 +213,32 @@ describe('DevTools 按需内容', () => {
     expect(secondSteps).toHaveLength(1);
     expect(secondSteps[0]?.sessionId).toBe('room:second');
     expect(value.sessions().map(session => session.id)).toEqual(['room:first', 'room:second']);
+  });
+
+  it('路由按宿主给定的 Session 边界隔离查询与订阅', async () => {
+    const value = await host();
+    await value.agentListener('watch:room')({
+      type: 'message_end',
+      message: { role: 'user', content: '直播消息', timestamp: 10 },
+    });
+    await value.agentListener('investigation:first')({
+      type: 'message_end',
+      message: { role: 'user', content: '调查消息', timestamp: 20 },
+    });
+    await value.flushRecords();
+
+    const client = createRouterClient(
+      createDevtoolsRouter(value, {
+        session: sessionId => sessionId.startsWith('investigation:'),
+      }),
+    );
+    const updates = await client.updates();
+    const initial = await updates.next();
+    const snapshot = initial.value as DevtoolsUpdate;
+
+    expect(snapshot.sessions.map(session => session.id)).toEqual(['investigation:first']);
+    expect(snapshot.entries.every(entry => entry.sessionId === 'investigation:first')).toBe(true);
+    expect(await client.entries.list({ sessionId: 'watch:room' })).toEqual([]);
+    await updates.return?.(undefined);
   });
 });
