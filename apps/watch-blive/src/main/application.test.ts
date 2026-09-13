@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   account: vi.fn(),
   start: vi.fn(),
   stop: vi.fn(),
+  compact: vi.fn(),
   resolveConfig: vi.fn(),
 }));
 
@@ -71,11 +72,12 @@ beforeEach(() => {
   mocks.openStorage.mockResolvedValue({ ...resource('storage'), checkpoint: mocks.checkpoint });
   mocks.openDevtools.mockResolvedValue({ ...resource('devtools'), record: vi.fn() });
   mocks.createMcp.mockResolvedValue(resource('mcp'));
-  mocks.resolveConfig.mockReturnValue({ wake: false });
+  mocks.resolveConfig.mockReturnValue({ ai: {}, wake: false });
   mocks.createRuntime.mockReturnValue({
     status: 'idle',
     start: mocks.start,
     stop: mocks.stop,
+    compactContext: mocks.compact,
     onEvent: () => () => mocks.order.push('unsubscribe'),
     close: async () => {
       mocks.order.push('runtime');
@@ -102,6 +104,7 @@ it('账号和快照无需 AI 配置，首次观看只创建一次运行时，关
   expect(mocks.createRuntime.mock.calls[0]![0].perception.asr).toEqual({
     model: 'sensevoice-small',
     bufferSeconds: 30,
+    vad: { minSilenceDuration: 0.2, maxSpeechDuration: 5 },
   });
   const closing = application.close();
   expect(application.close()).toBe(closing);
@@ -111,6 +114,18 @@ it('账号和快照无需 AI 配置，首次观看只创建一次运行时，关
   await expect(client.watch.start({ mode: { type: 'follow', roomId: 123 } })).rejects.toThrow(
     '已关闭',
   );
+});
+
+it('手动压缩路由转发给运行时，尚未启动时拒绝', async () => {
+  application = await createWatchApplication(window);
+  const client = createRouterClient(application.router);
+  mocks.compact.mockResolvedValue(true);
+
+  await expect(client.watch.compact()).rejects.toThrow('尚未启动');
+
+  await client.watch.start({ mode: { type: 'follow', roomId: 123 } });
+  await expect(client.watch.compact()).resolves.toBe(true);
+  expect(mocks.compact).toHaveBeenCalledOnce();
 });
 
 it('初始化中途失败时释放已打开资源和 checkpoint 定时器', async () => {

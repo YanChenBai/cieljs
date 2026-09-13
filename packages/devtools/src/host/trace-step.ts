@@ -1,3 +1,4 @@
+import type { RuntimeEvent } from '@cieljs/agent-kit/protocol';
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 
 import type { TraceEntry, TraceEvent } from '../protocol/index.ts';
@@ -31,6 +32,11 @@ export function createTraceStep(
     step.endedAt = undefined;
   }
   attachContentReferences(step, trace);
+  // 压缩不是 Agent 事件，但同样需要一行可读的轨迹与摘要。
+  if (trace.event.type === 'session_compaction') {
+    step.label = '上下文压缩';
+    step.text = trace.event.summary;
+  }
   const errorPath = eventErrorPath(trace.event);
   if (errorPath) {
     step.status = 'error';
@@ -40,7 +46,7 @@ export function createTraceStep(
   return step;
 }
 
-function eventErrorPath(event: AgentEvent): string[] | undefined {
+function eventErrorPath(event: RuntimeEvent): string[] | undefined {
   if (event.type === 'tool_execution_end' && event.isError) return ['result'];
   if ('message' in event && messageFailed(event.message)) return ['message'];
   if (event.type === 'turn_end' && event.toolResults.some(messageFailed)) return ['toolResults'];
@@ -52,7 +58,7 @@ function messageFailed(message: Extract<AgentEvent, { type: 'message_end' }>['me
   return message.role === 'toolResult' && message.isError;
 }
 
-function eventKind(event: AgentEvent): TraceEntry['kind'] {
+function eventKind(event: RuntimeEvent): TraceEntry['kind'] {
   if (event.type.startsWith('tool_')) return 'tool';
   if (event.type.startsWith('message_')) return 'message';
   return 'event';
@@ -75,7 +81,7 @@ function attachContentReferences(step: TraceEntry, trace: TraceEvent) {
 
 function attachDisplayMetadata(
   step: TraceEntry,
-  event: AgentEvent,
+  event: RuntimeEvent,
   tools?: Array<Omit<Agent['state']['tools'][number], 'execute'>>,
   model?: Agent['state']['model'],
 ) {

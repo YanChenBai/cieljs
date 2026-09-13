@@ -17,6 +17,7 @@ type Usage = {
 export class TraceUsageTally {
   private readonly total = empty();
   private context: TraceUsage | null = null;
+  private contextSessionId: string | null = null;
   private readonly sessionStates = new Map<
     string,
     { startedAt: number; endedAt: number; total: TraceUsage; context: TraceUsage | null }
@@ -24,12 +25,23 @@ export class TraceUsageTally {
 
   consume(record: RuntimeRecord) {
     const session = this.touch(record.sessionId, record.timestamp);
+
+    if (record.event.type === 'session_compaction') {
+      // 压缩换了上下文，保留消息里的旧 usage 不再代表当前规模；先用摘要加保留原文的
+      // 估算顶上，等下一次真实请求再覆盖。缺估算的旧记录只能清空。
+      const context = contextFromTokens(record.event.contextTokens);
+      session.context = context;
+      if (this.contextSessionId === record.sessionId) this.context = context;
+      return;
+    }
+
     if (record.event.type !== 'message_end') return;
 
     const usage = assistantUsage(record.event.message);
     if (!usage) return;
 
     this.context = usage;
+    this.contextSessionId = record.sessionId;
     session.context = usage;
     addUsage(this.total, usage);
     addUsage(session.total, usage);
@@ -82,6 +94,13 @@ function addUsage(target: TraceUsage, usage: TraceUsage) {
 
 function empty(): TraceUsage {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+}
+
+/** 压缩后的上下文只有总量估算，输入项留空；缓存命中率用的是累计量，不受影响。 */
+function contextFromTokens(tokens: number | undefined): TraceUsage | null {
+  if (tokens === undefined || !Number.isFinite(tokens) || tokens <= 0) return null;
+
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: tokens };
 }
 
 /**

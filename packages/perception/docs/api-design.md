@@ -331,8 +331,10 @@ const messages: AgentMessage[] = [
 
 {hearingContext}
 
-[2026-09-05T12:00:01.000Z][speaker_1] xxxxx
-[2026-09-05T12:00:04.000Z][主播] xxxxx
+时间: 2026-09-05T12:00:01.000Z, 说话人: [speaker_1]
+xxxxx
+时间: 2026-09-05T12:00:04.000Z, 说话人: [主播]
+xxxxx
 ```
 
 视觉图片是独立的 `image` content。上面的 `{image content}` 只表示它在消息中的位置，不会真的生成这段占位文字。
@@ -340,13 +342,13 @@ const messages: AgentMessage[] = [
 `compose()` 的默认行为：
 
 1. 按转写的 `startAt` 排序。
-2. 每条转写保留 ISO 时间、说话人和正文。
+2. 每条转写保留 ISO 时间、说话人、声音事件和正文。
 3. 按图片 `source` 分组。
 4. 每组超过 `maxFrames` 时均匀选择画面，并始终保留时间跨度信息。
 5. 每组生成一张 1920×1080 JPEG 多帧合成图。
 6. 视觉有数据时调用 `context`，先加入一次 `# 视觉` 和返回文本，随后展开合成后的 image content。
 7. 听觉有数据时调用 `context`，在所有视觉内容之后加入 `# 听觉`、返回文本和按时间排列的转写。
-8. 每条转写使用 `[ISO time][speaker] content` 格式；没有说话人时省略第二组方括号。
+8. 每条转写先输出一行 `时间: ...`、`说话人: [...]`、`声音事件: ...` 元信息，再输出正文；没有说话人或声音事件时省略对应字段。
 9. 没有有效图片时不生成 `# 视觉`、vision text content 或 image content。
 10. 没有有效转写时不生成 `# 听觉` 或 hearing text content。
 11. 当转写与图片都为空时返回空数组，不依靠提示词制造空感知消息。

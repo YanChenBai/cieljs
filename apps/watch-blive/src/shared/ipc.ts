@@ -37,6 +37,8 @@ export interface WatchBliveBridge {
   openBrowseWindow(): Promise<void>;
   start(options: StartWatchOptions): Promise<void>;
   stop(): Promise<void>;
+  /** 手动压缩当前会话上下文；返回是否产生了新的压缩摘要。 */
+  compactContext(): Promise<boolean>;
   login(): Promise<Account>;
   logout(): Promise<void>;
   account(): Promise<Account | undefined>;

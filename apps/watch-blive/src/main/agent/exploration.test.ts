@@ -1,4 +1,4 @@
-import type { Ciel } from '@cieljs/runtime';
+import type { Ciel } from 'cieljs';
 import { describe, expect, it, vi } from 'vite-plus/test';
 
 import type { RoomCandidate, RoomInfo, WatchEvent } from '../../shared/types.ts';

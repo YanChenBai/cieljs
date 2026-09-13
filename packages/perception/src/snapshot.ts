@@ -155,15 +155,18 @@ function selectFrames(frames: readonly PerceptionFrame[], limit: number) {
 }
 
 function formatTranscript(transcript: ASRResult) {
-  const speaker = transcript.speaker ? `[${transcript.speaker}]` : '';
   const events = transcript.events?.map(event => event.type).join('|');
+  const fields = [`时间: ${transcript.startAt.toISOString()}`];
 
-  return [
-    `<开始时间: ${transcript.startAt.toISOString()}>`,
-    `<说话人: ${speaker}>`,
-    `<声音事件: ${events ?? ''}>`,
-    transcript.content,
-  ].join('');
+  if (transcript.speaker) {
+    fields.push(`说话人: [${transcript.speaker}]`);
+  }
+
+  if (events) {
+    fields.push(`声音事件: ${events}`);
+  }
+
+  return `${fields.join(', ')}\n${transcript.content}`;
 }
 
 function cloneTranscript(transcript: ASRResult): ASRResult {

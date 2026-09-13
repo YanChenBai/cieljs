@@ -3,10 +3,12 @@ import { CielDevtools, type MessageRenderers, type ToolRenderers } from '@cieljs
 import {
   ArrowUp,
   ExternalLink,
+  LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  Shrink,
   X,
 } from '@lucide/vue';
 import { Button } from '@vuetify/v0/components';
@@ -45,6 +47,7 @@ const {
   attached,
   start,
   stop,
+  compactContext,
   login,
   logout,
   refreshAccount,
@@ -121,6 +124,7 @@ const videoProgressLabel = computed(() => {
         :aria-expanded="!collapsed"
         aria-controls="watch-sidebar"
         :aria-label="collapsed ? '展开侧边栏' : '收起侧边栏'"
+        :title="collapsed ? '展开侧边栏' : '收起侧边栏'"
         @click="collapsed = !collapsed"
       >
         <PanelLeftOpen v-if="collapsed" :size="16" />
@@ -147,7 +151,23 @@ const videoProgressLabel = computed(() => {
         </span>
         {{ state.status }}
       </span>
-      <Button.Root class="action icon-button" aria-label="打开 B 站浏览窗口" @click="openBrowse">
+      <Button.Root
+        class="action icon-button"
+        title="压缩上下文"
+        aria-label="压缩上下文"
+        :disabled="!activeSessionId || pending === 'compact'"
+        :aria-busy="pending === 'compact'"
+        @click="compactContext"
+      >
+        <LoaderCircle v-if="pending === 'compact'" class="spinning" :size="16" />
+        <Shrink v-else :size="16" />
+      </Button.Root>
+      <Button.Root
+        class="action icon-button"
+        title="打开 B 站浏览窗口"
+        aria-label="打开 B 站浏览窗口"
+        @click="openBrowse"
+      >
         <ExternalLink :size="16" />
       </Button.Root>
       <Button.Root
@@ -155,6 +175,7 @@ const videoProgressLabel = computed(() => {
         :aria-expanded="!right.collapsed.value"
         aria-controls="watch-devtools"
         aria-label="展开或收起 DevTools"
+        title="展开或收起 DevTools"
         @click="right.collapsed.value = !right.collapsed.value"
       >
         <PanelRightOpen v-if="right.collapsed.value" :size="16" />
@@ -165,7 +186,7 @@ const videoProgressLabel = computed(() => {
       class="workspace grid min-h-0 flex-1 p-0"
       :class="{
         resizing: dragging || right.dragging.value,
-        'grid-cols-[var(--sidebar-width)_5px_minmax(0,1fr)]': !collapsed,
+        'grid-cols-[var(--sidebar-width)_3px_minmax(0,1fr)]': !collapsed,
         'grid-cols-[minmax(0,1fr)]': collapsed,
       }"
       :style="{ '--sidebar-width': `${width}px`, '--devtools-width': `${right.width.value}px` }"
@@ -207,6 +228,7 @@ const videoProgressLabel = computed(() => {
           v-if="sidebarScrolled"
           class="text-muted hover:text-foreground absolute bottom-3 left-1/2 z-20 grid size-7 -translate-x-1/2 cursor-pointer place-items-center rounded-full border border-[#ffffff1a] bg-[#27272a] shadow-[0_4px_12px_#00000059] transition-colors hover:bg-[#3f3f46]"
           aria-label="回到侧边栏顶部"
+          title="回到侧边栏顶部"
           @click="scrollSidebarToTop"
         >
           <ArrowUp :size="14" />
@@ -214,7 +236,7 @@ const videoProgressLabel = computed(() => {
       </div>
       <div
         v-show="!collapsed"
-        class="resize-handle my-2 rounded-lg"
+        class="resize-handle relative z-10 my-2 rounded-lg"
         role="separator"
         tabindex="0"
         aria-label="调整侧边栏宽度"
@@ -230,9 +252,11 @@ const videoProgressLabel = computed(() => {
         @lostpointercapture="endDrag"
         @keydown="keyboardResize"
       />
+      <!-- 侧栏分界线就是容器的左边框：容器左移 2px，线正好落在 3px 拖拽区正中，两侧各留 1px。 -->
       <div
         class="viewer-container bg-surface grid min-h-0 min-w-0 overflow-hidden rounded-tl-xl border border-r-0 border-b-0 border-[#ffffff16] [box-shadow:0_2px_12px_#00000018,inset_0_1px_0_#ffffff04]"
         :class="{
+          '-ml-0.5': !collapsed,
           'grid-cols-[minmax(240px,1fr)_3px_var(--devtools-width)]': !right.collapsed.value,
           'grid-cols-[minmax(0,1fr)]': right.collapsed.value,
           'rounded-tr-xl': right.collapsed.value,
@@ -245,7 +269,11 @@ const videoProgressLabel = computed(() => {
             role="alert"
           >
             <span class="min-w-0 flex-1">{{ error }}</span>
-            <Button.Root class="action icon-button" aria-label="关闭错误提示" @click="error = ''"
+            <Button.Root
+              class="action icon-button"
+              aria-label="关闭错误提示"
+              title="关闭错误提示"
+              @click="error = ''"
               ><X :size="14"
             /></Button.Root>
           </div>
@@ -274,7 +302,7 @@ const videoProgressLabel = computed(() => {
         </section>
         <div
           v-show="!right.collapsed.value"
-          class="resize-handle"
+          class="resize-handle devtools-divider"
           role="separator"
           tabindex="0"
           aria-label="调整 DevTools 宽度"

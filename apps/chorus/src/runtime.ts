@@ -5,11 +5,11 @@ import { qwen } from '@cieljs/embed';
 import { createMcp, type Mcp } from '@cieljs/mcp';
 import { memoryStorage } from '@cieljs/memory';
 import { createPerception, type Perception, type SpeechEndEvent } from '@cieljs/perception';
-import { defineCiel, type Ciel, type CielSession } from '@cieljs/runtime';
 import { sessionStorage } from '@cieljs/session';
 import { Storage } from '@cieljs/storage';
 import { VectorService, vectorStorage } from '@cieljs/vector';
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { defineCiel, type Ciel, type CielSession } from 'cieljs';
 
 import { createAudioInput } from './audio/input.ts';
 import { AudioNormalizer } from './audio/normalizer.ts';

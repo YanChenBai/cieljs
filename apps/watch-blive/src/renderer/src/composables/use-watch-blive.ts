@@ -68,18 +68,20 @@ export function useWatchBlive() {
     void refreshSetup();
   });
 
+  function appendEvent(text: string) {
+    events.value = [
+      ...events.value,
+      { id: ++eventId, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text },
+    ].slice(-60);
+  }
+
   function receive(event: WatchBridgeEvent) {
     if (event.type === 'video_progress') videoProgress.value = event;
     if (event.type === 'status' && ['idle', 'closed'].includes(event.status))
       videoProgress.value = undefined;
     if (event.type === 'room_requested') requestedRoomId.value = event.roomId;
     const text = describeWatchEvent(event);
-    if (text) {
-      events.value = [
-        ...events.value,
-        { id: ++eventId, time: new Date().toLocaleTimeString('zh-CN', { hour12: false }), text },
-      ].slice(-60);
-    }
+    if (text) appendEvent(text);
 
     if (event.type === 'status') state.value = { ...state.value, status: event.status };
     if (event.type === 'room_opened') {
@@ -150,6 +152,11 @@ export function useWatchBlive() {
     attached,
     start: (options: StartWatchOptions) => run('start', () => watchBridge.start(options)),
     stop: () => run('stop', () => watchBridge.stop()),
+    compactContext: () =>
+      run('compact', async () => {
+        const compacted = await watchBridge.compactContext();
+        appendEvent(compacted ? '已手动压缩上下文' : '当前没有可压缩的历史');
+      }),
     login: () =>
       run('login', async () => {
         account.value = await watchBridge.login();

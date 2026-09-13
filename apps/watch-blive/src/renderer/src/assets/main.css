@@ -91,6 +91,12 @@ select:focus-visible {
 .resize-handle {
   @apply cursor-col-resize touch-none;
 }
+/* DevTools 的分界线画在拖拽区里，拖拽栏本身就不再是一条空档。 */
+.devtools-divider {
+  padding: 0 1px;
+  background-color: #ffffff16;
+  background-clip: content-box;
+}
 .resize-handle:hover,
 .resize-handle:focus-visible,
 .resizing .resize-handle {

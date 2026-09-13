@@ -11,7 +11,7 @@ import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
 import { expect, test } from 'vite-plus/test';
 
 import { createInvestigationTools } from '../src/agents/investigation-tools.ts';
-import { createCielSessionAgent } from '../src/agents/session-agent.ts';
+import { createRuntimeSessionAgent } from '../src/agents/session-agent.ts';
 
 test('跨 Space 读取需要授权，读取不会扩大房间写入权限', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ciel-cross-space-'));
@@ -43,8 +43,12 @@ test('跨 Space 读取需要授权，读取不会扩大房间写入权限', asyn
       assertRunning: () => {},
       onClose: () => {},
     };
-    const local = await createCielSessionAgent({ ...base, sessionId: 'local' });
-    const shared = await createCielSessionAgent({ ...base, sessionId: 'shared', crossSpace: true });
+    const local = await createRuntimeSessionAgent({ ...base, sessionId: 'local' });
+    const shared = await createRuntimeSessionAgent({
+      ...base,
+      sessionId: 'shared',
+      crossSpace: true,
+    });
     const localFinder = local.agent.state.tools.find(
       tool => tool.name === 'find_sessions_by_source',
     )!;

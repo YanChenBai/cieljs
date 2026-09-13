@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
-  AgentEvent,
+  RuntimeEvent,
   RuntimeMetadata,
   RuntimeReader,
   RuntimeRecord,
@@ -22,7 +22,7 @@ interface Correlation {
 export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
   private readonly states = new Map<string, Correlation>();
   private readonly listeners = new Set<() => void>();
-  private readonly seen = new WeakMap<AgentEvent, Map<string, Promise<RuntimeRecord>>>();
+  private readonly seen = new WeakMap<RuntimeEvent, Map<string, Promise<RuntimeRecord>>>();
   private pending = Promise.resolve();
   private failure: unknown;
   private closed = false;
@@ -32,7 +32,7 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
   /** 同一事件对象可由多个观察器提交，但只持久化一次。投影在同一事务内提交。 */
   record(
     sessionId: string,
-    event: AgentEvent,
+    event: RuntimeEvent,
     metadata: RuntimeMetadata = {},
     project?: (tx: Transaction, record: RuntimeRecord) => Promise<void>,
   ): Promise<RuntimeRecord> {

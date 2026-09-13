@@ -6,6 +6,7 @@ import { isAllowedPageUrl } from './bilibili/page-executor.ts';
 import { closeBrowseWindow } from './browse-window.ts';
 import { prepareWatchResources, migrateWatchResources } from './config.ts';
 import { registerWatchBliveIpc } from './ipc.ts';
+import { browserUserAgent } from './user-agent.ts';
 
 /** 浏览窗口也计入 getAllWindows()，判断主窗口是否还活着只能靠这个引用。 */
 let activeMainWindow: BrowserWindow | undefined;
@@ -91,6 +92,9 @@ async function createWindow(): Promise<void> {
   // 不该把窗口一起挡住，也不该让 createWindow 以未处理拒绝结束。
   await ipc.catch(error => console.error('准备观看运行时失败', error));
 }
+
+// userAgentFallback 必须在 ready 之前设置，否则会话会先采用带 Electron 标识的默认 UA。
+app.userAgentFallback = browserUserAgent;
 
 prepareWatchResources();
 

@@ -1,21 +1,19 @@
 import { runInvestigation } from './agents/investigation-agent.ts';
-import { createCielSessionAgent, type SessionAgentHandle } from './agents/session-agent.ts';
-import { CielResources } from './resources.ts';
+import { createRuntimeSessionAgent, type SessionAgentHandle } from './agents/session-agent.ts';
 import { createSourceResolver } from './sources.ts';
 import type {
-  Ciel,
-  CielSession,
-  CielStatus,
-  DefineCielOptions,
   InvestigateOptions,
   InvestigationResult,
-  OpenSessionOptions,
+  OpenRuntimeSessionOptions,
+  RuntimeOptions,
+  RuntimeSession,
+  RuntimeStatus,
 } from './types.ts';
 
-class CielSessionRuntime implements CielSession {
+class RuntimeSessionInstance implements RuntimeSession {
   readonly id: string;
   readonly spaceId: string;
-  readonly agent: CielSession['agent'];
+  readonly agent: RuntimeSession['agent'];
 
   constructor(private readonly handle: SessionAgentHandle) {
     this.id = handle.session.id;
@@ -27,30 +25,32 @@ class CielSessionRuntime implements CielSession {
     return this.close();
   }
 
+  compact() {
+    return this.handle.compactContext();
+  }
+
   close() {
     return this.handle.close();
   }
 }
 
-class CielRuntime implements Ciel {
-  private currentStatus: CielStatus = 'idle';
+export class Runtime implements AsyncDisposable {
+  private currentStatus: RuntimeStatus = 'idle';
   private startPromise: Promise<void> | undefined;
   private closePromise: Promise<void> | undefined;
-  private resources: CielResources | undefined;
-
   private readonly sessions = new Set<SessionAgentHandle>();
   private readonly sessionOpenings = new Set<Promise<SessionAgentHandle>>();
   private readonly investigations = new Set<Promise<unknown>>();
 
-  constructor(private readonly options: DefineCielOptions) {}
+  constructor(private readonly options: RuntimeOptions) {}
 
-  get status() {
+  get status(): RuntimeStatus {
     return this.currentStatus;
   }
 
   start(): Promise<void> {
     if (this.closePromise) {
-      return Promise.reject(new Error('Ciel 已开始关闭'));
+      return Promise.reject(new Error('Runtime 已开始关闭'));
     }
 
     if (this.currentStatus === 'running') {
@@ -62,7 +62,7 @@ class CielRuntime implements Ciel {
     }
 
     if (this.currentStatus === 'closing' || this.currentStatus === 'closed') {
-      return Promise.reject(new Error(`Ciel 已开始关闭：${this.currentStatus}`));
+      return Promise.reject(new Error(`Runtime 已开始关闭：${this.currentStatus}`));
     }
 
     this.currentStatus = 'starting';
@@ -71,21 +71,21 @@ class CielRuntime implements Ciel {
     return this.startPromise;
   }
 
-  async session(options: OpenSessionOptions): Promise<CielSession> {
+  async session(options: OpenRuntimeSessionOptions): Promise<RuntimeSession> {
     this.assertRunning();
 
-    const resources = this.requireResources();
     const resolveSources = createSourceResolver(options.sources);
-    const opening = createCielSessionAgent({
+    const opening = createRuntimeSessionAgent({
       model: this.options.model,
       apiKey: this.options.apiKey,
       systemPrompt: this.options.systemPrompt,
-      tools: [...(this.options.tools ?? []), ...(this.options.mcp?.tools ?? [])],
-      sessionManager: resources.sessionManager,
-      memoryManager: resources.memoryManager,
+      tools: this.options.tools ?? [],
+      sessionManager: this.options.sessionManager,
+      memoryManager: this.options.memoryManager,
       sessionId: options.sessionId,
       spaceId: options.spaceId,
       crossSpace: options.crossSpace,
+      compaction: this.options.compaction,
       resolveSources,
       assertRunning: this.assertRunning.bind(this),
       onClose: this.removeSession.bind(this),
@@ -102,22 +102,21 @@ class CielRuntime implements Ciel {
 
     this.sessions.add(handle);
 
-    return new CielSessionRuntime(handle);
+    return new RuntimeSessionInstance(handle);
   }
 
   investigate(options: InvestigateOptions): Promise<InvestigationResult> {
     this.assertRunning();
 
-    const resources = this.requireResources();
     const resolveSources = createSourceResolver(options.sources);
     const investigation = runInvestigation({
       model: this.options.model,
       apiKey: this.options.apiKey,
       systemPrompt: this.options.investigation?.systemPrompt ?? this.options.systemPrompt,
       tools: this.options.investigation?.tools ?? [],
-      sessionManager: resources.sessionManager,
-      investigationManager: resources.investigationManager,
-      memoryManager: resources.memoryManager,
+      sessionManager: this.options.sessionManager,
+      investigationManager: this.options.investigationManager,
+      memoryManager: this.options.memoryManager,
       sessionId: options.sessionId,
       spaceId: options.spaceId,
       crossSpace: options.crossSpace,
@@ -147,16 +146,7 @@ class CielRuntime implements Ciel {
   }
 
   private async startResources() {
-    try {
-      this.resources = await CielResources.open(this.options);
-
-      if (this.currentStatus !== 'closing') this.currentStatus = 'running';
-    } catch (error) {
-      this.startPromise = undefined;
-      if (this.currentStatus !== 'closing') this.currentStatus = 'idle';
-
-      throw error;
-    }
+    if (this.currentStatus !== 'closing') this.currentStatus = 'running';
   }
 
   private async closeResources() {
@@ -176,39 +166,24 @@ class CielRuntime implements Ciel {
       ...[...this.sessions].map(session => session.close()),
       ...this.investigations,
     ]);
-    const storageResults = await Promise.allSettled([this.resources?.[Symbol.asyncDispose]()]);
-
     this.currentStatus = 'closed';
-    this.resources = undefined;
 
-    const failures = [...openingResults, ...activeResults, ...storageResults]
+    const failures = [...openingResults, ...activeResults]
       .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
       .map(result => result.reason);
 
     if (failures.length) {
-      throw new AggregateError(failures, 'Ciel 关闭时发生错误');
+      throw new AggregateError(failures, 'Runtime 关闭时发生错误');
     }
   }
 
   private assertRunning() {
     if (this.closePromise || this.currentStatus !== 'running') {
-      throw new Error(`Ciel 当前不可用：${this.currentStatus}`);
+      throw new Error(`Runtime 当前不可用：${this.currentStatus}`);
     }
-  }
-
-  private requireResources(): CielResources {
-    if (!this.resources) {
-      throw new Error('Ciel 尚未完成启动');
-    }
-
-    return this.resources;
   }
 
   private removeSession(session: SessionAgentHandle) {
     this.sessions.delete(session);
   }
-}
-
-export function defineCiel(options: DefineCielOptions): Ciel {
-  return new CielRuntime(options);
 }

@@ -22,8 +22,9 @@ vp run -r test
 vp run -r build
 ```
 
-- Run the development server:
+- Run the development server（选择具体应用）:
 
 ```bash
-vp run dev
+vp run watch-blive#dev      # Electron 桌面应用
+vp run @cieljs/chorus#dev   # 多人语音聊天应用
 ```

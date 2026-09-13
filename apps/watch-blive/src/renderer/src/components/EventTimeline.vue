@@ -20,7 +20,7 @@ const newestFirst = computed(() => [...props.events].reverse());
       <li
         v-for="event in newestFirst"
         :key="event.id"
-        class="grid grid-cols-[52px_minmax(0,1fr)] gap-[7px] py-1.5 [overflow-wrap:anywhere]"
+        class="timeline-entry grid grid-cols-[52px_minmax(0,1fr)] gap-[7px] [overflow-wrap:anywhere]"
       >
         <time class="text-[#71717a]">{{ event.time }}</time
         ><span>{{ event.text }}</span>
@@ -28,3 +28,38 @@ const newestFirst = computed(() => [...props.events].reverse());
     </ol>
   </section>
 </template>
+
+<style scoped>
+/* 左侧一条竖直导轨配节点，把事件读成时间线。
+   留白与行高放在这里而不是工具类：导轨要让开文字，节点要对上文字首行。 */
+.timeline-entry {
+  position: relative;
+  padding: 4px 0 4px 16px;
+  line-height: 17px;
+}
+.timeline-entry::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 3px;
+  bottom: 0;
+  width: 1px;
+  background: #ffffff1a;
+}
+.timeline-entry::after {
+  content: '';
+  position: absolute;
+  top: 9px;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #52525b;
+  /* 用背景色描一圈，盖住导轨穿过节点的接缝。 */
+  box-shadow: 0 0 0 3px var(--surface);
+}
+/* 倒序展示，首行就是最新事件：用强调色点出来。 */
+.timeline-entry:first-child::after {
+  background: var(--accent);
+}
+</style>

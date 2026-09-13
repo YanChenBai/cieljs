@@ -112,6 +112,35 @@ describe('Watch Blive 配置', () => {
     });
   });
 
+  it('读取推理强度与单轮思考时间预算', async () => {
+    await writeFile(
+      watchConfigFile(),
+      JSON.stringify({
+        ai: { provider: 'xiaomi', model: 'mimo-v2.5', apiKey: 'secret', thinkingLevel: 'low' },
+        interaction: { minimumThinkIntervalMs: 3000, thinkTimeoutMs: 45_000 },
+      }),
+    );
+
+    const config = resolveWatchConfig();
+
+    expect(config.ai.thinkingLevel).toBe('low');
+    expect(config.interaction.thinkTimeoutMs).toBe(45_000);
+  });
+
+  it('拒绝未知的推理强度', async () => {
+    await writeFile(
+      watchConfigFile(),
+      JSON.stringify({
+        ai: { provider: 'xiaomi', model: 'mimo-v2.5', apiKey: 'secret', thinkingLevel: 'turbo' },
+      }),
+    );
+
+    expect(watchConfigurationStatus()).toMatchObject({
+      valid: false,
+      message: expect.stringContaining('ai.thinkingLevel'),
+    });
+  });
+
   it('从数据目录 config.json 读取并校验 AI 凭据', async () => {
     await writeFile(
       watchConfigFile(),

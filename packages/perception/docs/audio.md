@@ -34,7 +34,7 @@ const perception = createPerception({
 
 底层 `ASR` 的 `result` 先写入内部时间线，再处理对应的 `speechend`。感知包按转写的 `startAt` 排序，`retentionMs`（默认 60 秒）决定内部最多保留多长的感知数据。
 
-每条转写保留 ISO 时间、说话人和正文。没有说话人的转写在快照中省略说话人方括号。
+每条转写保留 ISO 时间、说话人、声音事件和正文。没有说话人或声音事件的转写在快照中省略对应字段。
 
 ## 说话人
 

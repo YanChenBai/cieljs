@@ -52,6 +52,14 @@ Memory 工具绑定 `session.id` 和当前动态来源，Agent 不能自行构�
 
 Memory 召回内容带有来源和时间信息，并标记为历史资料，不能被当作当前用户指令。
 
+## 上下文压缩
+
+每次运行前 Runtime 会用对话模型的 `contextWindow` 检查 Session 的 token 用量；超过 `contextWindow - reserveTokens`（默认预留 16,384）时，用同一个模型把旧消息递归总结成一份累计摘要，最近的原文继续保留。压缩只改送给模型的上下文，原始消息仍完整保存在数据库中，检索与历史读取不受影响。
+
+压缩后 Agent 改用摘要加保留的原文继续运行。每次压缩都会向事实流水写入一条 `session_compaction` 事件，Devtools 的执行轨迹里能看到「上下文压缩」步骤和摘要。摘要生成失败、被截断或返回空内容会中断本次运行，不会覆盖已有历史，下一次运行可以重试。
+
+需要换窗口或保留条数时，直接实例化 `@cieljs/runtime` 的 `Runtime` 并传入 `compaction`；`ciel.session()` 的默认值适用于大多数场景。
+
 ## 关闭
 
 `session.close()` 等待当前 Agent 运行结束、消息持久化队列清空后取消订阅，并从 Ciel 的活动 Session 集合中移除。重复调用返回同一个关闭流程。

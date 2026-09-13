@@ -37,4 +37,5 @@ export const DanmakuPageResultSchema = Type.Object({
   accepted: Type.Boolean(),
   code: Type.Union([Type.Number(), Type.Null()]),
   message: Type.String(),
+  riskControl: Type.Boolean(),
 });

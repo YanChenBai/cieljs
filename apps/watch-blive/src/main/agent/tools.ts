@@ -46,7 +46,7 @@ export const createDanmakuTool = defineTool(
   (context: DanmakuToolContext, gate: DanmakuRunGate) => ({
     name: 'send_danmaku',
     label: '发送弹幕',
-    description: '选择发送一条自然弹幕或暂缓互动；每轮必须且只能调用一次。',
+    description: '选择发送一条自然弹幕或暂缓互动；每轮最多调用一次。',
     executionMode: 'sequential',
     execute: params => executeDanmaku(params, context, gate),
   }),
@@ -78,7 +78,10 @@ async function deliverDanmaku(context: DanmakuToolContext, room: RoomInfo, conte
   const pageResult = await context.livePage.sendDanmaku(content);
 
   if (!pageResult.accepted) {
-    throw new Error(`页面拒绝发送弹幕：${pageResult.message || String(pageResult.code)}`);
+    const reason = pageResult.message || String(pageResult.code);
+    const prefix = pageResult.riskControl ? '发送弹幕被风控拦截' : '页面拒绝发送弹幕';
+
+    throw new Error(`${prefix}：${reason}`);
   }
 
   context.emit({ type: 'danmaku_delivered', content, roomId: room.roomId });

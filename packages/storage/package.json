@@ -8,10 +8,6 @@
   "exports": {
     ".": "./dist/index.mjs"
   },
-  "scripts": {
-    "build": "vp pack",
-    "test": "vp test --passWithNoTests"
-  },
   "dependencies": {
     "@cieljs/agent-kit": "workspace:*",
     "@electric-sql/pglite": "catalog:",

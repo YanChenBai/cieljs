@@ -4,9 +4,7 @@ import type { Readable } from 'node:stream';
 import type { KWS } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
 
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36';
+import { browserUserAgent } from '../user-agent.ts';
 
 export interface LiveMediaOptions {
   roomId: number;
@@ -215,7 +213,7 @@ export function ffmpegArguments(roomId: number, input: string, live: boolean): s
         '-reconnect_delay_max',
         '5',
         '-user_agent',
-        USER_AGENT,
+        browserUserAgent,
         '-referer',
         `https://live.bilibili.com/${roomId}`,
         '-headers',

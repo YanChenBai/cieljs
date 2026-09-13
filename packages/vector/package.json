@@ -8,10 +8,6 @@
   "exports": {
     ".": "./dist/index.mjs"
   },
-  "scripts": {
-    "build": "vp pack",
-    "test": "vp test --passWithNoTests"
-  },
   "dependencies": {
     "@cieljs/model-kit": "workspace:*",
     "@cieljs/storage": "workspace:*",

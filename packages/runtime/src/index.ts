@@ -1,15 +1,12 @@
 export type * from '@cieljs/agent-kit/protocol';
-export { defineCiel } from './ciel.ts';
+export { Runtime } from './runtime.ts';
 export type {
-  Ciel,
-  CielSession,
-  CielStatus,
-  DefineCielOptions,
   InvestigateOptions,
   InvestigationResult,
-  InvestigationStorageOptions,
-  MemoryStorageOptions,
-  OpenSessionOptions,
+  OpenRuntimeSessionOptions,
+  RuntimeCompactionOptions,
+  RuntimeOptions,
+  RuntimeSession,
+  RuntimeStatus,
   SessionSources,
-  SessionStorageOptions,
 } from './types.ts';

@@ -6,6 +6,8 @@ import type { Agent, AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { streamSimple } from '@earendil-works/pi-ai/compat';
 
+import type { RuntimeCompactionOptions } from '../types.ts';
+import { createSessionSummarizer } from './compaction.ts';
 import { createSessionContextTransformer } from './context.ts';
 import { ManagedAgent } from './managed-agent.ts';
 import { createSessionSourceSync } from './session-sources.ts';
@@ -20,6 +22,8 @@ export class SessionAgentHandle {
     private readonly unsubscribe: () => void,
     private readonly markClosed: () => void,
     private readonly onClose: (handle: SessionAgentHandle) => void,
+    /** 手动压缩当前上下文：忽略自动阈值，返回是否产生了新的压缩摘要。 */
+    readonly compactContext: () => Promise<boolean>,
   ) {}
 
   close(): Promise<void> {
@@ -38,7 +42,7 @@ export class SessionAgentHandle {
   }
 }
 
-export async function createCielSessionAgent(options: {
+export async function createRuntimeSessionAgent(options: {
   model: Model<Api>;
   apiKey?: string;
   systemPrompt: string;
@@ -48,6 +52,7 @@ export async function createCielSessionAgent(options: {
   sessionId?: string;
   spaceId: string;
   crossSpace?: boolean;
+  compaction?: RuntimeCompactionOptions;
   resolveSources: () => string[];
   assertRunning: () => void;
   onClose: (handle: SessionAgentHandle) => void;
@@ -90,8 +95,36 @@ export async function createCielSessionAgent(options: {
   ];
   assertUniqueTools(tools);
 
+  const summarize = createSessionSummarizer(options.model, options.apiKey);
+
   let isClosed = false;
-  const agent = new ManagedAgent({
+  let agent: ManagedAgent;
+
+  // 自动路径每次运行前检查一次；手动路径忽略阈值，但同样只改模型可见的上下文，
+  // Agent 转录必须同步为压缩后的结果。
+  const compactSession = async (force = false) => {
+    const result = await session.compact({
+      summarize,
+      contextWindow: options.compaction?.contextWindow ?? options.model.contextWindow,
+      reserveTokens: options.compaction?.reserveTokens,
+      keepRecentMessages: options.compaction?.keepRecentMessages,
+      force,
+    });
+
+    if (result) {
+      agent.state.messages = await session.context();
+    }
+
+    return result !== null;
+  };
+
+  // 等当前运行结束再改转录，避免中途替换正在使用的消息。
+  const compactContext = async () => {
+    await agent.waitForIdle();
+    return compactSession(true);
+  };
+
+  agent = new ManagedAgent({
     sessionId: session.id,
     streamFn: (model, context, streamOptions) =>
       streamSimple(model, context, { ...streamOptions, apiKey: options.apiKey }),
@@ -103,6 +136,7 @@ export async function createCielSessionAgent(options: {
       }
 
       await resolveAndRefreshSources();
+      await compactSession();
     },
     beforeToolCall: resolveAndRefreshSources,
     transformContext: createSessionContextTransformer({
@@ -132,5 +166,6 @@ export async function createCielSessionAgent(options: {
       isClosed = true;
     },
     options.onClose,
+    compactContext,
   );
 }

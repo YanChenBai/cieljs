@@ -1,7 +1,7 @@
 import type { DevtoolsHost } from '@cieljs/devtools/host';
 import type { ASRModelId, KWS, WakeEvent } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
-import type { CielSession } from '@cieljs/runtime';
+import type { CielSession } from 'cieljs';
 
 import type { RoomInfo, WatchEvent, WatchMode } from '../shared/types.ts';
 import type { LiveMedia } from './media/live-media.ts';
@@ -24,6 +24,7 @@ interface RoomVisitOptions {
   };
   minimumThinkIntervalMs: number;
   periodicObservationMs: number;
+  thinkTimeoutMs?: number;
   canSwitch: () => boolean;
   beforeRun: () => void;
   afterRun: () => Promise<void> | void;
@@ -50,6 +51,7 @@ export class RoomVisit {
       perception: options.perception,
       agent: options.session.agent,
       minimumIntervalMs: options.minimumThinkIntervalMs,
+      thinkTimeoutMs: options.thinkTimeoutMs,
       startedAt: new Date(options.startedAt),
       context: wake => ({
         role: 'user',

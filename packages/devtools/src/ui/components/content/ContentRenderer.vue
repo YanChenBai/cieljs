@@ -80,12 +80,7 @@ const formattedText = computed(() => {
           html-policy="escape"
           :final="final"
         />
-        <Disclosure
-          v-else-if="block.type === 'thinking'"
-          title="思考过程"
-          class="dt-thinking"
-          :default-open="false"
-        >
+        <Disclosure v-else-if="block.type === 'thinking'" title="思考过程" class="dt-thinking">
           <MarkdownRender
             :content="block.thinking"
             :is-dark="true"

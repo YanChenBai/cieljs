@@ -1,37 +1,39 @@
-import type { McpTools } from '@cieljs/mcp';
-import type { MemoryManagerOptions } from '@cieljs/memory';
-import type { SessionManagerOptions } from '@cieljs/session';
-import type { Storage } from '@cieljs/storage';
-import type { VectorService } from '@cieljs/vector';
+import type { MemoryManager } from '@cieljs/memory';
+import type { SessionManager } from '@cieljs/session';
 import type { Agent, AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { SessionSources } from './sources.ts';
 
-export type CielStatus = 'idle' | 'starting' | 'running' | 'closing' | 'closed';
+export type RuntimeStatus = 'idle' | 'starting' | 'running' | 'closing' | 'closed';
 
-export type SessionStorageOptions = SessionManagerOptions;
-export type MemoryStorageOptions = MemoryManagerOptions;
-export type InvestigationStorageOptions = SessionManagerOptions;
+export interface RuntimeCompactionOptions {
+  /** 触发压缩的上下文窗口；省略时使用对话模型的 contextWindow。 */
+  contextWindow?: number;
+  /** 为后续生成预留的 token；省略时由 Session 使用 16384。 */
+  reserveTokens?: number;
+  /** 至少保留的最近原始消息条数；省略时由 Session 使用 10。 */
+  keepRecentMessages?: number;
+}
 
-export interface DefineCielOptions {
+export interface RuntimeOptions {
   model: Model<Api>;
   /** 请求级 API key，不写入全局环境变量或持久化存储。 */
   apiKey?: string;
   systemPrompt: string;
-  storage: Storage;
-  session?: Pick<SessionStorageOptions, 'tokenize' | 'onIndexError'>;
-  memory?: Pick<MemoryStorageOptions, 'timeZone' | 'tokenize' | 'onIndexError'>;
-  vectors?: VectorService;
+  sessionManager: SessionManager;
+  investigationManager: SessionManager;
+  memoryManager: MemoryManager;
   tools?: AgentTool[];
-  mcp?: McpTools;
+  /** 会话上下文压缩；省略时按对话模型的窗口自动压缩。 */
+  compaction?: RuntimeCompactionOptions;
   investigation?: {
     systemPrompt?: string;
     tools?: AgentTool[];
   };
 }
 
-export interface OpenSessionOptions {
+export interface OpenRuntimeSessionOptions {
   /** 允许工具只读检索其他 Space；默认仅当前 Space。 */
   crossSpace?: boolean;
   sessionId?: string;
@@ -39,7 +41,7 @@ export interface OpenSessionOptions {
   sources?: SessionSources;
 }
 
-export interface InvestigateOptions extends OpenSessionOptions {
+export interface InvestigateOptions extends OpenRuntimeSessionOptions {
   question: string | AgentMessage[];
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent, context: { tools: AgentTool[]; model: Model<Api> }) => void;
@@ -51,18 +53,12 @@ export interface InvestigationResult {
   messages: AgentMessage[];
 }
 
-export interface CielSession extends AsyncDisposable {
+export interface RuntimeSession extends AsyncDisposable {
   readonly id: string;
   readonly spaceId: string;
   readonly agent: Agent;
-  close(): Promise<void>;
-}
-
-export interface Ciel extends AsyncDisposable {
-  readonly status: CielStatus;
-  start(): Promise<void>;
-  session(options: OpenSessionOptions): Promise<CielSession>;
-  investigate(options: InvestigateOptions): Promise<InvestigationResult>;
+  /** 手动压缩上下文：忽略自动触发阈值，返回是否产生了新的压缩摘要。 */
+  compact(): Promise<boolean>;
   close(): Promise<void>;
 }
 

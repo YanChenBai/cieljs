@@ -50,7 +50,10 @@ export interface DevtoolsUsage {
    * 因此跨宿主重启连续，也不受客户端窗口与「清空视图」影响。
    */
   total: TraceUsage;
-  /** 最近一次请求的用量，即当前上下文规模；还没有请求时为 null。 */
+  /**
+   * 当前上下文规模：最近一次请求的用量；压缩后还没发起新请求时，是摘要加保留原文的
+   * 估算；还没有任何请求时为 null。
+   */
   context: TraceUsage | null;
 }
 

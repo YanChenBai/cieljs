@@ -1,9 +1,9 @@
-import type { AgentEvent } from '@earendil-works/pi-agent-core';
+import type { RuntimeEvent } from '@cieljs/agent-kit/protocol';
 import { expect, it } from 'vite-plus/test';
 
 import { createTraceStep } from './trace-step.ts';
 
-function step(event: AgentEvent) {
+function step(event: RuntimeEvent) {
   return createTraceStep({
     version: 1,
     id: 'event',
@@ -55,6 +55,18 @@ it('模型错误标记消息、轮次和运行，详情引用完整错误载荷'
   expect(step({ type: 'agent_end', messages: [failure] })).toMatchObject({
     status: 'error',
     error: { path: ['event', 'messages'] },
+  });
+});
+
+it('会话压缩生成可读的轨迹步骤，摘要进入消息内容', () => {
+  expect(
+    step({ type: 'session_compaction', summary: '累计摘要', throughSeq: 3, createdAt: 10 }),
+  ).toMatchObject({
+    name: 'session_compaction',
+    kind: 'event',
+    label: '上下文压缩',
+    text: '累计摘要',
+    status: 'completed',
   });
 });
 

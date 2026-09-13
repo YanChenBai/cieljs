@@ -15,11 +15,9 @@
     "access": "public"
   },
   "scripts": {
-    "build": "vp pack",
     "dev": "oxnode ./src/cli/index.ts start",
     "list-devices": "oxnode ./src/cli/index.ts list-devices",
     "start": "oxnode ./src/cli/index.ts start",
-    "test": "vp test",
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },
@@ -30,12 +28,12 @@
     "@cieljs/memory": "workspace:*",
     "@cieljs/model-kit": "workspace:*",
     "@cieljs/perception": "workspace:*",
-    "@cieljs/runtime": "workspace:*",
     "@cieljs/session": "workspace:*",
     "@cieljs/storage": "workspace:*",
     "@cieljs/vector": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
+    "cieljs": "workspace:*",
     "decibri": "^5.7.0",
     "typebox": "catalog:"
   },

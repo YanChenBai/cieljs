@@ -19,6 +19,6 @@ await using memory = await MemoryManager.open({ storage });
 
 所有借用 Storage 的服务必须先关闭。关闭 Manager 或 DevTools 不关闭数据库，宿主最后关闭 Storage。初始化失败会回收 PGlite。
 
-`storage.journal` 直接接受 Pi `AgentEvent`，在消息生成时分配统一的关联 ID。Session 将消息关联投影与事件写入放入同一事务，消息正文通过视图读取。重复提交同一事件对象不会重复追加事件。
+`storage.journal` 直接接受 `RuntimeEvent`（Pi `AgentEvent` 加宿主运行时事件，例如会话压缩），在消息生成时分配统一的关联 ID。Session 将消息关联投影与事件写入放入同一事务，消息正文通过视图读取。重复提交同一事件对象不会重复追加事件。
 
 记录保留 Pi 的事件快照，不执行重新生成。当前保留完整流式事件，未启用历史保留策略或压缩。

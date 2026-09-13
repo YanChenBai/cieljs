@@ -77,7 +77,7 @@ test('speechend publishes a frozen snapshot with the matching ASR result', async
       content: [
         {
           type: 'text',
-          text: '# 听觉\n\n听觉提示\n\n<开始时间: 2026-09-05T12:00:01.000Z><说话人: [alice]><声音事件: >测试内容',
+          text: '# 听觉\n\n听觉提示\n\n时间: 2026-09-05T12:00:01.000Z, 说话人: [alice]\n测试内容',
         },
       ],
     },

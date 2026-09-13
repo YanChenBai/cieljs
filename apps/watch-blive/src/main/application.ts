@@ -100,12 +100,14 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
       storage,
       dataDir: dataDirectory,
       ffmpegPath: config.ffmpegPath,
+      thinkingLevel: config.ai.thinkingLevel,
       wake: config.wake === false ? undefined : config.wake,
       perception: {
         asr: {
           model: hearingModel,
           bufferSeconds: 30,
-          // 不覆盖 vad：沿用包默认的 0.5 秒停顿 / 10 秒单段上限。
+          // 直播要跟得上现场：0.2 秒停顿收尾，单段最长 5 秒，都比包默认更短。
+          vad: { minSilenceDuration: 0.2, maxSpeechDuration: 5 },
         },
       },
       ...config.interaction,
@@ -140,6 +142,10 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
     watch: {
       start: os.input(startSchema).handler(({ input }) => requireRuntime().start(input)),
       stop: os.handler(() => runtime?.stop()),
+      compact: os.handler(() => {
+        if (!runtime) throw new Error('Watch Blive 尚未启动');
+        return runtime.compactContext();
+      }),
       areas: os.handler(() => api.areas()),
       snapshot: os.handler(() => ({ status: runtime?.status ?? 'idle', room: runtime?.room })),
       events: os.handler(async function* ({ signal }) {

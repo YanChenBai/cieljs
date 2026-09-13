@@ -21,11 +21,15 @@ const watchConfigSchema = z.object({
       .url()
       .refine(value => /^https?:\/\//u.test(value), '仅支持 HTTP 或 HTTPS 地址')
       .optional(),
+    /** 推理强度；省略时沿用模型默认（当前 mimo 等价于关闭）。 */
+    thinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   }),
   interaction: z
     .object({
       minimumThinkIntervalMs: z.number().int().min(500).default(2_000),
       periodicObservationMs: z.number().int().min(1_000).default(10_000),
+      /** 单轮思考的时间预算；超过就中止本轮，省略表示不限制。 */
+      thinkTimeoutMs: z.number().int().min(1_000).optional(),
     })
     .prefault({}),
   wake: z

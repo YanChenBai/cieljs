@@ -192,7 +192,7 @@ export class LivePage {
 
     if (generation !== this.generation) throw new Error('检查发送目标期间直播间已切换');
 
-    const result = await sendDanmaku(contents, content);
+    const result = await sendDanmaku(contents, roomId, content);
     if (generation !== this.generation) {
       throw new Error('发送期间直播间已切换，发送结果不再属于当前访问');
     }

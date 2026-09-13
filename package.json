@@ -1,5 +1,5 @@
 {
-  "name": "cieljs",
+  "name": "@cieljs/workspace",
   "version": "0.0.0",
   "private": true,
   "type": "module",

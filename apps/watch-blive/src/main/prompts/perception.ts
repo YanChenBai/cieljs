@@ -11,10 +11,10 @@ export function createPerceptionContext(input: PerceptionContextInput) {
     return DEFAULT_VISION_PROMPT;
   }
 
-  return `${HEARING_PROMPT}\n\n${PERCEPTION_RULES}`;
+  return HEARING_PROMPT;
 }
 
-export const PERCEPTION_RULES = `
+export const PERCEPTION_PROMPT = `
 ## 感知
 
 画面和听觉转写共同构成现场依据，两者结合判断，并区分看见的、听到的、推断的和不知道的。听觉转写由 ASR 生成：字词、谐音、人名和专有名词都可能不准，音乐、噪音、空场或多人抢话处还会凭空生成并不存在的内容。

@@ -1,5 +1,5 @@
-import type { RuntimeRecord } from '@cieljs/agent-kit/protocol';
-import type { AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core';
+import type { RuntimeEvent, RuntimeRecord } from '@cieljs/agent-kit/protocol';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { expect, it } from 'vite-plus/test';
 
 import { TraceUsageTally } from './usage.ts';
@@ -26,7 +26,7 @@ function assistant(counts: Counts): AgentMessage {
   };
 }
 
-function record(event: AgentEvent): RuntimeRecord {
+function record(event: RuntimeEvent): RuntimeRecord {
   return {
     version: 1,
     id: 'record:1',
@@ -54,6 +54,43 @@ it('累计每次请求的用量，并以最近一次请求作为当前上下文'
     total: { input: 150, output: 30, cacheRead: 1700, cacheWrite: 5, total: 1885 },
     context: { input: 50, output: 10, cacheRead: 900, cacheWrite: 5, total: 965 },
   });
+});
+
+it('压缩后用估算更新当前上下文，累计用量保持不变', () => {
+  const tally = new TraceUsageTally();
+  tally.consume(
+    ended(assistant({ input: 100, output: 20, cacheRead: 800, cacheWrite: 0, totalTokens: 920 })),
+  );
+
+  tally.consume(
+    record({
+      type: 'session_compaction',
+      summary: '累计摘要',
+      throughSeq: 3,
+      createdAt: 10,
+      contextTokens: 120,
+    }),
+  );
+
+  expect(tally.snapshot()).toEqual({
+    total: { input: 100, output: 20, cacheRead: 800, cacheWrite: 0, total: 920 },
+    context: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 120 },
+  });
+  expect(tally.snapshot('live')?.context?.total).toBe(120);
+});
+
+it('压缩记录缺少估算时清空当前上下文，不留下压缩前的大值', () => {
+  const tally = new TraceUsageTally();
+  tally.consume(
+    ended(assistant({ input: 100, output: 20, cacheRead: 800, cacheWrite: 0, totalTokens: 920 })),
+  );
+
+  tally.consume(
+    record({ type: 'session_compaction', summary: '旧摘要', throughSeq: 1, createdAt: 5 }),
+  );
+
+  expect(tally.snapshot().context).toBeNull();
+  expect(tally.snapshot().total.total).toBe(920);
 });
 
 it('按 Session 独立统计用量与当前上下文', () => {

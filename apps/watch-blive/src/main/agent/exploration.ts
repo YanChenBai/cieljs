@@ -1,5 +1,5 @@
 import type { DevtoolsHost } from '@cieljs/devtools/host';
-import type { Ciel } from '@cieljs/runtime';
+import type { Ciel } from 'cieljs';
 
 import type { WatchEvent } from '../../shared/types.ts';
 import type { BilibiliApi } from '../bilibili/api.ts';

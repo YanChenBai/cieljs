@@ -15,25 +15,21 @@
     "access": "public"
   },
   "scripts": {
-    "build": "vp pack",
-    "test": "vp test",
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
     "@cieljs/agent-kit": "workspace:*",
-    "@cieljs/mcp": "workspace:*",
     "@cieljs/memory": "workspace:*",
-    "@cieljs/model-kit": "workspace:*",
     "@cieljs/session": "workspace:*",
-    "@cieljs/storage": "workspace:*",
-    "@cieljs/vector": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "typebox": "catalog:"
   },
   "devDependencies": {
     "@cieljs/devtools": "workspace:*",
+    "@cieljs/storage": "workspace:*",
+    "@cieljs/vector": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

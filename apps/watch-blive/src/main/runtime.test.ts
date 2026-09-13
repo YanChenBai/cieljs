@@ -5,8 +5,9 @@ afterAll(() => storage.close());
 import type { DevtoolsHost } from '@cieljs/devtools/host';
 import type { ASRResult, WakeEvent } from '@cieljs/hearing';
 import { createPerception, type Perception, type PerceptionOptions } from '@cieljs/perception';
-import type { DefineCielOptions, OpenSessionOptions } from '@cieljs/runtime';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
+import type { DefineCielOptions, OpenSessionOptions } from 'cieljs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import type { Account } from '../shared/types.ts';
@@ -33,7 +34,7 @@ const mocks = vi.hoisted(() => ({
   kwsWrite: vi.fn(),
 }));
 vi.mock('@cieljs/hearing', () => ({ createKWS: mocks.createKWS }));
-vi.mock('@cieljs/runtime', () => ({
+vi.mock('cieljs', () => ({
   defineCiel: (options: DefineCielOptions) => {
     mocks.defineCiel(options);
     return mocks;
@@ -74,10 +75,12 @@ function setup(
   devtools?: DevtoolsHost,
   wake?: WatchWakeOptions,
   perceptionOptions?: PerceptionOptions,
+  thinkingLevel?: ThinkingLevel,
 ) {
   faux = registerFauxProvider();
   const sessionClose = vi.fn().mockResolvedValue(undefined);
   const prompt = vi.fn().mockResolvedValue(undefined);
+  const compact = vi.fn().mockResolvedValue(true);
   mocks.kwsOn.mockImplementation(() => vi.fn());
   mocks.createKWS.mockResolvedValue({
     on: mocks.kwsOn,
@@ -88,6 +91,7 @@ function setup(
     id: options.sessionId,
     spaceId: options.spaceId,
     agent: { abort: vi.fn(), prompt, state: { messages: [] } },
+    compact,
     close: sessionClose,
   }));
   const perceptionClose = vi.fn().mockResolvedValue(undefined);
@@ -127,8 +131,9 @@ function setup(
     api: api as unknown as BilibiliApi,
     wake,
     perception: perceptionOptions,
+    thinkingLevel,
   });
-  return { page, api, sessionClose, perceptionClose, setModel, asrOn, prompt };
+  return { page, api, sessionClose, perceptionClose, setModel, asrOn, prompt, compact };
 }
 
 describe('直播关键词唤醒', () => {
@@ -222,6 +227,23 @@ afterEach(async () => {
 });
 
 describe('观看生命周期', () => {
+  it('按配置设置会话的推理强度', async () => {
+    setup(undefined, undefined, undefined, 'low');
+    await runtime.start({ mode: { type: 'follow', roomId: 123 } });
+    const session = await mocks.session.mock.results[0]!.value;
+
+    expect(session.agent.state.thinkingLevel).toBe('low');
+  });
+
+  it('手动压缩上下文交给当前房间会话，未观看时拒绝', async () => {
+    const { compact } = setup();
+    await expect(runtime.compactContext()).rejects.toThrow('当前没有正在观看的直播间');
+
+    await runtime.start({ mode: { type: 'follow', roomId: 123 } });
+    await expect(runtime.compactContext()).resolves.toBe(true);
+    expect(compact).toHaveBeenCalledOnce();
+  });
+
   it('进房不预取主播动态与投稿，查询能力交由 Agent 按需使用', async () => {
     const { api } = setup();
     await runtime.start({ mode: { type: 'follow', roomId: 123 } });

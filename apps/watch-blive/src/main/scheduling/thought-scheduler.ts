@@ -6,8 +6,10 @@ import type { WatchWakeOptions } from './wake.ts';
 
 export interface ThoughtSchedulerOptions {
   perception: Pick<Perception, 'snapshot'>;
-  agent: Pick<Agent, 'prompt'>;
+  agent: Pick<Agent, 'prompt'> & Partial<Pick<Agent, 'abort'>>;
   minimumIntervalMs: number;
+  /** 单轮思考的时间预算；省略表示不限制。 */
+  thinkTimeoutMs?: number;
   startedAt: Date;
   context: (wake?: WakeEvent) => AgentMessage;
   beforeRun?: () => void;
@@ -173,6 +175,14 @@ export class ThoughtScheduler {
 
   private async run(window: PendingWindow): Promise<void> {
     const startedAt = Date.now();
+    const timeoutMs = this.options.thinkTimeoutMs;
+    let timedOut = false;
+    const timer = timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          this.options.agent.abort?.();
+        }, timeoutMs)
+      : undefined;
 
     try {
       const snapshot = await this.options.perception.snapshot({
@@ -186,19 +196,36 @@ export class ThoughtScheduler {
       }
 
       await this.options.agent.prompt([...messages, this.options.context(window.wake)]);
+
+      if (timedOut && !this.closed) {
+        this.options.onError?.(timeoutError(timeoutMs!));
+        return;
+      }
+
       await this.options.afterRun?.();
       this.options.onRunFinished?.(Date.now() - startedAt);
     } catch (error) {
       const failure = toError(error);
       const aborted =
         failure.name === 'AbortError' || /Request (?:was )?aborted/iu.test(failure.message);
+
       if (this.closed && aborted) {
         return;
       }
-      if (toError(error).message.includes('content_filter')) {
+
+      if (timedOut) {
+        this.options.onError?.(timeoutError(timeoutMs!, failure));
+        return;
+      }
+
+      if (failure.message.includes('content_filter')) {
         this.cancel();
       }
-      this.options.onError?.(toError(error));
+      this.options.onError?.(failure);
+    } finally {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
     }
   }
 
@@ -206,6 +233,10 @@ export class ThoughtScheduler {
     clearTimeout(this.timer);
     this.timer = undefined;
   }
+}
+
+function timeoutError(timeoutMs: number, cause?: Error) {
+  return new Error(`单轮思考超过 ${timeoutMs} ms，已中止本轮`, { cause });
 }
 
 function toError(error: unknown): Error {

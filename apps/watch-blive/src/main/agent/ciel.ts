@@ -1,8 +1,8 @@
 import type { McpTools } from '@cieljs/mcp';
-import { defineCiel } from '@cieljs/runtime';
 import type { Storage } from '@cieljs/storage';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { defineCiel } from 'cieljs';
 
 import type { WatchMode } from '../../shared/types.ts';
 import { createSystemPrompt } from '../prompts/index.ts';

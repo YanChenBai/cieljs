@@ -12,7 +12,6 @@ import { fauxAssistantMessage, registerFauxProvider } from '@earendil-works/pi-a
 import { Type } from 'typebox';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 
-import { assertUniqueTools } from '../src/agents/tools.ts';
 import { defineCiel } from '../src/index.ts';
 
 const { qwen } = vi.hoisted(() => ({
@@ -57,17 +56,6 @@ afterEach(async () => {
 });
 
 describe('defineCiel', () => {
-  test('拒绝重复工具名称', () => {
-    const tool = defineTool(Type.Object({}), () => ({
-      name: 'search_memory',
-      label: '搜索记忆',
-      description: 'test',
-      execute: async () => ({ content: [], details: {} }),
-    }))();
-
-    expect(() => assertUniqueTools([tool, tool])).toThrow('工具名称重复：search_memory');
-  });
-
   test('借用共享 MCP，关闭一个 runtime 不影响另一个', async () => {
     const storage = await createStorage();
     const faux = registerFauxProvider();

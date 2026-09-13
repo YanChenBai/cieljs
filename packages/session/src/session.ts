@@ -1,4 +1,4 @@
-import type { AgentEvent, RuntimeMetadata } from '@cieljs/agent-kit/protocol';
+import type { RuntimeEvent, RuntimeMetadata } from '@cieljs/agent-kit/protocol';
 import type { Storage } from '@cieljs/storage';
 import type { VectorIndex } from '@cieljs/vector';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
@@ -7,6 +7,7 @@ import { findCompactionBoundary } from './compaction.ts';
 import { SessionNotFoundError } from './errors.ts';
 import type { SessionRepository } from './repository.ts';
 import type { SessionRetrieval } from './retrieval.ts';
+import { estimateContextTokens } from './tokens.ts';
 import type {
   AppendCompactionInput,
   CompactionOptions,
@@ -56,7 +57,7 @@ export class Session {
     });
   }
 
-  record(event: AgentEvent, metadata?: RuntimeMetadata) {
+  record(event: RuntimeEvent, metadata?: RuntimeMetadata) {
     return this.services.operate(async () => {
       const record = await this.services.storage.journal.record(
         this.id,
@@ -189,11 +190,30 @@ export class Session {
       });
       options.signal?.throwIfAborted();
 
-      return this.services.repository.appendCompaction(this.selector, {
+      const compaction = await this.services.repository.appendCompaction(this.selector, {
         summary: summary.trim(),
         throughSeq: rows[boundary - 1]!.seq,
         expectedThroughSeq: latest?.throughSeq ?? 0,
       });
+
+      // 压缩后的当前上下文 = 摘要 + 保留的原文。保留消息里的旧 usage 反映的是压缩前的
+      // 大上下文，这里按纯文本估算，等下一次真实请求再覆盖。
+      const retained = rows.slice(boundary);
+      const contextTokens = estimateContextTokens(
+        { summary: compaction.summary, messages: retained.map(row => row.message) },
+        retained.length,
+      ).tokens;
+
+      // 压缩也要进事实流水，Devtools 与其他消费者才能看到这一步并回放。
+      await this.record({
+        type: 'session_compaction',
+        summary: compaction.summary,
+        throughSeq: compaction.throughSeq,
+        createdAt: compaction.createdAt.getTime(),
+        contextTokens,
+      });
+
+      return compaction;
     });
     const settled = operation.then(
       () => {},

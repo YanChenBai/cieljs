@@ -2,9 +2,10 @@ import type { DevtoolsHost } from '@cieljs/devtools/host';
 import { createKWS, type ASRModelId, type KWS } from '@cieljs/hearing';
 import type { McpTools } from '@cieljs/mcp';
 import { createPerception, type PerceptionOptions } from '@cieljs/perception';
-import type { Ciel, CielSession } from '@cieljs/runtime';
 import type { Storage } from '@cieljs/storage';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
+import type { Ciel, CielSession } from 'cieljs';
 
 import type {
   Account,
@@ -47,6 +48,10 @@ export interface WatchBliveOptions {
   perception?: PerceptionOptions;
   periodicObservationMs?: number;
   minimumThinkIntervalMs?: number;
+  /** 单轮思考的时间预算；省略表示不限制。 */
+  thinkTimeoutMs?: number;
+  /** 推理强度；省略时沿用模型默认。 */
+  thinkingLevel?: ThinkingLevel;
   wake?: WatchWakeOptions;
 }
 
@@ -57,6 +62,8 @@ export interface WatchBlive {
 
   start(options: StartWatchOptions): Promise<void>;
   stop(): Promise<void>;
+  /** 手动压缩当前会话上下文；返回是否产生了新的压缩摘要。 */
+  compactContext(): Promise<boolean>;
   setHearingModel(model: ASRModelId): Promise<void>;
   login(): Promise<Account>;
   logout(): Promise<void>;
@@ -123,6 +130,15 @@ class WatchBliveRuntime implements WatchBlive {
 
   areas(): ReturnType<BilibiliApi['areas']> {
     return this.api.areas();
+  }
+
+  async compactContext(): Promise<boolean> {
+    if (this.closePromise) throw new Error('Watch Blive 已关闭');
+
+    const visit = this.visit;
+    if (!visit) throw new Error('当前没有正在观看的直播间');
+
+    return visit.session.compact();
   }
 
   async login(): Promise<Account> {
@@ -379,6 +395,7 @@ class WatchBliveRuntime implements WatchBlive {
       session = await this.requireCiel().session(
         createRoomSessionOptions(room, new Date(startedAt)),
       );
+      this.applyThinkingLevel(session);
       const playUrl = await this.api.playUrl(room.roomId);
       const wake = this.options.wake ? resolveWakeOptions(this.options.wake) : undefined;
       if (wake) kws = await createKWS({ keywords: wake.keywords, cooldownMs: wake.cooldownMs });
@@ -407,6 +424,7 @@ class WatchBliveRuntime implements WatchBlive {
         wake: wake && kws ? { kws, options: wake } : undefined,
         minimumThinkIntervalMs: this.options.minimumThinkIntervalMs ?? 5_000,
         periodicObservationMs: this.options.periodicObservationMs ?? 30_000,
+        thinkTimeoutMs: this.options.thinkTimeoutMs,
         canSwitch: () => this.canSwitch(startedAt),
         beforeRun: () => this.danmakuGate.beginRun(),
         afterRun: () => this.inspectDecision(generation, signal),
@@ -448,6 +466,7 @@ class WatchBliveRuntime implements WatchBlive {
       session = await this.requireCiel().session(
         createRoomSessionOptions(room, new Date(startedAt), mode),
       );
+      this.applyThinkingLevel(session);
       signal.throwIfAborted();
 
       const media = new LiveMedia({
@@ -477,6 +496,7 @@ class WatchBliveRuntime implements WatchBlive {
         media,
         minimumThinkIntervalMs: this.options.minimumThinkIntervalMs ?? 5_000,
         periodicObservationMs: this.options.periodicObservationMs ?? 30_000,
+        thinkTimeoutMs: this.options.thinkTimeoutMs,
         canSwitch: () => false,
         beforeRun: () => undefined,
         afterRun: () => undefined,
@@ -721,6 +741,13 @@ class WatchBliveRuntime implements WatchBlive {
     }
 
     return this.startOptions;
+  }
+
+  /** 推理强度必须在首次请求前设置，按配置覆盖 Agent 默认值。 */
+  private applyThinkingLevel(session: CielSession): void {
+    if (this.options.thinkingLevel) {
+      session.agent.state.thinkingLevel = this.options.thinkingLevel;
+    }
   }
 
   private requireCiel(): Ciel {

@@ -25,6 +25,7 @@ export const watchBridge: WatchBliveBridge = {
   openBrowseWindow: () => rpc.window.openBrowse(),
   start: input => rpc.watch.start(input),
   stop: () => rpc.watch.stop(),
+  compactContext: () => rpc.watch.compact(),
   login: () => rpc.account.login(),
   logout: () => rpc.account.logout(),
   account: () => rpc.account.get(),

@@ -13,10 +13,6 @@
     "./client": "./dist/client.mjs",
     "./protocol": "./dist/protocol.mjs"
   },
-  "scripts": {
-    "build": "vp pack",
-    "test": "vp test"
-  },
   "dependencies": {
     "@cieljs/agent-kit": "workspace:*",
     "@cieljs/storage": "workspace:*",

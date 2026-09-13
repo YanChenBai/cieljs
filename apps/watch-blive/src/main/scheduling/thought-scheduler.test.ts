@@ -129,6 +129,42 @@ describe('ThoughtScheduler', () => {
     scheduler.trigger(new Date(3));
     expect(prompt).not.toHaveBeenCalled();
   });
+
+  it('单轮思考超过预算时中止本轮并报告超时', async () => {
+    vi.useFakeTimers();
+    let rejectPrompt!: (error: Error) => void;
+    const prompt = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectPrompt = reject;
+        }),
+    );
+    const abort = vi.fn(() => rejectPrompt(new Error('Request was aborted')));
+    const onError = vi.fn();
+    const scheduler = new ThoughtScheduler({
+      perception: { snapshot: vi.fn().mockResolvedValue({ compose: async () => [] }) },
+      agent: { prompt, abort },
+      minimumIntervalMs: 0,
+      thinkTimeoutMs: 1_000,
+      startedAt: new Date(0),
+      context: () => ({ role: 'user', content: '观察', timestamp: 0 }),
+      onError,
+    });
+
+    scheduler.trigger(new Date(1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(prompt).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(abort).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: '单轮思考超过 1000 ms，已中止本轮' }),
+    );
+
+    await scheduler.close();
+    vi.useRealTimers();
+  });
 });
 
 describe('关键词优先调度', () => {

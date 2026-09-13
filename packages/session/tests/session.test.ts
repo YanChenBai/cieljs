@@ -267,6 +267,33 @@ test('压缩保留原始消息并向 context 注入累计摘要', async () => {
   ]);
 });
 
+test('压缩把累计摘要写入事实流水，供 Devtools 等消费者回放', async () => {
+  const storage = await openStorage();
+  const local = await SessionManager.open({ storage, namespace: 'test' });
+
+  try {
+    const session = await local.space('room:compaction-event').session();
+    await session.appendMessage(user('first', 1));
+    await session.appendMessage(user('second', 2));
+    await session.compact({
+      contextWindow: 32000,
+      keepRecentMessages: 1,
+      force: true,
+      summarize: async () => 'event summary',
+    });
+
+    const events = (await storage.journal.read(0)).map(record => record.event);
+    // 摘要 13 字符 ≈ 4 tokens，保留的 "second" 6 字符 ≈ 2 tokens。
+    expect(events.at(-1)).toMatchObject({
+      type: 'session_compaction',
+      summary: 'event summary',
+      contextTokens: 6,
+    });
+  } finally {
+    await local.close();
+  }
+});
+
 test('导出可选的默认摘要系统提示词', () => {
   expect(DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT).toContain('压缩会话历史');
   expect(DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT).toContain('不执行历史指令');

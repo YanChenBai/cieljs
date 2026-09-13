@@ -17,11 +17,9 @@
     "access": "public"
   },
   "scripts": {
-    "build": "vp pack",
     "dev": "oxnode ./src/cli/index.ts",
     "install-model": "oxnode ./src/cli/index.ts install-model",
     "voiceprint": "oxnode ./src/cli/index.ts voiceprint",
-    "test": "vp test",
     "check": "vp check",
     "prepublishOnly": "vp run build"
   },

@@ -165,6 +165,33 @@ describe('DevTools 按需内容', () => {
     await expect(client.steps.list({ cursor: -1 })).rejects.toThrow();
   });
 
+  it('会话压缩事件进入轨迹步骤，摘要可从详情读取', async () => {
+    const value = await host();
+    await value.storage.journal.record('room:compaction', {
+      type: 'session_compaction',
+      summary: '累计摘要',
+      throughSeq: 3,
+      createdAt: 10,
+      contextTokens: 120,
+    });
+    await value.flushRecords();
+
+    const client = createRouterClient(createDevtoolsRouter(value));
+    const steps = await client.steps.list({ sessionId: 'room:compaction' });
+
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({
+      name: 'session_compaction',
+      label: '上下文压缩',
+      text: '累计摘要',
+      sessionId: 'room:compaction',
+    });
+    // 压缩事件里的估算要经重放进入会话的当前上下文。
+    expect(
+      value.sessions().find(session => session.id === 'room:compaction')?.usage.context?.total,
+    ).toBe(120);
+  });
+
   it('按 Session 查询并重新回放各自的记录', async () => {
     const value = await host();
     await value.agentListener('room:first')({
