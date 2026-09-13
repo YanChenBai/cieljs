@@ -22,7 +22,12 @@
 ## 基本使用
 
 ```ts
-import { createPerception } from '@cieljs/perception';
+import {
+  createPerception,
+  DEFAULT_HEARING_PROMPT,
+  DEFAULT_PERCEPTION_SYSTEM_PROMPT,
+  DEFAULT_VISION_PROMPT,
+} from '@cieljs/perception';
 
 const perception = createPerception({
   asr: {
@@ -33,9 +38,13 @@ const perception = createPerception({
     differenceThreshold: 0.03,
     maxFrames: 9,
   },
-  hearingPrompt: '一段语音刚刚结束，请结合以下听觉转写作出判断。',
-  visionPrompt: '以下画面按采集时间排列，请结合画面变化理解现场。',
 });
+
+// 是否加入默认系统提示词由宿主决定
+const systemPrompt = DEFAULT_PERCEPTION_SYSTEM_PROMPT;
+
+// 自定义 context 时可复用包导出的默认文本
+const prompts = { hearing: DEFAULT_HEARING_PROMPT, vision: DEFAULT_VISION_PROMPT };
 
 const unsubscribe = perception.on('speechend', async ({ snapshot }) => {
   const messages = await snapshot.compose();
@@ -61,7 +70,7 @@ await perception.close();
 
 ## 快照与 Agent 消息
 
-快照创建后不再加入新数据，`compose()` 按「先视觉、后听觉」的顺序返回 `AgentMessage[]`，可直接传给 `agent.prompt()`。转写按时间排列，格式为 `[ISO time][speaker] content`。详见[快照与 Agent 消息](./docs/snapshot.md)。
+快照创建后不再加入新数据，`compose()` 按「先视觉、后听觉」的顺序返回 `AgentMessage[]`，可直接传给 `agent.prompt()`。未配置 `context` 时使用包内默认处理；外部传入后完整覆盖，并由同一实例的所有快照共享。详见[快照与 Agent 消息](./docs/snapshot.md)。
 
 ## 事件与关闭
 

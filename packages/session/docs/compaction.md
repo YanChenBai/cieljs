@@ -33,12 +33,12 @@ contextTokens > contextWindow - reserveTokens
 
 ## 第二步：配置摘要模型
 
-摘要模型由 `createSummarizer({ generateText })` 注入。服务地址、鉴权、模型和输出上限由调用方的模型 SDK 管理，不写进 SessionManager。
+摘要函数由调用方直接实现。服务地址、鉴权、模型、消息序列化和输出上限都由外部管理，Session 不调用模型，也不自动注入提示词。
 
-下面使用仓库现有的 Pi AI。调用方需要安装 `@earendil-works/pi-ai`，并配置对应 Provider 所需的凭据，以及 `SESSION_COMPACTION_PROVIDER`、`SESSION_COMPACTION_MODEL`：
+包导出 `DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT` 作为可选默认值。是否使用它由调用方决定：
 
 ```ts
-import { createSummarizer } from '@cieljs/session/agent';
+import { DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT, type SessionSummarizer } from '@cieljs/session';
 import { createModels } from '@earendil-works/pi-ai';
 import { builtinProviders } from '@earendil-works/pi-ai/providers/all';
 
@@ -52,32 +52,35 @@ const model = models.getModel(
 if (!model) throw new Error('未找到会话压缩模型');
 const summaryModel = model;
 
-const summarize = createSummarizer({
-  instructions: '保留关键文件路径、用户约束和未完成事项。',
-  async generateText({ systemPrompt, prompt, signal }) {
-    const response = await models.completeSimple(
-      summaryModel,
-      {
-        systemPrompt,
-        messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
-      },
-      { maxTokens: 2048, signal },
-    );
+const summarize: SessionSummarizer = async ({ summary, messages, signal }) => {
+  const response = await models.completeSimple(
+    summaryModel,
+    {
+      systemPrompt: DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: JSON.stringify({ summary, messages }),
+          timestamp: Date.now(),
+        },
+      ],
+    },
+    { maxTokens: 2048, signal },
+  );
 
-    // 不使用失败或被截断的摘要替换历史。
-    if (response.stopReason !== 'stop') {
-      throw new Error(response.errorMessage ?? `摘要未完整生成：${response.stopReason}`);
-    }
+  // 不使用失败或被截断的摘要替换历史。
+  if (response.stopReason !== 'stop') {
+    throw new Error(response.errorMessage ?? `摘要未完整生成：${response.stopReason}`);
+  }
 
-    return response.content
-      .filter(block => block.type === 'text')
-      .map(block => block.text)
-      .join('\n');
-  },
-});
+  return response.content
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
+    .join('\n');
+};
 ```
 
-该函数把上次摘要与新增旧消息序列化给模型，不发送历史 thinking 或图片数据。需要处理图片、自定义消息格式时，可自行实现 `SessionSummarizer`。输出 token 上限属于摘要请求预算，不等同于前面的 `reserveTokens`。
+`SessionSummarizer` 会收到原始 `AgentMessage[]`。对 thinking、图片和工具结果的取舍属于外部模型适配器；上面的直接 JSON 序列化只是最小示例。输出 token 上限属于摘要请求预算，不等同于前面的 `reserveTokens`。
 
 ## 第三步：检查并执行压缩
 

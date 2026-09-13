@@ -83,8 +83,6 @@ const perception = createPerception({
     maxFrames: 9,
   },
 
-  hearingPrompt: '一段语音刚刚结束，请结合以下听觉转写作出判断。',
-  visionPrompt: '以下画面按采集时间排列，请结合画面变化理解现场。',
   retentionMs: 60_000,
 });
 ```
@@ -126,20 +124,10 @@ export interface PerceptionOptions {
   readonly vision?: false | VisionOptions;
 
   /**
-   * 放在听觉转写之前的提示词。
-   * 空字符串表示不添加提示词。
-   *
-   * @default "以下是按时间排列的听觉转写，请结合说话人理解。"
+   * 为对应模态的感知数据生成附加上下文。
+   * 同一实例产生的所有快照共享该函数。
    */
-  readonly hearingPrompt?: string;
-
-  /**
-   * 放在每个视觉来源合成图之前的提示词。
-   * 空字符串表示不添加提示词。
-   *
-   * @default "以下画面按来源合并，编号顺序与采集时间一致。"
-   */
-  readonly visionPrompt?: string;
+  readonly context?: PerceptionContext;
 
   /**
    * 内部最多保留多长时间的感知数据。
@@ -148,6 +136,27 @@ export interface PerceptionOptions {
    */
   readonly retentionMs?: number;
 }
+
+export type PerceptionContext = (
+  input: PerceptionContextInput,
+) => string | undefined | Promise<string | undefined>;
+
+export type PerceptionContextInput =
+  | {
+      readonly modality: 'vision';
+      readonly snapshotId: string;
+      readonly startAt: Date;
+      readonly endAt: Date;
+      readonly frames: readonly PerceptionFrame[];
+      readonly sources: readonly string[];
+    }
+  | {
+      readonly modality: 'hearing';
+      readonly snapshotId: string;
+      readonly startAt: Date;
+      readonly endAt: Date;
+      readonly transcripts: readonly ASRResult[];
+    };
 
 export interface VisionOptions {
   /**
@@ -287,7 +296,7 @@ const messages: AgentMessage[] = [
     content: [
       {
         type: 'text',
-        text: ['# 视觉', visionPrompt].filter(Boolean).join('\n\n'),
+        text: ['# 视觉', visionContext].filter(Boolean).join('\n\n'),
       },
       {
         type: 'image',
@@ -297,7 +306,7 @@ const messages: AgentMessage[] = [
       // 可能继续包含其他合成图片
       {
         type: 'text',
-        text: ['# 听觉', hearingPrompt, transcript].filter(Boolean).join('\n\n'),
+        text: ['# 听觉', hearingContext, transcript].filter(Boolean).join('\n\n'),
       },
     ],
     timestamp: snapshot.endAt.getTime(),
@@ -312,7 +321,7 @@ const messages: AgentMessage[] = [
 ```text
 # 视觉
 
-{visionPrompt}
+{visionContext}
 
 {image content}
 
@@ -320,7 +329,7 @@ const messages: AgentMessage[] = [
 
 # 听觉
 
-{hearingPrompt}
+{hearingContext}
 
 [2026-09-05T12:00:01.000Z][speaker_1] xxxxx
 [2026-09-05T12:00:04.000Z][主播] xxxxx
@@ -335,14 +344,14 @@ const messages: AgentMessage[] = [
 3. 按图片 `source` 分组。
 4. 每组超过 `maxFrames` 时均匀选择画面，并始终保留时间跨度信息。
 5. 每组生成一张 1920×1080 JPEG 多帧合成图。
-6. 先加入一次 `# 视觉` 和 `visionPrompt`，随后直接展开所有合成后的 image content。
-7. 所有视觉内容结束后加入 `# 听觉`、`hearingPrompt` 和按时间排列的转写。
+6. 视觉有数据时调用 `context`，先加入一次 `# 视觉` 和返回文本，随后展开合成后的 image content。
+7. 听觉有数据时调用 `context`，在所有视觉内容之后加入 `# 听觉`、返回文本和按时间排列的转写。
 8. 每条转写使用 `[ISO time][speaker] content` 格式；没有说话人时省略第二组方括号。
 9. 没有有效图片时不生成 `# 视觉`、vision text content 或 image content。
 10. 没有有效转写时不生成 `# 听觉` 或 hearing text content。
 11. 当转写与图片都为空时返回空数组，不依靠提示词制造空感知消息。
 
-听觉和视觉的解释指令分别由宿主通过 `hearingPrompt` 与 `visionPrompt` 配置。`compose()` 负责将两个提示词放到对应模态的数据之前，不能合并成一个脱离数据位置的总提示词。同一个快照重复调用 `compose()` 应得到内容等价的消息，不读取调用时刻之后的新数据。
+未配置 `context` 时，感知实例在包内使用默认视觉和听觉提示词。宿主传入 `context` 后完整覆盖默认处理；包只导出 `DEFAULT_VISION_PROMPT`、`DEFAULT_HEARING_PROMPT` 和可选的 `DEFAULT_PERCEPTION_SYSTEM_PROMPT`。`compose()` 负责把 context 返回的文本放到对应模态数据之前，不读取快照之后的新感知数据。
 
 虽然返回值使用联合类型 `AgentMessage[]`，第一版的实际元素类型固定为 Pi Agent 的 `UserMessage`。保留 `AgentMessage[]` 作为公共返回类型，是为了让结果能够不经过转换直接传给 `agent.prompt()`，并允许未来在不修改调用方式的情况下增加其他合法上下文消息。
 
@@ -422,9 +431,6 @@ const perception = createPerception({
     sampleIntervalMs: 5_000,
     maxFrames: 9,
   },
-
-  hearingPrompt: '一段语音刚刚结束，请结合以下听觉转写作出判断。',
-  visionPrompt: '以下画面按采集时间排列，请结合画面变化理解现场。',
 });
 
 let thinkingQueue = Promise.resolve();

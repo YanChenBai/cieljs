@@ -4,9 +4,31 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 export interface PerceptionOptions {
   readonly asr?: ASROptions;
   readonly vision?: false | VisionOptions;
-  readonly hearingPrompt?: string;
-  readonly visionPrompt?: string;
+  readonly context?: PerceptionContext;
   readonly retentionMs?: number;
+}
+
+export type PerceptionContext = (
+  input: PerceptionContextInput,
+) => string | undefined | Promise<string | undefined>;
+
+export type PerceptionContextInput = VisionPerceptionContext | HearingPerceptionContext;
+
+interface PerceptionContextBase {
+  readonly snapshotId: string;
+  readonly startAt: Date;
+  readonly endAt: Date;
+}
+
+export interface VisionPerceptionContext extends PerceptionContextBase {
+  readonly modality: 'vision';
+  readonly frames: readonly PerceptionFrame[];
+  readonly sources: readonly string[];
+}
+
+export interface HearingPerceptionContext extends PerceptionContextBase {
+  readonly modality: 'hearing';
+  readonly transcripts: readonly ASRResult[];
 }
 
 export interface VisionOptions {

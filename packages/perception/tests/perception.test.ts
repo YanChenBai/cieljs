@@ -48,7 +48,7 @@ test('speechend publishes a frozen snapshot with the matching ASR result', async
       speaker: [{ name: 'alice', file: 'alice.voiceprint' }],
     },
     vision: false,
-    hearingPrompt: '听觉提示',
+    context: ({ modality }) => (modality === 'hearing' ? '听觉提示' : undefined),
     retentionMs: 60_000,
   });
   const asr = perception.asr as unknown as InstanceType<typeof MockASR>;
@@ -86,6 +86,36 @@ test('speechend publishes a frozen snapshot with the matching ASR result', async
   result.content = '已修改';
 
   expect(event.snapshot.transcripts[0]?.content).toBe('测试内容');
+});
+
+test('未传入 context 时使用包内默认听觉提示词', async () => {
+  const perception = createPerception({ vision: false });
+  const asr = perception.asr as unknown as InstanceType<typeof MockASR>;
+  const published = new Promise<SpeechEndEvent>(resolve => perception.on('speechend', resolve));
+  const result = {
+    content: '测试内容',
+    startAt: new Date('2026-09-05T12:00:01.000Z'),
+    endAt: new Date('2026-09-05T12:00:02.000Z'),
+  };
+
+  asr.emit('result', result);
+  asr.emit('speechend', result.endAt);
+
+  const event = await published;
+  const messages = await event.snapshot.compose();
+
+  expect(messages).toMatchObject([
+    {
+      content: [
+        {
+          type: 'text',
+          text: expect.stringContaining('以下是按时间排列的听觉转写'),
+        },
+      ],
+    },
+  ]);
+
+  await perception.close();
 });
 
 test('speechend still publishes without recognized text and close is idempotent', async () => {

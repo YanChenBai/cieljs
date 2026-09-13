@@ -13,6 +13,7 @@ import type { Account } from '../shared/types.ts';
 import type { BilibiliApi } from './bilibili/api.ts';
 import type { LivePage } from './bilibili/live-page.ts';
 import type { LiveMediaOptions } from './media/live-media.ts';
+import { createPerceptionContext } from './prompts/index.ts';
 import { createWatchBlive, type WatchBlive, type WatchWakeOptions } from './runtime.ts';
 import { loadVoiceprints } from './voiceprints.ts';
 
@@ -261,7 +262,7 @@ describe('观看生命周期', () => {
   it('直播感知使用宿主的听觉转写提示词', async () => {
     setup();
     await runtime.start({ mode: { type: 'follow', roomId: 123 } });
-    expect(mocks.perceptionOptions.at(-1)?.hearingPrompt).toContain('没听清');
+    expect(mocks.perceptionOptions.at(-1)?.context).toBe(createPerceptionContext);
   });
   it.each(['follow', 'recording'] as const)(
     '%s 合并声纹和 ASR 配置，下一次观看重新扫描',
@@ -296,7 +297,7 @@ describe('观看生命周期', () => {
     await runtime.start({
       mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
     });
-    expect(mocks.perceptionOptions.at(-1)?.hearingPrompt).toContain('没听清');
+    expect(mocks.perceptionOptions.at(-1)?.context).toBe(createPerceptionContext);
   });
   it('中途停止视频先等待识别、只生成一次部分总结，再关闭会话', async () => {
     const { perceptionClose, sessionClose } = setup();

@@ -1,11 +1,18 @@
-/**
- * 感知提示词分两层：`HEARING_PROMPT` 跟着每次听觉转写走，只说这一段数据怎么读；
- * 恒真的可靠性前提、行为后果和校准规则放 `PERCEPTION_RULES`，随系统提示词每会话注入一次。
- */
+import { DEFAULT_VISION_PROMPT, type PerceptionContextInput } from '@cieljs/perception';
+
+/** 视觉使用包的默认 context；听觉分支同时注入转写说明和可靠性规则。 */
 
 export const HEARING_PROMPT = `
 以下是按时间排列的听觉转写，请结合说话人理解。转写可能有误，以画面和上文为准：对得上的按原意理解，读不通或与现场矛盾的按「没听清」处理。
 `.trim();
+
+export function createPerceptionContext(input: PerceptionContextInput) {
+  if (input.modality === 'vision') {
+    return DEFAULT_VISION_PROMPT;
+  }
+
+  return `${HEARING_PROMPT}\n\n${PERCEPTION_RULES}`;
+}
 
 export const PERCEPTION_RULES = `
 ## 感知

@@ -5,6 +5,7 @@ import {
   CIEL_PERSONA_PROMPT,
   createCandidateSources,
   createExplorationQuestion,
+  createPerceptionContext,
   createRoomContext,
   createRoomSources,
   createSystemPrompt,
@@ -184,8 +185,9 @@ describe('人设提示词', () => {
     },
   ])('$type 模式的系统提示词带人设与优先级约束', mode => {
     const text = createSystemPrompt(mode);
+    const taskHeading = mode.type === 'recording' ? '# Bilibili 内容陪伴' : '# Bilibili 直播陪伴';
 
-    expect(text.indexOf('夏尔（Ciel）')).toBeLessThan(text.indexOf('## 感知'));
+    expect(text.indexOf('夏尔（Ciel）')).toBeLessThan(text.indexOf(taskHeading));
     expect(text).toContain('## 人设边界');
     expect(text).toContain('任务优先');
     expect(text).toContain('不改变决策');
@@ -208,27 +210,39 @@ describe('人设提示词', () => {
 });
 
 describe('感知提示词', () => {
-  it('听觉转写提示词只说明怎么读这一段，不带行为后果', () => {
+  it('视觉使用包提供的默认 context', () => {
+    const context = createPerceptionContext({
+      modality: 'vision',
+      snapshotId: 'snapshot',
+      startAt: new Date(0),
+      endAt: new Date(1),
+      frames: [],
+      sources: [],
+    });
+
+    expect(context).toContain('画面按来源多帧合并');
+  });
+
+  it('听觉 context 同时带转写说明和可靠性规则', () => {
     expect(HEARING_PROMPT).toContain('以画面和上文为准');
     expect(HEARING_PROMPT).toContain('没听清');
     expect(HEARING_PROMPT).not.toContain('不写入记忆');
     expect(HEARING_PROMPT).not.toContain('不假装听懂');
-  });
-  it.each([
-    { type: 'follow' as const, roomId: 1 },
-    {
-      type: 'recording' as const,
-      roomId: 1,
-      source: { type: 'file' as const, path: '/video.mp4' },
-    },
-  ])('$type 模式把可疑转写的后果与校准规则写进系统提示词', mode => {
-    const text = createSystemPrompt(mode);
+    const context = createPerceptionContext({
+      modality: 'hearing',
+      snapshotId: 'snapshot',
+      startAt: new Date(0),
+      endAt: new Date(1),
+      transcripts: [],
+    });
 
-    expect(text).toContain('## 感知');
-    expect(text).toContain('凭空生成');
-    expect(text).toContain('不写入记忆');
-    expect(text).toContain('不假装听懂');
-    expect(text).toContain('不因为一句可疑就否定');
+    expect(context).toContain(HEARING_PROMPT);
+    expect(context).toContain('## 感知');
+    expect(context).toContain('凭空生成');
+    expect(context).toContain('不写入记忆');
+    expect(context).toContain('不假装听懂');
+    expect(context).toContain('不因为一句可疑就否定');
+    expect(createSystemPrompt({ type: 'follow', roomId: 1 })).not.toContain('听觉转写由 ASR 生成');
   });
 });
 

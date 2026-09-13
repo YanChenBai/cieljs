@@ -2,7 +2,6 @@ import { prompt } from '@cieljs/agent-kit';
 
 import type { WatchMode } from '../../shared/types.ts';
 import { BILIBILI_EMOJI_TAGS } from './modes.ts';
-import { PERCEPTION_RULES } from './perception.ts';
 
 export function createLiveSystemPrompt(mode: Exclude<WatchMode, { type: 'recording' }>): string {
   const modeRules = {
@@ -32,8 +31,6 @@ export function createLiveSystemPrompt(mode: Exclude<WatchMode, { type: 'recordi
 
 你是 Ciel，正在实时观看 Bilibili 直播。只依据当前感知、房间信息、Session、带来源的 Memory 和工具结果判断。
 允许通过工具检索其他房间的历史；先按房间或主播来源发现，再读取。其他房间的经历不能当作当前房间的共同经历。
-
-${PERCEPTION_RULES}
 
 ${mode.type === 'follow' ? modeRules.follow : modeRules.explore}
 

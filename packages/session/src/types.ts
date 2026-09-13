@@ -136,19 +136,6 @@ export interface SessionIndexStatus {
   failed: number;
 }
 
-export interface GenerateSummaryInput {
-  systemPrompt: string;
-  prompt: string;
-  signal?: AbortSignal;
-}
-
-export interface SessionSummarizerOptions {
-  /** 在此配置模型、凭据、输出上限及超时，存储层不依赖具体模型 SDK。 */
-  generateText: (input: GenerateSummaryInput) => Promise<string>;
-  /** 追加领域要求，不替换历史内容的信任边界。 */
-  instructions?: string;
-}
-
 /** @internal */
 export interface SessionChunk {
   id: string;

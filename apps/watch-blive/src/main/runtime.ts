@@ -25,7 +25,7 @@ import { LiveStatusMonitor } from './bilibili/live-status-monitor.ts';
 import { readRoomLiveStatus } from './bilibili/live-status.ts';
 import { watchDataDirectory } from './config.ts';
 import { LiveMedia } from './media/live-media.ts';
-import { HEARING_PROMPT, ROOM_REVIEW_AFTER_MS } from './prompts/index.ts';
+import { createPerceptionContext, ROOM_REVIEW_AFTER_MS } from './prompts/index.ts';
 import { RoomHistory } from './room-history.ts';
 import { RoomScorePolicy } from './room-score-policy.ts';
 import { RoomVisit } from './room-visit.ts';
@@ -345,7 +345,7 @@ class WatchBliveRuntime implements WatchBlive {
     const options = this.options.perception;
     return createPerception({
       vision: { sampleIntervalMs: 6_666, differenceThreshold: 0.03, maxFrames: 9 },
-      hearingPrompt: HEARING_PROMPT,
+      context: createPerceptionContext,
       ...options,
       retentionMs,
       asr: {

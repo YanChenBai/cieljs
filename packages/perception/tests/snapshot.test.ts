@@ -10,8 +10,7 @@ test('纯声音事件进入听觉提示，并与外部结果对象隔离', async
     endAt: new Date(1),
     transcripts: [{ content: '', events, startAt: new Date(0), endAt: new Date(1) }],
     frames: [],
-    hearingPrompt: '听觉提示',
-    visionPrompt: '',
+    context: ({ modality }) => (modality === 'hearing' ? '听觉提示' : undefined),
     maxFrames: 9,
   });
   events[0]!.type = 'bgm';
@@ -54,8 +53,7 @@ test('compose combines visual blocks before the hearing transcript', async () =>
         mimeType: 'image/png',
       },
     ],
-    hearingPrompt: '听觉提示',
-    visionPrompt: '视觉提示',
+    context: ({ modality }) => (modality === 'vision' ? '视觉提示' : '听觉提示'),
     maxFrames: 9,
   });
 
@@ -98,8 +96,7 @@ test('compose omits empty modalities and does not create prompt-only messages', 
     endAt: new Date(1),
     transcripts: [],
     frames: [],
-    hearingPrompt: '听觉提示',
-    visionPrompt: '视觉提示',
+    context: () => '不应调用',
     maxFrames: 9,
   });
 

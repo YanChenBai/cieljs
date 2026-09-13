@@ -36,13 +36,13 @@ await agent.prompt(messages);
 ```text
 # 视觉
 
-{visionPrompt}
+{context({ modality: "vision" })}
 
 {image content}
 
 # 听觉
 
-{hearingPrompt}
+{context({ modality: "hearing" })}
 
 [2026-09-05T12:00:01.000Z][speaker_1] xxxxx
 [2026-09-05T12:00:04.000Z][主播] xxxxx
@@ -50,6 +50,8 @@ await agent.prompt(messages);
 
 转写按 `startAt` 排序，格式为 `[ISO time][speaker] content`，没有说话人时省略第二组方括号。没有有效图片时不生成视觉部分，没有转写时不生成听觉部分；两者都为空时返回空数组，不依靠提示词制造空消息。
 
-## 提示词
+## 上下文
 
-`hearingPrompt` 和 `visionPrompt` 分别由宿主配置，放在对应模态的数据之前，不合并成一个脱离数据位置的总提示词。空字符串表示不添加该提示词。同一个快照重复调用 `compose()` 得到内容等价的消息。
+`context` 在 `createPerception()` 时配置，同一实例产生的所有快照共享该函数。`compose()` 仅在对应模态有数据时调用它，并将返回文本放到该模态数据之前。宿主未配置时使用包内默认处理；传入后完整覆盖，返回 `undefined` 可省略该模态的附加上下文。
+
+包导出 `DEFAULT_HEARING_PROMPT`、`DEFAULT_VISION_PROMPT` 和 `DEFAULT_PERCEPTION_SYSTEM_PROMPT`，便于宿主在自定义 context 或 system prompt 时显式复用。

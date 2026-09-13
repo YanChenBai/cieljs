@@ -5,7 +5,13 @@ import { randomUUID } from 'node:crypto';
 import type { ASRResult } from '@cieljs/hearing';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import type { PerceptionFrame, PerceptionSnapshot } from './types.ts';
+import type {
+  HearingPerceptionContext,
+  PerceptionContext,
+  PerceptionFrame,
+  PerceptionSnapshot,
+  VisionPerceptionContext,
+} from './types.ts';
 import { composeVisionFrames } from './vision/composer.ts';
 
 interface SnapshotData {
@@ -13,10 +19,13 @@ interface SnapshotData {
   readonly endAt: Date;
   readonly transcripts: readonly ASRResult[];
   readonly frames: readonly PerceptionFrame[];
-  readonly hearingPrompt: string;
-  readonly visionPrompt: string;
+  readonly context?: PerceptionContext;
   readonly maxFrames: number;
 }
+
+type SnapshotContextInput =
+  | Omit<VisionPerceptionContext, 'snapshotId' | 'startAt' | 'endAt'>
+  | Omit<HearingPerceptionContext, 'snapshotId' | 'startAt' | 'endAt'>;
 
 export function createPerceptionSnapshot(data: SnapshotData): PerceptionSnapshot {
   return new FrozenPerceptionSnapshot(data);
@@ -29,8 +38,7 @@ class FrozenPerceptionSnapshot implements PerceptionSnapshot {
   readonly transcripts: readonly ASRResult[];
   readonly frames: readonly PerceptionFrame[];
 
-  private readonly hearingPrompt: string;
-  private readonly visionPrompt: string;
+  private readonly context?: PerceptionContext;
   private readonly maxFrames: number;
 
   constructor(data: SnapshotData) {
@@ -38,8 +46,7 @@ class FrozenPerceptionSnapshot implements PerceptionSnapshot {
     this.endAt = new Date(data.endAt);
     this.transcripts = Object.freeze(data.transcripts.map(cloneTranscript));
     this.frames = Object.freeze(data.frames.map(cloneFrame));
-    this.hearingPrompt = data.hearingPrompt;
-    this.visionPrompt = data.visionPrompt;
+    this.context = data.context;
     this.maxFrames = data.maxFrames;
   }
 
@@ -51,19 +58,29 @@ class FrozenPerceptionSnapshot implements PerceptionSnapshot {
     const images = await this.composeImages();
 
     if (images.length > 0) {
+      const context = await this.resolveContext({
+        modality: 'vision',
+        frames: this.frames,
+        sources: [...groupFrames(this.frames).keys()],
+      });
+
       content.push({
         type: 'text',
-        text: ['# 视觉', this.visionPrompt].filter(Boolean).join('\n\n'),
+        text: ['# 视觉', context].filter(Boolean).join('\n\n'),
       });
       content.push(...images);
     }
 
     if (this.transcripts.length > 0) {
       const transcript = this.transcripts.map(formatTranscript).join('\n');
+      const context = await this.resolveContext({
+        modality: 'hearing',
+        transcripts: this.transcripts,
+      });
 
       content.push({
         type: 'text',
-        text: ['# 听觉', this.hearingPrompt, transcript].filter(Boolean).join('\n\n'),
+        text: ['# 听觉', context, transcript].filter(Boolean).join('\n\n'),
       });
     }
 
@@ -78,6 +95,15 @@ class FrozenPerceptionSnapshot implements PerceptionSnapshot {
         timestamp: this.endAt.getTime(),
       },
     ];
+  }
+
+  private resolveContext(input: SnapshotContextInput) {
+    return this.context?.({
+      ...input,
+      snapshotId: this.id,
+      startAt: this.startAt,
+      endAt: this.endAt,
+    });
   }
 
   private async composeImages() {

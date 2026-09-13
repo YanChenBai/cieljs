@@ -5,6 +5,7 @@ import { EventEmitter } from 'node:events';
 import { ASR } from '@cieljs/hearing';
 import type { ASRResult, Unsubscribe } from '@cieljs/hearing';
 
+import { createDefaultPerceptionContext } from './prompts.ts';
 import { createPerceptionSnapshot } from './snapshot.ts';
 import type {
   Perception,
@@ -21,8 +22,6 @@ const DEFAULT_RETENTION_MS = 60_000;
 const DEFAULT_SAMPLE_INTERVAL_MS = 6_666;
 const DEFAULT_DIFFERENCE_THRESHOLD = 0.03;
 const DEFAULT_MAX_FRAMES = 9;
-const DEFAULT_HEARING_PROMPT = '以下是按时间排列的听觉转写，请结合说话人理解。';
-const DEFAULT_VISION_PROMPT = '以下画面按来源多帧合并，编号顺序与采集时间一致。';
 
 export function createPerception(options: PerceptionOptions = {}): Perception {
   return new PerceptionRuntime(options);
@@ -43,18 +42,16 @@ class PerceptionRuntime implements Perception {
   private readonly transcripts: ASRResult[] = [];
   private readonly unsubscribers: Unsubscribe[] = [];
 
-  private readonly hearingPrompt: string;
+  private readonly context: PerceptionOptions['context'];
   private readonly maxFrames: number;
   private readonly retentionMs: number;
-  private readonly visionPrompt: string;
 
   constructor(options: PerceptionOptions) {
     const normalized = normalizeOptions(options);
 
-    this.hearingPrompt = normalized.hearingPrompt;
+    this.context = options.context ?? createDefaultPerceptionContext;
     this.maxFrames = normalized.maxFrames;
     this.retentionMs = normalized.retentionMs;
-    this.visionPrompt = normalized.visionPrompt;
 
     if (normalized.vision) {
       this.image = new PerceptionImageStream({
@@ -197,8 +194,7 @@ class PerceptionRuntime implements Perception {
       endAt,
       transcripts,
       frames,
-      hearingPrompt: this.hearingPrompt,
-      visionPrompt: this.visionPrompt,
+      context: this.context,
       maxFrames: this.maxFrames,
     });
   }
@@ -244,8 +240,6 @@ function normalizeOptions(options: PerceptionOptions) {
 
   if (!options.vision) {
     return {
-      hearingPrompt: options.hearingPrompt ?? DEFAULT_HEARING_PROMPT,
-      visionPrompt: options.visionPrompt ?? DEFAULT_VISION_PROMPT,
       retentionMs,
       maxFrames: DEFAULT_MAX_FRAMES,
       vision: undefined,
@@ -267,8 +261,6 @@ function normalizeOptions(options: PerceptionOptions) {
   }
 
   return {
-    hearingPrompt: options.hearingPrompt ?? DEFAULT_HEARING_PROMPT,
-    visionPrompt: options.visionPrompt ?? DEFAULT_VISION_PROMPT,
     retentionMs,
     maxFrames,
     vision: {

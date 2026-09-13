@@ -1,5 +1,6 @@
 export * from './errors.ts';
 export { SessionManager } from './session-manager.ts';
+export { DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT } from './compaction.ts';
 export { tokenizeSearchText } from './search.ts';
 export type { Session } from './session.ts';
 export type { SessionSpace } from './session-space.ts';

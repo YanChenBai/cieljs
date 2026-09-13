@@ -8,7 +8,7 @@ export { createExplorationQuestion, createRoomContext } from './context.ts';
 export type { ExplorationContext, PreviousVisit, SentDanmaku } from './context.ts';
 export { BILIBILI_EMOJI_TAGS, ROOM_REVIEW_AFTER_MS } from './modes.ts';
 export { CIEL_PERSONA_PROMPT } from './persona.ts';
-export { HEARING_PROMPT } from './perception.ts';
+export { createPerceptionContext, HEARING_PROMPT } from './perception.ts';
 
 /** 人设统一注入在系统提示词最前面；选房用的 `EXPLORATION_SYSTEM_PROMPT` 是纯决策提示词，不带人设。 */
 export function createSystemPrompt(mode: WatchMode): string {
