@@ -140,6 +140,36 @@ test('update 实时分发但不进入 durable journal，start/end 共享稳定�
   ]);
 });
 
+test('复用同一 update 对象时，内容 mutation 仍会持续实时发布', async () => {
+  await using storage = await Storage.open({ dataDir: 'memory://' });
+  const listener = vi.fn();
+  storage.events.subscribe(listener);
+
+  const message = {
+    role: 'assistant' as const,
+    content: [{ type: 'text' as const, text: 'a' }],
+    timestamp: 1,
+  };
+  const update = {
+    type: 'message_update' as const,
+    message,
+    assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'a' } as never,
+  };
+
+  const first = await storage.events.publish('session', update);
+  const duplicate = await storage.events.publish('session', update);
+  expect(duplicate.id).toBe(first.id);
+
+  message.content[0]!.text = 'ab';
+  (update.assistantMessageEvent as { delta: string }).delta = 'b';
+  const second = await storage.events.publish('session', update);
+
+  expect(second.id).not.toBe(first.id);
+  expect(second.revision).toBeGreaterThan(first.revision);
+  expect(listener).toHaveBeenCalledTimes(2);
+  expect(await storage.journal.read()).toEqual([]);
+});
+
 test('事件首次写入即持久化生成后的序号', async () => {
   await using storage = await Storage.open({ dataDir: 'memory://' });
   const envelope = await storage.events.publish('session', {
