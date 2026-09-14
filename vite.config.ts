@@ -38,10 +38,4 @@ export default defineConfig({
       typeCheck: true,
     },
   },
-  run: {
-    cache: {
-      scripts: false,
-      tasks: true,
-    },
-  },
 });

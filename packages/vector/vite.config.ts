@@ -10,6 +10,10 @@ export default defineConfig({
       },
     },
   },
-  pack: { entry: ['src/index.ts'], dts: { tsgo: true } },
-  lint: { options: { typeAware: true, typeCheck: true } },
+  pack: {
+    entry: ['src/index.ts'],
+    dts: {
+      tsgo: true,
+    },
+  },
 });

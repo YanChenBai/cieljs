@@ -1,24 +1,11 @@
 {
   "name": "watch-blive",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "An Electron application with Vue and TypeScript",
   "homepage": "https://electron-vite.org",
-  "author": "example.com",
+  "author": "byc.com",
   "type": "module",
   "main": "./out/main/index.js",
-  "scripts": {
-    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
-    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "vp run typecheck:node && vp run typecheck:web",
-    "start": "vld preview",
-    "dev": "vld dev",
-    "build": "vp run typecheck && vld build",
-    "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
-  },
   "dependencies": {
     "@cieljs/agent-kit": "workspace:*",
     "@cieljs/devtools": "workspace:*",
@@ -34,26 +21,27 @@
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "@lucide/vue": "catalog:",
-    "@orpc/client": "2.0.0-beta.33",
-    "@orpc/server": "2.0.0-beta.33",
+    "@orpc/client": "catalog:",
+    "@orpc/server": "catalog:",
     "@vuetify/v0": "catalog:",
     "cieljs": "workspace:*",
     "typebox": "catalog:",
-    "vue": "^3.6.0-rc.7",
+    "vue": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "catalog:",
-    "@tailwindcss/vite": "^4.3.3",
+    "@tailwindcss/vite": "catalog:",
     "@types/node": "catalog:",
-    "@vitejs/plugin-vue": "^6.0.2",
+    "@vitejs/plugin-vue": "catalog:",
     "electron": "^44.2.0",
     "electron-builder": "^26.0.12",
     "electron-updater": "^6.3.9",
-    "tailwindcss": "^4.3.3",
-    "typescript": "~5.9.3",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
     "veldorajs": "0.0.4",
     "vite": "catalog:",
-    "vue-tsc": "^3.1.6"
-  }
+    "vue-tsc": "catalog:"
+  },
+  "packageManager": "pnpm@12.4.1"
 }

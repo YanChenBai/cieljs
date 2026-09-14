@@ -34,4 +34,41 @@ export default defineConfig({
       ],
     },
   },
+  run: {
+    tasks: {
+      'typecheck:node': 'tsc --noEmit -p tsconfig.node.json --composite false',
+      'typecheck:web': 'vue-tsc --noEmit -p tsconfig.web.json --composite false',
+      typecheck: ['vpr typecheck:node ', ' vpr typecheck:web'],
+      start: {
+        command: 'vld preview',
+        cache: false,
+      },
+      dev: {
+        command: 'vld dev',
+        cache: false,
+        dependsOn: ['build'],
+      },
+      build: {
+        command: 'vld build',
+        dependsOn: ['typecheck'],
+      },
+      postinstall: 'electron-builder install-app-deps',
+      'build:unpack': {
+        command: 'electron-builder --dir',
+        dependsOn: ['build'],
+      },
+      'build:win': {
+        command: 'electron-builder --win',
+        dependsOn: ['build'],
+      },
+      'build:mac': {
+        command: 'electron-builder --mac',
+        dependsOn: ['build'],
+      },
+      'build:linux': {
+        command: 'electron-builder --linux',
+        dependsOn: ['build'],
+      },
+    },
+  },
 });
