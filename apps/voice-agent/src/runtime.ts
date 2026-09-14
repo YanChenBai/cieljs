@@ -16,21 +16,21 @@ import { AudioNormalizer } from './audio/normalizer.ts';
 import { createAudioOutput } from './audio/output.ts';
 import type { AudioInput, AudioOutput, DeviceSelector } from './audio/types.ts';
 import { resolveDevice } from './audio/types.ts';
-import type { ChorusConfig } from './config.ts';
+import type { VoiceAgentConfig } from './config.ts';
 import {
   ConversationScheduler,
-  type ChorusEvent,
+  type VoiceAgentEvent,
   type SchedulerState,
 } from './conversation/scheduler.ts';
 import { createSpeakTool, SpeakController } from './conversation/speak-tool.ts';
-import { CHORUS_SYSTEM_PROMPT } from './system-prompt.ts';
+import { VOICE_AGENT_SYSTEM_PROMPT } from './system-prompt.ts';
 import type { TextToSpeech } from './tts/types.ts';
 import { createXiaomiTextToSpeech } from './tts/xiaomi.ts';
 
-export type ChorusStatus = 'idle' | 'starting' | 'running' | 'closing' | 'closed';
+export type VoiceAgentStatus = 'idle' | 'starting' | 'running' | 'closing' | 'closed';
 
-export interface ChorusOptions {
-  config: ChorusConfig;
+export interface VoiceAgentOptions {
+  config: VoiceAgentConfig;
   model: Model<Api>;
   dataDir?: string;
   input?: AudioInput;
@@ -39,25 +39,25 @@ export interface ChorusOptions {
   perception?: Perception;
 }
 
-export interface Chorus {
-  readonly status: ChorusStatus;
+export interface VoiceAgent {
+  readonly status: VoiceAgentStatus;
   readonly scheduler: SchedulerState;
 
   start(): Promise<void>;
   close(): Promise<void>;
-  onEvent(listener: (event: ChorusEvent) => void): () => void;
+  onEvent(listener: (event: VoiceAgentEvent) => void): () => void;
 }
 
-export function createChorus(options: ChorusOptions): Chorus {
-  return new ChorusRuntime(options);
+export function createVoiceAgent(options: VoiceAgentOptions): VoiceAgent {
+  return new VoiceAgentRuntime(options);
 }
 
-class ChorusRuntime implements Chorus {
-  private currentStatus: ChorusStatus = 'idle';
+class VoiceAgentRuntime implements VoiceAgent {
+  private currentStatus: VoiceAgentStatus = 'idle';
   private startPromise: Promise<void> | undefined;
   private closePromise: Promise<void> | undefined;
 
-  private readonly listeners = new Set<(event: ChorusEvent) => void>();
+  private readonly listeners = new Set<(event: VoiceAgentEvent) => void>();
   private readonly selfEcho = new SelfEchoFilter();
 
   private storage?: Storage;
@@ -73,9 +73,9 @@ class ChorusRuntime implements Chorus {
   private unsubscribeSpeechEnd?: () => void;
   private unsubscribeAgent?: () => void;
 
-  constructor(private readonly options: ChorusOptions) {}
+  constructor(private readonly options: VoiceAgentOptions) {}
 
-  get status(): ChorusStatus {
+  get status(): VoiceAgentStatus {
     return this.currentStatus;
   }
 
@@ -87,7 +87,7 @@ class ChorusRuntime implements Chorus {
     );
   }
 
-  onEvent(listener: (event: ChorusEvent) => void): () => void {
+  onEvent(listener: (event: VoiceAgentEvent) => void): () => void {
     this.listeners.add(listener);
 
     return () => this.listeners.delete(listener);
@@ -103,7 +103,7 @@ class ChorusRuntime implements Chorus {
     }
 
     if (this.currentStatus !== 'idle') {
-      return Promise.reject(new Error(`Chorus 当前不可用：${this.currentStatus}`));
+      return Promise.reject(new Error(`Voice Agent 当前不可用：${this.currentStatus}`));
     }
 
     this.currentStatus = 'starting';
@@ -183,7 +183,7 @@ class ChorusRuntime implements Chorus {
 
       this.ciel = defineCiel({
         model: this.options.model,
-        systemPrompt: CHORUS_SYSTEM_PROMPT,
+        systemPrompt: VOICE_AGENT_SYSTEM_PROMPT,
         storage: this.storage,
         vectors: this.vectors,
         tools: [speakTool],
@@ -246,7 +246,10 @@ class ChorusRuntime implements Chorus {
     });
   }
 
-  private async pumpAudio(scheduler: ConversationScheduler, config: ChorusConfig): Promise<void> {
+  private async pumpAudio(
+    scheduler: ConversationScheduler,
+    config: VoiceAgentConfig,
+  ): Promise<void> {
     if (!this.input || !this.perception) {
       return;
     }
@@ -343,7 +346,7 @@ class ChorusRuntime implements Chorus {
     this.tts = undefined;
   }
 
-  private emit(event: ChorusEvent): void {
+  private emit(event: VoiceAgentEvent): void {
     for (const listener of this.listeners) {
       listener(event);
     }

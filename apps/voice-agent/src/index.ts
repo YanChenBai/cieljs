@@ -1,23 +1,23 @@
 import { models } from '@cieljs/model-kit/models';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
-export { defaultChorusConfig, defineChorusConfig } from './config.ts';
+export { defaultVoiceAgentConfig, defineVoiceAgentConfig } from './config.ts';
 export type {
-  ChorusAudioInputConfig,
-  ChorusAudioOutputConfig,
-  ChorusConfig,
-  ChorusConversationConfig,
-  ChorusPerceptionConfig,
-  ChorusTtsConfig,
+  VoiceAgentAudioInputConfig,
+  VoiceAgentAudioOutputConfig,
+  VoiceAgentConfig,
+  VoiceAgentConversationConfig,
+  VoiceAgentPerceptionConfig,
+  VoiceAgentTtsConfig,
 } from './config.ts';
 
-export { CHORUS_SYSTEM_PROMPT } from './system-prompt.ts';
+export { VOICE_AGENT_SYSTEM_PROMPT } from './system-prompt.ts';
 
-export { createChorus } from './runtime.ts';
-export type { Chorus, ChorusOptions, ChorusStatus } from './runtime.ts';
+export { createVoiceAgent } from './runtime.ts';
+export type { VoiceAgent, VoiceAgentOptions, VoiceAgentStatus } from './runtime.ts';
 
 export { ConversationScheduler } from './conversation/scheduler.ts';
-export type { ChorusEvent, PendingWindow, SchedulerState } from './conversation/scheduler.ts';
+export type { VoiceAgentEvent, PendingWindow, SchedulerState } from './conversation/scheduler.ts';
 export { createSpeakTool, SpeakController } from './conversation/speak-tool.ts';
 export type { SpeakResult, SpeakToolOptions, ThinkRunGate } from './conversation/speak-tool.ts';
 
@@ -47,7 +47,7 @@ export type {
   TextToSpeech,
 } from './tts/types.ts';
 
-export function resolveChorusModel(): Model<Api> {
+export function resolveVoiceAgentModel(): Model<Api> {
   const model = models.getModel('xiaomi', 'mimo-v2.5');
 
   if (!model) {

@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vite-plus/test';
 
 import type { AudioOutput } from '../src/audio/types.ts';
-import type { ChorusEvent } from '../src/conversation/scheduler.ts';
+import type { VoiceAgentEvent } from '../src/conversation/scheduler.ts';
 import {
   createSpeakTool,
   SpeakController,
@@ -15,12 +15,12 @@ interface Harness {
   synthesizeMock: ReturnType<typeof vi.fn>;
   playMock: ReturnType<typeof vi.fn>;
   setSynthesize(impl: (request: { signal?: AbortSignal }) => Promise<SpeechAudio>): void;
-  events: ChorusEvent[];
+  events: VoiceAgentEvent[];
 }
 
 function createHarness(): Harness {
   const controller = new SpeakController();
-  const events: ChorusEvent[] = [];
+  const events: VoiceAgentEvent[] = [];
 
   const synthesizeMock = vi.fn(async () => createAudio());
   const playMock = vi.fn(async () => {});

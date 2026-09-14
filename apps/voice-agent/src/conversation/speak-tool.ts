@@ -4,7 +4,7 @@ import { Type } from 'typebox';
 
 import type { AudioOutput, DeviceSelector } from '../audio/types.ts';
 import type { SpeechAudio, SpeechAudioFormat, TextToSpeech } from '../tts/types.ts';
-import type { ChorusEvent } from './scheduler.ts';
+import type { VoiceAgentEvent } from './scheduler.ts';
 
 export type SpeakResult =
   | { status: 'delivered'; startedAt: string; endedAt: string }
@@ -85,7 +85,7 @@ export interface SpeakToolOptions {
   format: SpeechAudioFormat;
   instructions?: string;
   outputDevice?: DeviceSelector;
-  emit: (event: ChorusEvent) => void;
+  emit: (event: VoiceAgentEvent) => void;
   onDelivered?: (delivery: { text: string; startedAt: Date; endedAt: Date }) => void;
   onAecReference?: (pcm: Buffer) => void;
 }

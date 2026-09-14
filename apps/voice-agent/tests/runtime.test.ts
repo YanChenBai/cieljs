@@ -11,9 +11,9 @@ import {
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 
 import type { AudioInput, AudioOutput } from '../src/audio/types.ts';
-import { defaultChorusConfig } from '../src/config.ts';
-import type { ChorusEvent } from '../src/conversation/scheduler.ts';
-import { createChorus } from '../src/runtime.ts';
+import { defaultVoiceAgentConfig } from '../src/config.ts';
+import type { VoiceAgentEvent } from '../src/conversation/scheduler.ts';
+import { createVoiceAgent } from '../src/runtime.ts';
 import type { SpeechAudio, TextToSpeech } from '../src/tts/types.ts';
 
 const { qwen } = vi.hoisted(() => ({
@@ -55,14 +55,14 @@ vi.mock('decibri', () => ({
 
 const temporaryDirectories: string[] = [];
 const testConfig = {
-  ...defaultChorusConfig,
+  ...defaultVoiceAgentConfig,
   mcp: {
     enabled: false,
   },
 };
 
 async function createDataDir(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'chorus-'));
+  const root = await mkdtemp(join(tmpdir(), 'voice-agent-'));
   temporaryDirectories.push(root);
 
   return root;
@@ -165,7 +165,7 @@ function createFakeTts() {
   return { tts, synthesizeMock };
 }
 
-describe('createChorus', () => {
+describe('createVoiceAgent', () => {
   test('speechend 触发思考并通过 speak 工具完成播放', async () => {
     const dataDir = await createDataDir();
     const faux = registerFauxProvider();
@@ -175,12 +175,12 @@ describe('createChorus', () => {
       fauxAssistantMessage('好的'),
     ]);
 
-    const events: ChorusEvent[] = [];
+    const events: VoiceAgentEvent[] = [];
     const perception = createFakePerception();
     const output = createFakeOutput();
     const { tts, synthesizeMock } = createFakeTts();
 
-    const chorus = createChorus({
+    const voiceAgent = createVoiceAgent({
       config: testConfig,
       model: faux.getModel(),
       dataDir,
@@ -190,10 +190,10 @@ describe('createChorus', () => {
       perception,
     });
 
-    chorus.onEvent(event => events.push(event));
+    voiceAgent.onEvent(event => events.push(event));
 
-    await chorus.start();
-    expect(chorus.status).toBe('running');
+    await voiceAgent.start();
+    expect(voiceAgent.status).toBe('running');
 
     const at = new Date('2026-01-01T00:00:01.000Z');
 
@@ -212,9 +212,9 @@ describe('createChorus', () => {
     expect(events.some(event => event.type === 'playback_finished')).toBe(true);
     expect(events.some(event => event.type === 'think_finished' && event.spoke)).toBe(true);
 
-    await chorus.close();
-    await chorus.close();
-    expect(chorus.status).toBe('closed');
+    await voiceAgent.close();
+    await voiceAgent.close();
+    expect(voiceAgent.status).toBe('closed');
 
     faux.unregister();
   }, 30_000);
@@ -226,7 +226,7 @@ describe('createChorus', () => {
 
     delete process.env.XIAOMI_API_KEY;
 
-    const chorus = createChorus({
+    const voiceAgent = createVoiceAgent({
       config: testConfig,
       model: faux.getModel(),
       dataDir,
@@ -235,7 +235,7 @@ describe('createChorus', () => {
       perception: createFakePerception(),
     });
 
-    await expect(chorus.start()).rejects.toThrow('XIAOMI_API_KEY');
+    await expect(voiceAgent.start()).rejects.toThrow('XIAOMI_API_KEY');
 
     process.env.XIAOMI_API_KEY = previous;
     faux.unregister();
@@ -245,7 +245,7 @@ describe('createChorus', () => {
     const dataDir = await createDataDir();
     const faux = registerFauxProvider();
 
-    const chorus = createChorus({
+    const voiceAgent = createVoiceAgent({
       config: {
         ...testConfig,
         audio: {
@@ -259,7 +259,7 @@ describe('createChorus', () => {
       perception: createFakePerception(),
     });
 
-    await expect(chorus.start()).rejects.toThrow('输入设备不存在');
+    await expect(voiceAgent.start()).rejects.toThrow('输入设备不存在');
 
     faux.unregister();
   }, 30_000);

@@ -402,7 +402,7 @@ Positionals are one or more 16 kHz WAV files, and the output is the single JSON 
 
 ### Where models live
 
-`modelsPath` belongs to the caller. The package reads the directory it is given and installs only into that path; Blive Agent and Chorus pass `join(dataDir, 'models')` from their own data directory, and voiceprint paths are decided by the same layer. The package's `.gitignore` excludes `/models/` and `voiceprints`, so neither is ever committed. KWS models land in `<modelsPath>/kws/<model>/`, and installing them shells out to the system `tar` with `-xOf` to read fixed archive members into stdout — archive paths and symlinks are never written to the filesystem.
+`modelsPath` belongs to the caller. The package reads the directory it is given and installs only into that path; Blive Agent and Voice Agent pass `join(dataDir, 'models')` from their own data directory, and voiceprint paths are decided by the same layer. The package's `.gitignore` excludes `/models/` and `voiceprints`, so neither is ever committed. KWS models land in `<modelsPath>/kws/<model>/`, and installing them shells out to the system `tar` with `-xOf` to read fixed archive members into stdout — archive paths and symlinks are never written to the filesystem.
 
 ### Runtime model configuration
 
@@ -484,4 +484,4 @@ vp run build    # vp pack -> dist (index, worker, ciel)
 
 Tests live in `tests/**/*.test.ts` and substitute `sherpa-onnx-node` with module doubles, so they need neither a model download nor real audio hardware. The `test` task declares `CIEL_NODE_EXECUTABLE` as an environment input, and `build` depends on the same task in dependencies. `./worker` must stay a separate ESM entry, because the Electron backend spawns it as a file.
 
-Consumers: [`@cieljs/perception`](../perception/README.md) wraps `ASR` to add vision sampling and agent snapshots, while `apps/blive-agent` and `apps/chorus` own the `modelsPath` and voiceprint layout inside their data directories.
+Consumers: [`@cieljs/perception`](../perception/README.md) wraps `ASR` to add vision sampling and agent snapshots, while `apps/blive-agent` and `apps/voice-agent` own the `modelsPath` and voiceprint layout inside their data directories.

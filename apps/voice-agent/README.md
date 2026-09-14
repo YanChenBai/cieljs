@@ -1,4 +1,4 @@
-<h1 align="center">@cieljs/chorus</h1>
+<h1 align="center">@cieljs/voice-agent</h1>
 
 <p align="center">A multi-speaker voice-chat participant for Node.js: always listening, thinking only when it matters, speaking through TTS.</p>
 
@@ -18,7 +18,7 @@
 
 ## Overview
 
-`@cieljs/chorus` is a pure Node.js application. It captures audio from a local input device, normalizes it to the fixed 16 kHz / mono / s16le contract, feeds it to [`@cieljs/perception`](../../packages/perception/README.md), hands the resulting multi-speaker snapshots to a Ciel Session (`cieljs` / [`@cieljs/runtime`](../../packages/runtime/README.md)), lets the Agent decide whether to join the conversation, and speaks the reply through Xiaomi MiMo TTS on a selected output device.
+`@cieljs/voice-agent` is a pure Node.js application. It captures audio from a local input device, normalizes it to the fixed 16 kHz / mono / s16le contract, feeds it to [`@cieljs/perception`](../../packages/perception/README.md), hands the resulting multi-speaker snapshots to a Ciel Session (`cieljs` / [`@cieljs/runtime`](../../packages/runtime/README.md)), lets the Agent decide whether to join the conversation, and speaks the reply through Xiaomi MiMo TTS on a selected output device.
 
 | Capability                                 | Implementation                                                                                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -38,17 +38,17 @@ Design invariants:
 
 ## Scope & non-goals
 
-`@cieljs/chorus` deliberately **is not**:
+`@cieljs/voice-agent` deliberately **is not**:
 
-- A browser or desktop UI. No Web Audio, no `setSinkId()`, no permission flows, no runtime visual configuration page — configuration is a typed `chorus.config.ts`.
+- A browser or desktop UI. No Web Audio, no `setSinkId()`, no permission flows, no runtime visual configuration page — configuration is a typed `voice-agent.config.ts`.
 - A question-answering bot that must reply to every detected utterance. `speechend` schedules a _judgement_, not an answer.
 - A synchronous ASR → Agent → TTS request pipeline. Intermediate ASR results only enter the perception timeline; they never call the Agent directly.
 - A transport for a specific chat platform (Discord, QQ, …). Platform integration is expected later as an outer transport layer and stays outside the perception, thinking and TTS contracts.
-- A vision consumer. Chorus creates perception with `asr` + `retentionMs` only, so `perception.image` is undefined and only audio is fed in.
+- A vision consumer. Voice Agent creates perception with `asr` + `retentionMs` only, so `perception.image` is undefined and only audio is fed in.
 - A streaming-ASR or streaming-TTS system. The TTS contract returns complete audio; a `StreamingTextToSpeech` capability detection is explicitly deferred.
 - A voice-design or voice-clone front end. MiMo voice design, cloning and singing are not exposed in the generic config.
 - A multi-Agent host. One fixed group-chat Session runs at a time, and thinking is single-flight.
-- A hand-written AEC/DSP stack. Acoustic echo cancellation comes from the audio backend; Chorus only enables it, feeds it a far-end reference and keeps a text-similarity fallback.
+- A hand-written AEC/DSP stack. Acoustic echo cancellation comes from the audio backend; Voice Agent only enables it, feeds it a far-end reference and keeps a text-similarity fallback.
 - A FIFO playback queue. Replies that have not started playing are superseded by newer speech instead of being queued.
 - A hot-swap surface for voiceprints or models at runtime.
 
@@ -68,37 +68,41 @@ Design invariants:
 vp install
 ```
 
-The package is consumed from source inside this monorepo (`@cieljs/chorus`, ESM, `exports["."] = ./dist/index.mjs`). No runtime configuration UI exists: everything is expressed in `chorus.config.ts` or in the programmatic options.
+The package is consumed from source inside this monorepo (`@cieljs/voice-agent`, ESM, `exports["."] = ./dist/index.mjs`). No runtime configuration UI exists: everything is expressed in `voice-agent.config.ts` or in the programmatic options.
 
 ## Quick start
 
 ```ts
-import { createChorus, defaultChorusConfig, resolveChorusModel } from '@cieljs/chorus';
+import {
+  createVoiceAgent,
+  defaultVoiceAgentConfig,
+  resolveVoiceAgentModel,
+} from '@cieljs/voice-agent';
 
-const chorus = createChorus({
-  config: defaultChorusConfig,
-  model: resolveChorusModel(),
+const voiceAgent = createVoiceAgent({
+  config: defaultVoiceAgentConfig,
+  model: resolveVoiceAgentModel(),
 });
 
-const unsubscribe = chorus.onEvent(event => console.log(event));
+const unsubscribe = voiceAgent.onEvent(event => console.log(event));
 
-await chorus.start();
+await voiceAgent.start();
 
 process.on('SIGINT', async () => {
   unsubscribe();
-  await chorus.close();
+  await voiceAgent.close();
 });
 ```
 
-`resolveChorusModel()` is a thin wrapper over the model registry — it returns `models.getModel('xiaomi', 'mimo-v2.5')` and throws `未找到 Xiaomi mimo-v2.5 模型` when the registry has no such model. The Xiaomi provider resolves its credential from `XIAOMI_API_KEY`, the same variable the TTS adapter reads.
+`resolveVoiceAgentModel()` is a thin wrapper over the model registry — it returns `models.getModel('xiaomi', 'mimo-v2.5')` and throws `未找到 Xiaomi mimo-v2.5 模型` when the registry has no such model. The Xiaomi provider resolves its credential from `XIAOMI_API_KEY`, the same variable the TTS adapter reads.
 
-The CLI entry point in `src/cli/index.ts` does exactly the above with `chorus.config.ts` instead of `defaultChorusConfig`.
+The CLI entry point in `src/cli/index.ts` does exactly the above with `voice-agent.config.ts` instead of `defaultVoiceAgentConfig`.
 
-### `createChorus(options)`
+### `createVoiceAgent(options)`
 
 | Option       | Type                                   | Notes                                                                                                          |
 | ------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `config`     | `ChorusConfig`                         | Required. Validated by `defineChorusConfig`.                                                                   |
+| `config`     | `VoiceAgentConfig`                     | Required. Validated by `defineVoiceAgentConfig`.                                                               |
 | `model`      | `Model<Api>` (`@earendil-works/pi-ai`) | Required. Passed straight to `defineCiel`.                                                                     |
 | `dataDir`    | `string`                               | Defaults to `join(homedir(), '.ciel')`, then `resolve()`d to an absolute path.                                 |
 | `input`      | `AudioInput`                           | Optional override — skip the decibri adapter (used by tests and embedders). Device assertions are skipped too. |
@@ -106,15 +110,15 @@ The CLI entry point in `src/cli/index.ts` does exactly the above with `chorus.co
 | `tts`        | `TextToSpeech`                         | Optional override. When omitted, the Xiaomi adapter is built and `XIAOMI_API_KEY` becomes mandatory.           |
 | `perception` | `Perception`                           | Optional override, so the audio pipeline can be faked deterministically.                                       |
 
-### The returned `Chorus`
+### The returned `VoiceAgent`
 
 | Member              | Behaviour                                                                                                                                                                  |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `status`            | `'idle' \| 'starting' \| 'running' \| 'closing' \| 'closed'`                                                                                                               |
 | `scheduler`         | Current `SchedulerState`; reports `{ status: 'idle' }` while running before the scheduler exists, and `{ status: 'closed' }` otherwise.                                    |
-| `start()`           | Resolves immediately when already running, returns the in-flight promise while starting, rejects with `Chorus 当前不可用：<status>` from any other state.                  |
+| `start()`           | Resolves immediately when already running, returns the in-flight promise while starting, rejects with `Voice Agent 当前不可用：<status>` from any other state.             |
 | `close()`           | Idempotent — repeated calls return the same promise. Closing while starting waits for the start to settle first, then still releases host-owned resources (including MCP). |
-| `onEvent(listener)` | Subscribes to `ChorusEvent`; returns an unsubscribe function.                                                                                                              |
+| `onEvent(listener)` | Subscribes to `VoiceAgentEvent`; returns an unsubscribe function.                                                                                                          |
 
 Work is placed in `dataDir`: `<dataDir>/storage` (Storage with the session, memory and vector modules), `<dataDir>/models` (ASR/VAD/speaker models consumed by `@cieljs/perception`), `<dataDir>/mcp.json` (MCP config, when `mcp.enabled`).
 
@@ -134,10 +138,10 @@ Package scripts (from `package.json`):
 > `dev` and `start` run the identical command — there is no watch mode. Use `vp run dev` or `vp run start` interchangeably.
 
 ```bash
-cd apps/chorus
+cd apps/voice-agent
 
 vp run list-devices   # index, stable id, channel counts, default rate for every device
-vp run start          # reads chorus.config.ts and XIAOMI_API_KEY
+vp run start          # reads voice-agent.config.ts and XIAOMI_API_KEY
 ```
 
 CLI arguments (`process.argv.slice(2)`):
@@ -145,7 +149,7 @@ CLI arguments (`process.argv.slice(2)`):
 | Argument                  | Behaviour                                                                                                                                                                                                 |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list-devices`, `devices` | Print input devices, then output devices. Each line carries `index`, `name`, `maxInputChannels`/`maxOutputChannels`, `rate` and a `(默认)` marker; the stable `id` is printed on an indented second line. |
-| `start`, _(none)_         | Run Chorus, then print `Chorus 已启动，Ctrl+C 退出。`                                                                                                                                                     |
+| `start`, _(none)_         | Run Voice Agent, then print `Voice Agent 已启动，Ctrl+C 退出。`                                                                                                                                           |
 | `help`, `--help`, `-h`    | Print usage.                                                                                                                                                                                              |
 | anything else             | Print usage and set `process.exitCode = 2`.                                                                                                                                                               |
 
@@ -160,18 +164,18 @@ Environment:
 > [!WARNING]
 > Xiaomi's public examples commonly use `MIMO_API_KEY`. This project reads **only** `XIAOMI_API_KEY` as a project convention.
 
-The CLI renders events as Chinese-labelled lines — `识别` (transcript + speaker), `忽略` (self-echo), `思考` (segment count, then spoke/silent + duration), `工具` (tool call and result), `朗读` (text, then synthesis time), `播放` (device selector, then duration) and `错误` (stage + message on stderr). `SIGINT` and `SIGTERM` trigger `chorus.close()` and `process.exit(0)`; further signals are ignored once shutdown started.
+The CLI renders events as Chinese-labelled lines — `识别` (transcript + speaker), `忽略` (self-echo), `思考` (segment count, then spoke/silent + duration), `工具` (tool call and result), `朗读` (text, then synthesis time), `播放` (device selector, then duration) and `错误` (stage + message on stderr). `SIGINT` and `SIGTERM` trigger `voiceAgent.close()` and `process.exit(0)`; further signals are ignored once shutdown started.
 
 ## Configuration
 
-Configuration is a typed module: `defineChorusConfig()` validates and returns the object, and `defaultChorusConfig` is the built-in baseline.
+Configuration is a typed module: `defineVoiceAgentConfig()` validates and returns the object, and `defaultVoiceAgentConfig` is the built-in baseline.
 
 ```ts
-// apps/chorus/chorus.config.ts
-import { defaultChorusConfig, defineChorusConfig } from '@cieljs/chorus';
+// apps/voice-agent/voice-agent.config.ts
+import { defaultVoiceAgentConfig, defineVoiceAgentConfig } from '@cieljs/voice-agent';
 
-export default defineChorusConfig({
-  embedding: defaultChorusConfig.embedding,
+export default defineVoiceAgentConfig({
+  embedding: defaultVoiceAgentConfig.embedding,
   mcp: {
     enabled: true,
   },
@@ -209,15 +213,15 @@ export default defineChorusConfig({
 });
 ```
 
-`defaultChorusConfig` differs from the shipped file in two places: `embedding.cacheDir` is `join(homedir(), '.ciel', 'cache', 'embedding')` (the file reuses that default) and `conversation.minimumThinkIntervalMs` is `2_000` (the file uses `200`).
+`defaultVoiceAgentConfig` differs from the shipped file in two places: `embedding.cacheDir` is `join(homedir(), '.ciel', 'cache', 'embedding')` (the file reuses that default) and `conversation.minimumThinkIntervalMs` is `2_000` (the file uses `200`).
 
 ### `embedding`
 
-When `embedding` is present, Chorus creates a `VectorService` backed by `qwen(config.embedding)` with `providerId: 'qwen'`, `revision: '1'`, `granularity: 'chunk'` and `inputConfig: 'qwen-default'`; when it is omitted, `vectors` stays `undefined` and no embedding provider is loaded.
+When `embedding` is present, Voice Agent creates a `VectorService` backed by `qwen(config.embedding)` with `providerId: 'qwen'`, `revision: '1'`, `granularity: 'chunk'` and `inputConfig: 'qwen-default'`; when it is omitted, `vectors` stays `undefined` and no embedding provider is loaded.
 
 ### `mcp`
 
-`mcp.enabled` (required boolean) and the optional `mcp.required` are forwarded to `createMcp({ cwd: dataDir, configFile: '<dataDir>/mcp.json', required })`. The instance is host-owned: Chorus shares it with the runtime and closes it only after every session is gone. Its tools are appended to the Session tool set after `speak`.
+`mcp.enabled` (required boolean) and the optional `mcp.required` are forwarded to `createMcp({ cwd: dataDir, configFile: '<dataDir>/mcp.json', required })`. The instance is host-owned: Voice Agent shares it with the runtime and closes it only after every session is gone. Its tools are appended to the Session tool set after `speak`.
 
 | Key          | Default                              | Notes                                                                          |
 | ------------ | ------------------------------------ | ------------------------------------------------------------------------------ |
@@ -254,7 +258,7 @@ When `embedding` is present, Chorus creates a `VectorService` backed by `qwen(co
 | `asr.maxSpeakers`      | `number`           | `8`      | Positive integer; upper bound on dynamic speakers.                                                                    |
 | `retentionMs`          | `number`           | `60_000` | Positive finite. Passed to `createPerception`; must cover the longest speech segment whose snapshot is still pending. |
 
-Chorus injects `modelsPath: join(dataDir, 'models')` into `asr` itself — it is intentionally not part of the config surface.
+Voice Agent injects `modelsPath: join(dataDir, 'models')` into `asr` itself — it is intentionally not part of the config surface.
 
 ### `tts`
 
@@ -278,11 +282,11 @@ Chorus injects `modelsPath: join(dataDir, 'models')` into `asr` itself — it is
 | `{ id: string }` | Exact match against the stable per-host `id` (e.g. `'wasapi:{...}'`), which survives re-enumeration and restarts. The `id` must be non-empty. |
 
 > [!WARNING]
-> Device indices shift when the system's device set changes. Prefer `{ id }` for anything durable, and re-check with `list-devices` after a driver or hardware change. An explicitly selected device that cannot be resolved fails startup — Chorus never silently falls back to the default device.
+> Device indices shift when the system's device set changes. Prefer `{ id }` for anything durable, and re-check with `list-devices` after a driver or hardware change. An explicitly selected device that cannot be resolved fails startup — Voice Agent never silently falls back to the default device.
 
 ### Validation rules
 
-`defineChorusConfig()` throws with a path-qualified Chinese message. Empty required strings (including `embedding.cacheDir`, `spaceId`, `sessionId`, each `sources[i]`, each `asr.speaker[i].name` / `.file`, `tts.voice` and `tts.instructions`) fail with `<path> 不能为空`; `mcp.enabled` must be a boolean; `audio.input.channels`, `asr.maxSpeakers` and integer device selectors have their own integer bounds (`>= 1`, `>= 1`, `>= 0`); `sampleRate`, `retentionMs` and `minimumThinkIntervalMs` must be finite (the last one also `>= 0`); `speakerThreshold` must fall inside `(0, 1]`; and every other value must match its literal type above — for example `conversation.minimumThinkIntervalMs 必须是有限整数`, `perception.asr.speakerThreshold 必须是大于 0 且不超过 1 的有限数字`, `audio.input.device 必须是大于等于 0 的整数设备索引`.
+`defineVoiceAgentConfig()` throws with a path-qualified Chinese message. Empty required strings (including `embedding.cacheDir`, `spaceId`, `sessionId`, each `sources[i]`, each `asr.speaker[i].name` / `.file`, `tts.voice` and `tts.instructions`) fail with `<path> 不能为空`; `mcp.enabled` must be a boolean; `audio.input.channels`, `asr.maxSpeakers` and integer device selectors have their own integer bounds (`>= 1`, `>= 1`, `>= 0`); `sampleRate`, `retentionMs` and `minimumThinkIntervalMs` must be finite (the last one also `>= 0`); `speakerThreshold` must fall inside `(0, 1]`; and every other value must match its literal type above — for example `conversation.minimumThinkIntervalMs 必须是有限整数`, `perception.asr.speakerThreshold 必须是大于 0 且不超过 1 的有限数字`, `audio.input.device 必须是大于等于 0 的整数设备索引`.
 
 ## How it works
 
@@ -419,19 +423,19 @@ Details worth knowing:
 
 ### VAD / AEC split of responsibility
 
-| Concern                                                                  | Owner                                                                                                                                                                            |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Voice activity detection, ASR, speaker clustering, transcript timestamps | [`@cieljs/perception`](../../packages/perception/README.md) → [`@cieljs/hearing`](../../packages/hearing/README.md)                                                              |
-| Fixed 16 kHz / mono / s16le input contract                               | `AudioNormalizer` (this package)                                                                                                                                                 |
-| Acoustic echo cancellation                                               | `decibri` capture opened with `aec: 'tau'`; Chorus feeds the far-end reference PCM through `AudioInput.pushAecReference()` from `AudioOutput.play()`'s `onAecReference` callback |
-| Residual self-echo guard                                                 | `SelfEchoFilter` in `runtime.ts`                                                                                                                                                 |
-| Deciding whether speech is worth a think                                 | `ConversationScheduler`                                                                                                                                                          |
+| Concern                                                                  | Owner                                                                                                                                                                                 |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Voice activity detection, ASR, speaker clustering, transcript timestamps | [`@cieljs/perception`](../../packages/perception/README.md) → [`@cieljs/hearing`](../../packages/hearing/README.md)                                                                   |
+| Fixed 16 kHz / mono / s16le input contract                               | `AudioNormalizer` (this package)                                                                                                                                                      |
+| Acoustic echo cancellation                                               | `decibri` capture opened with `aec: 'tau'`; Voice Agent feeds the far-end reference PCM through `AudioInput.pushAecReference()` from `AudioOutput.play()`'s `onAecReference` callback |
+| Residual self-echo guard                                                 | `SelfEchoFilter` in `runtime.ts`                                                                                                                                                      |
+| Deciding whether speech is worth a think                                 | `ConversationScheduler`                                                                                                                                                               |
 
-The self-echo fallback compares each `speechend` against the last delivered playback: the event time must fall inside the playback window, and the normalized transcript (lower-cased, punctuation/whitespace stripped) must equal, contain or be contained by the spoken text. On a match Chorus emits `self_echo_ignored` and calls `scheduler.skipThrough(at)` — the cursor advances so the echo is never re-read, but no thinking is triggered. Different speakers or clearly different text during the same window still enter a pending window.
+The self-echo fallback compares each `speechend` against the last delivered playback: the event time must fall inside the playback window, and the normalized transcript (lower-cased, punctuation/whitespace stripped) must equal, contain or be contained by the spoken text. On a match Voice Agent emits `self_echo_ignored` and calls `scheduler.skipThrough(at)` — the cursor advances so the echo is never re-read, but no thinking is triggered. Different speakers or clearly different text during the same window still enter a pending window.
 
 ### When the Agent speaks
 
-The rules live in `CHORUS_SYSTEM_PROMPT` (`src/system-prompt.ts`, exported from the package) and are passed to `defineCiel({ systemPrompt })`. It frames the Agent as one member of a group chat — not a host and not a per-utterance voice assistant:
+The rules live in `VOICE_AGENT_SYSTEM_PROMPT` (`src/system-prompt.ts`, exported from the package) and are passed to `defineCiel({ systemPrompt })`. It frames the Agent as one member of a group chat — not a host and not a per-utterance voice assistant:
 
 - Speak when directly addressed or asked, when the context is plainly waiting for a reply, when it adds relevant new information, when something about it needs clarifying, or when not correcting would cause real misunderstanding or risk.
 - Stay silent when others are talking to each other, when the turn would only echo or paraphrase, when the question is already fully answered, when the utterance is incomplete or ambiguous, during rapid turn-taking, when there is nothing new, or when the text sounds like its own recent speaker output. Silence needs no announcement and no placeholder output.
@@ -444,7 +448,7 @@ Core additionally gives the Agent the session/memory tools and a Bilibili tool s
 
 ### Events
 
-`chorus.onEvent()` receives one discriminated union, also used by the CLI renderer:
+`voiceAgent.onEvent()` receives one discriminated union, also used by the CLI renderer:
 
 | Event                | Payload                      |
 | -------------------- | ---------------------------- |
@@ -470,10 +474,10 @@ Startup (`startRuntime`) in order:
 
 1. Resolve `dataDir`, then build the TTS adapter (or use the injected one) — a missing `XIAOMI_API_KEY` fails here.
 2. Create perception with `{ ...asr, modelsPath: <dataDir>/models }` and `retentionMs`.
-3. Create `AudioInput` and `AudioOutput`, then assert devices — only for adapters Chorus created itself.
+3. Create `AudioInput` and `AudioOutput`, then assert devices — only for adapters Voice Agent created itself.
 4. Build `SpeakController` and the `speak` tool, wired to TTS, output, voice, format, instructions, output device, the event emitter, the self-echo recorder and the AEC reference hook.
 5. Open `Storage` with the session, memory and vector modules; optionally create the `qwen`-backed `VectorService`; optionally create MCP.
-6. `defineCiel({ model, systemPrompt: CHORUS_SYSTEM_PROMPT, storage, vectors, tools: [speakTool], mcp })`, then `await ciel.start()`.
+6. `defineCiel({ model, systemPrompt: VOICE_AGENT_SYSTEM_PROMPT, storage, vectors, tools: [speakTool], mcp })`, then `await ciel.start()`.
 7. Open the fixed Session with `{ sessionId, spaceId, sources }`, then subscribe to Agent events for `tool_call_started` / `tool_call_finished`.
 8. Create the `ConversationScheduler` with `startedAt = new Date()`, subscribe to perception's `speechend`, start the audio pump and set `status = 'running'`.
 
@@ -502,21 +506,21 @@ Shutdown (`close()` → `dispose()`) in order: unsubscribe `speechend` and Agent
 ## Directory layout
 
 ```text
-apps/chorus/
+apps/voice-agent/
 ├── package.json          # scripts, exports, decibri + workspace deps
-├── chorus.config.ts      # the shipped typed config consumed by the CLI
+├── voice-agent.config.ts      # the shipped typed config consumed by the CLI
 ├── vite.config.ts        # Vite+ tasks: test (forwards XIAOMI_API_KEY) and build (vp pack)
 ├── README.md
 ├── README.zh-CN.md
 ├── src/
 │   ├── index.ts          # public entry: config, prompt, runtime, scheduler, audio, tts
-│   ├── config.ts         # ChorusConfig types, defaultChorusConfig, validation
-│   ├── runtime.ts        # createChorus: lifecycle, device assertions, self-echo filter
-│   ├── system-prompt.ts  # CHORUS_SYSTEM_PROMPT
+│   ├── config.ts         # VoiceAgentConfig types, defaultVoiceAgentConfig, validation
+│   ├── runtime.ts        # createVoiceAgent: lifecycle, device assertions, self-echo filter
+│   ├── system-prompt.ts  # VOICE_AGENT_SYSTEM_PROMPT
 │   ├── cli/
 │   │   └── index.ts      # list-devices / start / help + event rendering
 │   ├── conversation/
-│   │   ├── scheduler.ts  # ConversationScheduler, PendingWindow, ChorusEvent
+│   │   ├── scheduler.ts  # ConversationScheduler, PendingWindow, VoiceAgentEvent
 │   │   └── speak-tool.ts # SpeakController, ThinkRunGate, the gated speak tool
 │   ├── audio/
 │   │   ├── types.ts      # AudioInput/AudioOutput interfaces, DeviceSelector, resolveDevice
@@ -540,7 +544,7 @@ Package exports: `"."` → `./dist/index.mjs`, `"./package.json"` → `./package
 
 ### Public API
 
-Config: `createChorus`/`ChorusOptions`/`Chorus`/`ChorusStatus`, `defaultChorusConfig`, `defineChorusConfig`, `ChorusConfig` and the per-section config types, `CHORUS_SYSTEM_PROMPT`. Scheduling: `ConversationScheduler`, `ChorusEvent`, `PendingWindow`, `SchedulerState`. Speak gating: `createSpeakTool`, `SpeakController`, `SpeakResult`, `SpeakToolOptions`, `ThinkRunGate`. Audio: `createAudioInput`, `createAudioOutput`, `AudioNormalizer`, `resampleS16le`, `decodeWavToPcm16`, `parseWav`, `resolveDevice`, plus the `ParsedWav`, `DecodedPcm`, `AudioDevice`, `AudioInput`, `AudioInputChunk`, `AudioInputDevice`, `AudioOutput`, `AudioOutputDevice` and `DeviceSelector` types. TTS: `createXiaomiTextToSpeech`, `XiaomiTextToSpeechOptions`, `SpeechAudio`, `SpeechAudioFormat`, `SpeechSynthesisRequest`, `TextToSpeech`. Model helper: `resolveChorusModel()`.
+Config: `createVoiceAgent`/`VoiceAgentOptions`/`VoiceAgent`/`VoiceAgentStatus`, `defaultVoiceAgentConfig`, `defineVoiceAgentConfig`, `VoiceAgentConfig` and the per-section config types, `VOICE_AGENT_SYSTEM_PROMPT`. Scheduling: `ConversationScheduler`, `VoiceAgentEvent`, `PendingWindow`, `SchedulerState`. Speak gating: `createSpeakTool`, `SpeakController`, `SpeakResult`, `SpeakToolOptions`, `ThinkRunGate`. Audio: `createAudioInput`, `createAudioOutput`, `AudioNormalizer`, `resampleS16le`, `decodeWavToPcm16`, `parseWav`, `resolveDevice`, plus the `ParsedWav`, `DecodedPcm`, `AudioDevice`, `AudioInput`, `AudioInputChunk`, `AudioInputDevice`, `AudioOutput`, `AudioOutputDevice` and `DeviceSelector` types. TTS: `createXiaomiTextToSpeech`, `XiaomiTextToSpeechOptions`, `SpeechAudio`, `SpeechAudioFormat`, `SpeechSynthesisRequest`, `TextToSpeech`. Model helper: `resolveVoiceAgentModel()`.
 
 ## Development
 
@@ -548,11 +552,11 @@ Config: `createChorus`/`ChorusOptions`/`Chorus`/`ChorusStatus`, `defaultChorusCo
 # repo root
 vp install
 
-cd apps/chorus
+cd apps/voice-agent
 vp run check     # vp check — format, lint, type check
 vp run test      # vite.config.ts task → vp test, forwarding XIAOMI_API_KEY
 vp run build     # vite.config.ts task → vp pack (declared dependency builds first)
-vp run start     # run the app against chorus.config.ts
+vp run start     # run the app against voice-agent.config.ts
 ```
 
 The repo root also exposes `vp run -r test`, `vp run -r build` and `vp ready` (`vp check && vp run -r test && vp run -r build`).
@@ -573,10 +577,10 @@ What the tests pin down today:
 These are fixed by the design but still need real-environment confirmation before the first device-level integration run. They are listed here as unverified on purpose:
 
 1. **decibri AEC effectiveness.** `aec: 'tau'` is enabled on capture and the far-end reference is pushed from playback, but its echo-cancellation quality on real full-duplex devices (speaker + microphone on the same machine) has not been measured. The text-similarity `SelfEchoFilter` is kept as a fallback, and `aecMetrics()` is available for diagnostics.
-2. **Xiaomi model registry stability.** `resolveChorusModel()` reads `models.getModel('xiaomi', 'mimo-v2.5')` from `@cieljs/model-kit/models`; whether that registry stays a supported public entry point (rather than Chorus registering the provider itself) is not yet settled.
+2. **Xiaomi model registry stability.** `resolveVoiceAgentModel()` reads `models.getModel('xiaomi', 'mimo-v2.5')` from `@cieljs/model-kit/models`; whether that registry stays a supported public entry point (rather than Voice Agent registering the provider itself) is not yet settled.
 3. **MiMo preset voice ID.** `tts.voice` defaults to `冰糖` provisionally; the final voice ID is unconfirmed.
 
-A related open question that is a _configuration_ choice rather than a design decision: the shipped `chorus.config.ts` uses `minimumThinkIntervalMs: 200`, while `defaultChorusConfig` and the design baseline use `2_000`. The right value for real group conversation has not been tuned on hardware.
+A related open question that is a _configuration_ choice rather than a design decision: the shipped `voice-agent.config.ts` uses `minimumThinkIntervalMs: 200`, while `defaultVoiceAgentConfig` and the design baseline use `2_000`. The right value for real group conversation has not been tuned on hardware.
 
 External references:
 

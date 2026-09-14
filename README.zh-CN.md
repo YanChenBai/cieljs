@@ -71,7 +71,7 @@ vp run -r build   # 只做构建
 
 ```bash
 vp run @cieljs/blive-agent#dev  # Electron 桌面应用
-vp run @cieljs/chorus#dev       # 语音聊天参与者
+vp run @cieljs/voice-agent#dev  # 语音聊天参与者
 ```
 
 ## 文档

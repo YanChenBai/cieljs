@@ -1,5 +1,5 @@
 {
-  "name": "@cieljs/chorus",
+  "name": "@cieljs/voice-agent",
   "version": "0.0.0",
   "description": "多人语音聊天参与者：感知、思考、发言与播放的纯 Node 应用。",
   "license": "MIT",

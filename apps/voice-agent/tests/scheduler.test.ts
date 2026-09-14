@@ -2,7 +2,7 @@ import type { Perception, PerceptionSnapshot } from '@cieljs/perception';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 
-import { ConversationScheduler, type ChorusEvent } from '../src/conversation/scheduler.ts';
+import { ConversationScheduler, type VoiceAgentEvent } from '../src/conversation/scheduler.ts';
 import { SpeakController } from '../src/conversation/speak-tool.ts';
 
 interface SnapshotCall {
@@ -12,7 +12,7 @@ interface SnapshotCall {
 
 interface Harness {
   scheduler: ConversationScheduler;
-  events: ChorusEvent[];
+  events: VoiceAgentEvent[];
   snapshotCalls: SnapshotCall[];
   prompt: ReturnType<typeof vi.fn>;
 }
@@ -22,7 +22,7 @@ function createHarness(options: {
   compose?: (call: SnapshotCall) => AgentMessage[];
   promptImpl?: () => Promise<void>;
 }): Harness {
-  const events: ChorusEvent[] = [];
+  const events: VoiceAgentEvent[] = [];
   const snapshotCalls: SnapshotCall[] = [];
   const speak = new SpeakController();
 

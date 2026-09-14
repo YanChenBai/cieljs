@@ -71,7 +71,7 @@ To run an application:
 
 ```bash
 vp run @cieljs/blive-agent#dev  # Electron desktop app
-vp run @cieljs/chorus#dev       # voice chat participant
+vp run @cieljs/voice-agent#dev  # voice chat participant
 ```
 
 ## Documentation

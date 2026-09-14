@@ -1,9 +1,9 @@
-import config from '../../chorus.config.ts';
+import config from '../../voice-agent.config.ts';
 import { createAudioInput } from '../audio/input.ts';
 import { createAudioOutput } from '../audio/output.ts';
-import type { ChorusEvent } from '../conversation/scheduler.ts';
-import { resolveChorusModel } from '../index.ts';
-import { createChorus } from '../runtime.ts';
+import type { VoiceAgentEvent } from '../conversation/scheduler.ts';
+import { resolveVoiceAgentModel } from '../index.ts';
+import { createVoiceAgent } from '../runtime.ts';
 
 async function main(): Promise<void> {
   loadLocalEnv();
@@ -68,15 +68,15 @@ async function listDevices(): Promise<void> {
 }
 
 async function start(): Promise<void> {
-  const chorus = createChorus({
+  const voiceAgent = createVoiceAgent({
     config,
-    model: resolveChorusModel(),
+    model: resolveVoiceAgentModel(),
   });
 
-  chorus.onEvent(event => logEvent(event));
+  voiceAgent.onEvent(event => logEvent(event));
 
-  await chorus.start();
-  process.stdout.write('Chorus 已启动，Ctrl+C 退出。\n');
+  await voiceAgent.start();
+  process.stdout.write('Voice Agent 已启动，Ctrl+C 退出。\n');
 
   let closing = false;
   const shutdown = async () => {
@@ -85,7 +85,7 @@ async function start(): Promise<void> {
     }
 
     closing = true;
-    await chorus.close();
+    await voiceAgent.close();
     process.exit(0);
   };
 
@@ -124,7 +124,7 @@ function describeArgs(args: unknown): string {
   }
 }
 
-function logEvent(event: ChorusEvent): void {
+function logEvent(event: VoiceAgentEvent): void {
   switch (event.type) {
     case 'speech_end':
       if (event.content) {
@@ -192,9 +192,9 @@ function printHelp(): void {
     [
       '用法：',
       '  oxnode ./src/cli/index.ts list-devices   列出输入/输出设备与设备 ID',
-      '  oxnode ./src/cli/index.ts start           启动 Chorus（读取 chorus.config.ts 与 XIAOMI_API_KEY）',
+      '  oxnode ./src/cli/index.ts start           启动 Voice Agent（读取 voice-agent.config.ts 与 XIAOMI_API_KEY）',
       '',
-      '在 chorus.config.ts 中设置设备：省略 device 使用系统默认，或使用 index / 名称子串 / { id } 稳定 ID。',
+      '在 voice-agent.config.ts 中设置设备：省略 device 使用系统默认，或使用 index / 名称子串 / { id } 稳定 ID。',
     ].join('\n') + '\n',
   );
 }

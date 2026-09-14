@@ -4,7 +4,7 @@ import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
 import type { DeviceSelector } from '../audio/types.ts';
 import type { SpeakController, ThinkRunGate } from './speak-tool.ts';
 
-export type ChorusEvent =
+export type VoiceAgentEvent =
   | { type: 'speech_end'; at: Date; speaker?: string; content?: string }
   | { type: 'pending_created'; window: PendingWindow }
   | { type: 'pending_merged'; window: PendingWindow }
@@ -44,7 +44,7 @@ export interface ConversationSchedulerOptions {
   speak: SpeakController;
   minimumThinkIntervalMs: number;
   startedAt: Date;
-  emit: (event: ChorusEvent) => void;
+  emit: (event: VoiceAgentEvent) => void;
 }
 
 const INITIAL_RETRY_DELAY_MS = 1_000;

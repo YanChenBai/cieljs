@@ -1,7 +1,7 @@
-import { defaultChorusConfig, defineChorusConfig } from './src/config.ts';
+import { defaultVoiceAgentConfig, defineVoiceAgentConfig } from './src/config.ts';
 
-export default defineChorusConfig({
-  embedding: defaultChorusConfig.embedding,
+export default defineVoiceAgentConfig({
+  embedding: defaultVoiceAgentConfig.embedding,
   mcp: {
     enabled: true,
   },

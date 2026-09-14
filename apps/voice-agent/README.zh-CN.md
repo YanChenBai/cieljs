@@ -1,4 +1,4 @@
-<h1 align="center">@cieljs/chorus</h1>
+<h1 align="center">@cieljs/voice-agent</h1>
 
 <p align="center">多人语音聊天参与者：持续感知、择机思考、通过 TTS 发言并播放的纯 Node.js 应用。</p>
 
@@ -18,7 +18,7 @@
 
 ## 概览
 
-`@cieljs/chorus` 是一个纯 Node.js 应用。它从本机输入设备采集音频，归一化为固定的 16 kHz / 单声道 / s16le 契约后交给 [`@cieljs/perception`](../../packages/perception/README.zh-CN.md)，把产生的多人语音快照交给 Ciel Session（`cieljs` / [`@cieljs/runtime`](../../packages/runtime/README.zh-CN.md)），让 Agent 判断是否加入对话，并通过小米 MiMo TTS 在指定输出设备上说出回复。
+`@cieljs/voice-agent` 是一个纯 Node.js 应用。它从本机输入设备采集音频，归一化为固定的 16 kHz / 单声道 / s16le 契约后交给 [`@cieljs/perception`](../../packages/perception/README.zh-CN.md)，把产生的多人语音快照交给 Ciel Session（`cieljs` / [`@cieljs/runtime`](../../packages/runtime/README.zh-CN.md)），让 Agent 判断是否加入对话，并通过小米 MiMo TTS 在指定输出设备上说出回复。
 
 | 能力                                   | 实现                                                                                                                                          |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -38,17 +38,17 @@
 
 ## 边界与非目标
 
-`@cieljs/chorus` 刻意**不是**：
+`@cieljs/voice-agent` 刻意**不是**：
 
-- 浏览器或桌面 UI。没有 Web Audio、没有 `setSinkId()`、没有权限流程，也没有运行时可视化配置页面——配置就是类型化的 `chorus.config.ts`。
+- 浏览器或桌面 UI。没有 Web Audio、没有 `setSinkId()`、没有权限流程，也没有运行时可视化配置页面——配置就是类型化的 `voice-agent.config.ts`。
 - 每检测到一句话就必须回答的问答机器人。`speechend` 调度的是一次*判断*，不是一次回答。
 - ASR → Agent → TTS 强行串成同步请求的流水线。ASR 的中间结果只进入 Perception 时间线，不会直接调用 Agent。
 - 某个具体聊天平台（Discord、QQ 等）的 transport。平台接入以后作为外层 transport 添加，不进入感知、思考或 TTS 的通用契约。
-- 视觉输入的消费者。Chorus 只用 `asr` + `retentionMs` 创建 perception，因此 `perception.image` 为 `undefined`，只喂入音频。
+- 视觉输入的消费者。Voice Agent 只用 `asr` + `retentionMs` 创建 perception，因此 `perception.image` 为 `undefined`，只喂入音频。
 - 流式 ASR 或流式 TTS 系统。TTS 契约返回完整音频；`StreamingTextToSpeech` 能力检测被明确推迟。
 - 音色设计或音色克隆的前端。MiMo 的 voice design、voice clone 与唱歌能力不进入通用配置。
 - 多 Agent 宿主。同一时刻只运行一个固定的群聊 Session，思考采用 single-flight。
-- 自研 AEC/DSP 栈。回声消除来自音频后端，Chorus 只负责启用它、喂入远端参考，并保留一层文本近似兜底。
+- 自研 AEC/DSP 栈。回声消除来自音频后端，Voice Agent 只负责启用它、喂入远端参考，并保留一层文本近似兜底。
 - FIFO 播放队列。尚未开始播放的回复被新语音 supersede，而不是排队等待。
 - 运行期热切换声纹或模型的界面。
 
@@ -68,37 +68,41 @@
 vp install
 ```
 
-本包在 monorepo 内以源码方式消费（`@cieljs/chorus`，ESM，`exports["."] = ./dist/index.mjs`）。不存在运行时配置界面：所有配置都写在 `chorus.config.ts` 或程序化选项里。
+本包在 monorepo 内以源码方式消费（`@cieljs/voice-agent`，ESM，`exports["."] = ./dist/index.mjs`）。不存在运行时配置界面：所有配置都写在 `voice-agent.config.ts` 或程序化选项里。
 
 ## 快速开始
 
 ```ts
-import { createChorus, defaultChorusConfig, resolveChorusModel } from '@cieljs/chorus';
+import {
+  createVoiceAgent,
+  defaultVoiceAgentConfig,
+  resolveVoiceAgentModel,
+} from '@cieljs/voice-agent';
 
-const chorus = createChorus({
-  config: defaultChorusConfig,
-  model: resolveChorusModel(),
+const voiceAgent = createVoiceAgent({
+  config: defaultVoiceAgentConfig,
+  model: resolveVoiceAgentModel(),
 });
 
-const unsubscribe = chorus.onEvent(event => console.log(event));
+const unsubscribe = voiceAgent.onEvent(event => console.log(event));
 
-await chorus.start();
+await voiceAgent.start();
 
 process.on('SIGINT', async () => {
   unsubscribe();
-  await chorus.close();
+  await voiceAgent.close();
 });
 ```
 
-`resolveChorusModel()` 只是模型 registry 的一层薄封装——它返回 `models.getModel('xiaomi', 'mimo-v2.5')`，registry 中不存在该模型时抛出 `未找到 Xiaomi mimo-v2.5 模型`。Xiaomi provider 与 TTS adapter 读取同一个 `XIAOMI_API_KEY`。
+`resolveVoiceAgentModel()` 只是模型 registry 的一层薄封装——它返回 `models.getModel('xiaomi', 'mimo-v2.5')`，registry 中不存在该模型时抛出 `未找到 Xiaomi mimo-v2.5 模型`。Xiaomi provider 与 TTS adapter 读取同一个 `XIAOMI_API_KEY`。
 
-`src/cli/index.ts` 做的正是上面这些事，只是把 `defaultChorusConfig` 换成了 `chorus.config.ts`。
+`src/cli/index.ts` 做的正是上面这些事，只是把 `defaultVoiceAgentConfig` 换成了 `voice-agent.config.ts`。
 
-### `createChorus(options)`
+### `createVoiceAgent(options)`
 
 | 选项         | 类型                                    | 说明                                                                     |
 | ------------ | --------------------------------------- | ------------------------------------------------------------------------ |
-| `config`     | `ChorusConfig`                          | 必填。由 `defineChorusConfig` 校验。                                     |
+| `config`     | `VoiceAgentConfig`                      | 必填。由 `defineVoiceAgentConfig` 校验。                                 |
 | `model`      | `Model<Api>`（`@earendil-works/pi-ai`） | 必填。原样传给 `defineCiel`。                                            |
 | `dataDir`    | `string`                                | 默认 `join(homedir(), '.ciel')`，随后被 `resolve()` 绝对化。             |
 | `input`      | `AudioInput`                            | 可选覆盖，跳过 decibri adapter（测试与嵌入方使用）。此时也跳过设备校验。 |
@@ -106,15 +110,15 @@ process.on('SIGINT', async () => {
 | `tts`        | `TextToSpeech`                          | 可选覆盖。省略时创建 Xiaomi adapter，`XIAOMI_API_KEY` 变成必需。         |
 | `perception` | `Perception`                            | 可选覆盖，便于确定性地伪造音频链路。                                     |
 
-### 返回的 `Chorus`
+### 返回的 `VoiceAgent`
 
 | 成员                | 行为                                                                                                            |
 | ------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `status`            | `'idle' \| 'starting' \| 'running' \| 'closing' \| 'closed'`                                                    |
 | `scheduler`         | 当前 `SchedulerState`；运行中而调度器尚未创建时报告 `{ status: 'idle' }`，其余情况报告 `{ status: 'closed' }`。 |
-| `start()`           | 已在运行时立即 resolve，正在启动时返回同一个 promise，其他状态以 `Chorus 当前不可用：<status>` 拒绝。           |
+| `start()`           | 已在运行时立即 resolve，正在启动时返回同一个 promise，其他状态以 `Voice Agent 当前不可用：<status>` 拒绝。      |
 | `close()`           | 幂等——重复调用返回同一个 promise。启动过程中关闭会先等启动结束，然后仍释放宿主持有的资源（包括 MCP）。          |
-| `onEvent(listener)` | 订阅 `ChorusEvent`，返回取消订阅函数。                                                                          |
+| `onEvent(listener)` | 订阅 `VoiceAgentEvent`，返回取消订阅函数。                                                                      |
 
 工作数据放在 `dataDir` 下：`<dataDir>/storage`（包含 session、memory、vector 模块的 Storage）、`<dataDir>/models`（`@cieljs/perception` 消费的 ASR/VAD/speaker 模型）、`<dataDir>/mcp.json`（`mcp.enabled` 时的 MCP 配置）。
 
@@ -134,10 +138,10 @@ process.on('SIGINT', async () => {
 > `dev` 与 `start` 执行完全相同的命令——没有 watch 模式。`vp run dev` 与 `vp run start` 可以互换使用。
 
 ```bash
-cd apps/chorus
+cd apps/voice-agent
 
 vp run list-devices   # 列出每个设备的 index、稳定 id、声道数与默认采样率
-vp run start          # 读取 chorus.config.ts 与 XIAOMI_API_KEY 后启动
+vp run start          # 读取 voice-agent.config.ts 与 XIAOMI_API_KEY 后启动
 ```
 
 CLI 参数（`process.argv.slice(2)`）：
@@ -145,7 +149,7 @@ CLI 参数（`process.argv.slice(2)`）：
 | 参数                      | 行为                                                                                                                                                        |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list-devices`、`devices` | 先打印输入设备，再打印输出设备。每行包含 `index`、`name`、`maxInputChannels`/`maxOutputChannels`、`rate` 以及 `(默认)` 标记；稳定 `id` 打印在缩进的第二行。 |
-| `start`、_（无参数）_     | 启动 Chorus，随后打印 `Chorus 已启动，Ctrl+C 退出。`                                                                                                        |
+| `start`、_（无参数）_     | 启动 Voice Agent，随后打印 `Voice Agent 已启动，Ctrl+C 退出。`                                                                                              |
 | `help`、`--help`、`-h`    | 打印用法。                                                                                                                                                  |
 | 其他任意参数              | 打印用法并设置 `process.exitCode = 2`。                                                                                                                     |
 
@@ -160,18 +164,18 @@ CLI 参数（`process.argv.slice(2)`）：
 > [!WARNING]
 > 小米公开示例常用 `MIMO_API_KEY`。本项目按项目约定**只**读取 `XIAOMI_API_KEY`。
 
-CLI 把事件渲染成带中文标签的行——`识别`（转写与说话人）、`忽略`（自身回声）、`思考`（语音段数，然后是发言/沉默与耗时）、`工具`（工具调用与结果）、`朗读`（文本，然后是合成耗时）、`播放`（设备选择器，然后是时长）以及 `错误`（stage + 消息，输出到 stderr）。`SIGINT` 与 `SIGTERM` 会触发 `chorus.close()` 并 `process.exit(0)`；开始关闭后再次收到的信号被忽略。
+CLI 把事件渲染成带中文标签的行——`识别`（转写与说话人）、`忽略`（自身回声）、`思考`（语音段数，然后是发言/沉默与耗时）、`工具`（工具调用与结果）、`朗读`（文本，然后是合成耗时）、`播放`（设备选择器，然后是时长）以及 `错误`（stage + 消息，输出到 stderr）。`SIGINT` 与 `SIGTERM` 会触发 `voiceAgent.close()` 并 `process.exit(0)`；开始关闭后再次收到的信号被忽略。
 
 ## 配置
 
-配置就是一个类型化模块：`defineChorusConfig()` 校验并返回对象，`defaultChorusConfig` 是内置基线。
+配置就是一个类型化模块：`defineVoiceAgentConfig()` 校验并返回对象，`defaultVoiceAgentConfig` 是内置基线。
 
 ```ts
-// apps/chorus/chorus.config.ts
-import { defaultChorusConfig, defineChorusConfig } from '@cieljs/chorus';
+// apps/voice-agent/voice-agent.config.ts
+import { defaultVoiceAgentConfig, defineVoiceAgentConfig } from '@cieljs/voice-agent';
 
-export default defineChorusConfig({
-  embedding: defaultChorusConfig.embedding,
+export default defineVoiceAgentConfig({
+  embedding: defaultVoiceAgentConfig.embedding,
   mcp: {
     enabled: true,
   },
@@ -209,15 +213,15 @@ export default defineChorusConfig({
 });
 ```
 
-`defaultChorusConfig` 与仓库中这份文件有两处不同：`embedding.cacheDir` 是 `join(homedir(), '.ciel', 'cache', 'embedding')`（文件直接复用该默认值），`conversation.minimumThinkIntervalMs` 是 `2_000`（文件里用的是 `200`）。
+`defaultVoiceAgentConfig` 与仓库中这份文件有两处不同：`embedding.cacheDir` 是 `join(homedir(), '.ciel', 'cache', 'embedding')`（文件直接复用该默认值），`conversation.minimumThinkIntervalMs` 是 `2_000`（文件里用的是 `200`）。
 
 ### `embedding`
 
-提供 `embedding` 时，Chorus 会创建以 `qwen(config.embedding)` 为后端的 `VectorService`，参数为 `providerId: 'qwen'`、`revision: '1'`、`granularity: 'chunk'`、`inputConfig: 'qwen-default'`；省略时 `vectors` 保持 `undefined`，不加载 embedding provider。
+提供 `embedding` 时，Voice Agent 会创建以 `qwen(config.embedding)` 为后端的 `VectorService`，参数为 `providerId: 'qwen'`、`revision: '1'`、`granularity: 'chunk'`、`inputConfig: 'qwen-default'`；省略时 `vectors` 保持 `undefined`，不加载 embedding provider。
 
 ### `mcp`
 
-必填的 `mcp.enabled`（boolean）与可选的 `mcp.required` 会传给 `createMcp({ cwd: dataDir, configFile: '<dataDir>/mcp.json', required })`。该实例由宿主持有：Chorus 与 runtime 共享它，并且只在所有会话消失之后才关闭它。它的工具会追加在 `speak` 之后的 Session 工具集中。
+必填的 `mcp.enabled`（boolean）与可选的 `mcp.required` 会传给 `createMcp({ cwd: dataDir, configFile: '<dataDir>/mcp.json', required })`。该实例由宿主持有：Voice Agent 与 runtime 共享它，并且只在所有会话消失之后才关闭它。它的工具会追加在 `speak` 之后的 Session 工具集中。
 
 | 键           | 默认值                         | 说明                                                           |
 | ------------ | ------------------------------ | -------------------------------------------------------------- |
@@ -254,7 +258,7 @@ export default defineChorusConfig({
 | `asr.maxSpeakers`      | `number`           | `8`      | 正整数；动态说话人数量上限。                                                              |
 | `retentionMs`          | `number`           | `60_000` | 大于 0 的有限数字。传给 `createPerception`；必须覆盖快照仍处于 pending 状态的最长语音段。 |
 
-Chorus 自己会向 `asr` 注入 `modelsPath: join(dataDir, 'models')`——它刻意不进入配置表面。
+Voice Agent 自己会向 `asr` 注入 `modelsPath: join(dataDir, 'models')`——它刻意不进入配置表面。
 
 ### `tts`
 
@@ -278,11 +282,11 @@ Chorus 自己会向 `asr` 注入 `modelsPath: join(dataDir, 'models')`——它�
 | `{ id: string }` | 与稳定的 per-host `id` 精确匹配（例如 `'wasapi:{...}'`），跨设备枚举与重启有效。`id` 必须非空。 |
 
 > [!WARNING]
-> 系统设备集合变化时，设备索引会漂移。需要长期稳定请优先用 `{ id }`，并在更换驱动或硬件后用 `list-devices` 重新确认。显式指定的设备无法解析时启动直接失败——Chorus 不会静默回退到默认设备。
+> 系统设备集合变化时，设备索引会漂移。需要长期稳定请优先用 `{ id }`，并在更换驱动或硬件后用 `list-devices` 重新确认。显式指定的设备无法解析时启动直接失败——Voice Agent 不会静默回退到默认设备。
 
 ### 校验规则
 
-`defineChorusConfig()` 抛出带路径的中文错误。必填字符串为空（包括 `embedding.cacheDir`、`spaceId`、`sessionId`、每个 `sources[i]`、每个 `asr.speaker[i].name` / `.file`、`tts.voice` 与 `tts.instructions`）报 `<路径> 不能为空`；`mcp.enabled` 必须是 boolean；`audio.input.channels`、`asr.maxSpeakers` 与整数设备选择器各有自己的整数下界（`>= 1`、`>= 1`、`>= 0`）；`sampleRate`、`retentionMs`、`minimumThinkIntervalMs` 必须是有限数字（最后一个还要 `>= 0`）；`speakerThreshold` 必须落在 `(0, 1]` 内；其余取值必须匹配上表中的字面量类型——例如 `conversation.minimumThinkIntervalMs 必须是有限整数`、`perception.asr.speakerThreshold 必须是大于 0 且不超过 1 的有限数字`、`audio.input.device 必须是大于等于 0 的整数设备索引`。
+`defineVoiceAgentConfig()` 抛出带路径的中文错误。必填字符串为空（包括 `embedding.cacheDir`、`spaceId`、`sessionId`、每个 `sources[i]`、每个 `asr.speaker[i].name` / `.file`、`tts.voice` 与 `tts.instructions`）报 `<路径> 不能为空`；`mcp.enabled` 必须是 boolean；`audio.input.channels`、`asr.maxSpeakers` 与整数设备选择器各有自己的整数下界（`>= 1`、`>= 1`、`>= 0`）；`sampleRate`、`retentionMs`、`minimumThinkIntervalMs` 必须是有限数字（最后一个还要 `>= 0`）；`speakerThreshold` 必须落在 `(0, 1]` 内；其余取值必须匹配上表中的字面量类型——例如 `conversation.minimumThinkIntervalMs 必须是有限整数`、`perception.asr.speakerThreshold 必须是大于 0 且不超过 1 的有限数字`、`audio.input.device 必须是大于等于 0 的整数设备索引`。
 
 ## 工作原理
 
@@ -419,19 +423,19 @@ SpeechAudio（wav）→ parseWav 校验 → decodeWavToPcm16
 
 ### VAD / AEC 的职责划分
 
-| 关注点                                  | 负责方                                                                                                                                                  |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VAD、ASR、说话人聚类、转写时间戳        | [`@cieljs/perception`](../../packages/perception/README.zh-CN.md) → [`@cieljs/hearing`](../../packages/hearing/README.zh-CN.md)                         |
-| 固定的 16 kHz / 单声道 / s16le 输入契约 | `AudioNormalizer`（本包）                                                                                                                               |
-| 回声消除                                | 以 `aec: 'tau'` 打开的 `decibri` 采集流；Chorus 通过 `AudioOutput.play()` 的 `onAecReference` 回调，把远端参考 PCM 送进 `AudioInput.pushAecReference()` |
-| 残留自身回声兜底                        | `runtime.ts` 中的 `SelfEchoFilter`                                                                                                                      |
-| 判断一段语音是否值得思考                | `ConversationScheduler`                                                                                                                                 |
+| 关注点                                  | 负责方                                                                                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| VAD、ASR、说话人聚类、转写时间戳        | [`@cieljs/perception`](../../packages/perception/README.zh-CN.md) → [`@cieljs/hearing`](../../packages/hearing/README.zh-CN.md)                              |
+| 固定的 16 kHz / 单声道 / s16le 输入契约 | `AudioNormalizer`（本包）                                                                                                                                    |
+| 回声消除                                | 以 `aec: 'tau'` 打开的 `decibri` 采集流；Voice Agent 通过 `AudioOutput.play()` 的 `onAecReference` 回调，把远端参考 PCM 送进 `AudioInput.pushAecReference()` |
+| 残留自身回声兜底                        | `runtime.ts` 中的 `SelfEchoFilter`                                                                                                                           |
+| 判断一段语音是否值得思考                | `ConversationScheduler`                                                                                                                                      |
 
-自身回声兜底会把每个 `speechend` 与最近一次交付的播放做比对：事件时间必须落在播放窗口内，且归一化后的转写（小写、去空白与标点符号）与朗读文本相等、包含或被包含。命中时 Chorus 发出 `self_echo_ignored` 并调用 `scheduler.skipThrough(at)`——游标推进，回声不会被再次读到，但不会触发思考。同一窗口内出现不同说话人或明显不同的文本时，仍然进入 pending window。
+自身回声兜底会把每个 `speechend` 与最近一次交付的播放做比对：事件时间必须落在播放窗口内，且归一化后的转写（小写、去空白与标点符号）与朗读文本相等、包含或被包含。命中时 Voice Agent 发出 `self_echo_ignored` 并调用 `scheduler.skipThrough(at)`——游标推进，回声不会被再次读到，但不会触发思考。同一窗口内出现不同说话人或明显不同的文本时，仍然进入 pending window。
 
 ### Agent 何时发言
 
-规则写在 `CHORUS_SYSTEM_PROMPT`（`src/system-prompt.ts`，由本包导出）中，并通过 `defineCiel({ systemPrompt })` 传入。它把 Agent 设定为群聊中的一位成员——不是主持人，也不是等待每句话后回答的语音助手：
+规则写在 `VOICE_AGENT_SYSTEM_PROMPT`（`src/system-prompt.ts`，由本包导出）中，并通过 `defineCiel({ systemPrompt })` 传入。它把 Agent 设定为群聊中的一位成员——不是主持人，也不是等待每句话后回答的语音助手：
 
 - 通常应该发言：被明确叫到或直接提问、上下文显然在等她回应、能补充相关的新信息、需要澄清与她有关的内容，或者不纠正会带来实际误解或风险。
 - 通常保持沉默：其他人正在彼此交流、这一轮只会附和或复述、问题已经被别人完整回答、当前语句不完整或指代不清、多人正在快速接话、没有新增信息，或者内容像是她刚刚通过扬声器说出的话。沉默不需要宣告，也不需要输出占位句。
@@ -444,7 +448,7 @@ Core 另外为 Agent 提供会话/记忆工具与 Bilibili 工具集；提示词
 
 ### 事件
 
-`chorus.onEvent()` 收到的是一个可辨识联合，CLI 渲染器也使用同一组事件：
+`voiceAgent.onEvent()` 收到的是一个可辨识联合，CLI 渲染器也使用同一组事件：
 
 | 事件                 | 载荷                         |
 | -------------------- | ---------------------------- |
@@ -470,10 +474,10 @@ Core 另外为 Agent 提供会话/记忆工具与 Bilibili 工具集；提示词
 
 1. 解析 `dataDir`，然后创建 TTS adapter（或使用注入的实例）——缺少 `XIAOMI_API_KEY` 在此失败。
 2. 以 `{ ...asr, modelsPath: <dataDir>/models }` 与 `retentionMs` 创建 perception。
-3. 创建 `AudioInput` 与 `AudioOutput` 并校验设备——仅针对 Chorus 自己创建的 adapter。
+3. 创建 `AudioInput` 与 `AudioOutput` 并校验设备——仅针对 Voice Agent 自己创建的 adapter。
 4. 构建 `SpeakController` 与 `speak` 工具，连接 TTS、输出、音色、格式、指令、输出设备、事件发射器、自身回声记录与 AEC 参考钩子。
 5. 以 session、memory、vector 模块打开 `Storage`；可选创建以 `qwen` 为后端的 `VectorService`；可选创建 MCP。
-6. `defineCiel({ model, systemPrompt: CHORUS_SYSTEM_PROMPT, storage, vectors, tools: [speakTool], mcp })`，随后 `await ciel.start()`。
+6. `defineCiel({ model, systemPrompt: VOICE_AGENT_SYSTEM_PROMPT, storage, vectors, tools: [speakTool], mcp })`，随后 `await ciel.start()`。
 7. 以 `{ sessionId, spaceId, sources }` 打开固定的 Session，然后订阅 Agent 事件，用于 `tool_call_started` / `tool_call_finished`。
 8. 以 `startedAt = new Date()` 创建 `ConversationScheduler`，订阅 perception 的 `speechend`，启动音频泵并设置 `status = 'running'`。
 
@@ -502,21 +506,21 @@ Core 另外为 Agent 提供会话/记忆工具与 Bilibili 工具集；提示词
 ## 目录结构
 
 ```text
-apps/chorus/
+apps/voice-agent/
 ├── package.json          # 脚本、exports、decibri 与 workspace 依赖
-├── chorus.config.ts      # CLI 消费的仓库内类型化配置
+├── voice-agent.config.ts      # CLI 消费的仓库内类型化配置
 ├── vite.config.ts        # Vite+ 任务：test（透传 XIAOMI_API_KEY）与 build（vp pack）
 ├── README.md
 ├── README.zh-CN.md
 ├── src/
 │   ├── index.ts          # 公共入口：配置、提示词、运行时、调度器、音频、TTS
-│   ├── config.ts         # ChorusConfig 类型、defaultChorusConfig、校验
-│   ├── runtime.ts        # createChorus：生命周期、设备校验、自身回声过滤
-│   ├── system-prompt.ts  # CHORUS_SYSTEM_PROMPT
+│   ├── config.ts         # VoiceAgentConfig 类型、defaultVoiceAgentConfig、校验
+│   ├── runtime.ts        # createVoiceAgent：生命周期、设备校验、自身回声过滤
+│   ├── system-prompt.ts  # VOICE_AGENT_SYSTEM_PROMPT
 │   ├── cli/
 │   │   └── index.ts      # list-devices / start / help 与事件渲染
 │   ├── conversation/
-│   │   ├── scheduler.ts  # ConversationScheduler、PendingWindow、ChorusEvent
+│   │   ├── scheduler.ts  # ConversationScheduler、PendingWindow、VoiceAgentEvent
 │   │   └── speak-tool.ts # SpeakController、ThinkRunGate 与带门控的 speak 工具
 │   ├── audio/
 │   │   ├── types.ts      # AudioInput/AudioOutput 接口、DeviceSelector、resolveDevice
@@ -540,7 +544,7 @@ apps/chorus/
 
 ### 公共 API
 
-配置：`createChorus`/`ChorusOptions`/`Chorus`/`ChorusStatus`、`defaultChorusConfig`、`defineChorusConfig`、`ChorusConfig` 及各分段配置类型、`CHORUS_SYSTEM_PROMPT`。调度：`ConversationScheduler`、`ChorusEvent`、`PendingWindow`、`SchedulerState`。发言门控：`createSpeakTool`、`SpeakController`、`SpeakResult`、`SpeakToolOptions`、`ThinkRunGate`。音频：`createAudioInput`、`createAudioOutput`、`AudioNormalizer`、`resampleS16le`、`decodeWavToPcm16`、`parseWav`、`resolveDevice`，以及 `ParsedWav`、`DecodedPcm`、`AudioDevice`、`AudioInput`、`AudioInputChunk`、`AudioInputDevice`、`AudioOutput`、`AudioOutputDevice`、`DeviceSelector` 类型。TTS：`createXiaomiTextToSpeech`、`XiaomiTextToSpeechOptions`、`SpeechAudio`、`SpeechAudioFormat`、`SpeechSynthesisRequest`、`TextToSpeech`。模型辅助函数：`resolveChorusModel()`。
+配置：`createVoiceAgent`/`VoiceAgentOptions`/`VoiceAgent`/`VoiceAgentStatus`、`defaultVoiceAgentConfig`、`defineVoiceAgentConfig`、`VoiceAgentConfig` 及各分段配置类型、`VOICE_AGENT_SYSTEM_PROMPT`。调度：`ConversationScheduler`、`VoiceAgentEvent`、`PendingWindow`、`SchedulerState`。发言门控：`createSpeakTool`、`SpeakController`、`SpeakResult`、`SpeakToolOptions`、`ThinkRunGate`。音频：`createAudioInput`、`createAudioOutput`、`AudioNormalizer`、`resampleS16le`、`decodeWavToPcm16`、`parseWav`、`resolveDevice`，以及 `ParsedWav`、`DecodedPcm`、`AudioDevice`、`AudioInput`、`AudioInputChunk`、`AudioInputDevice`、`AudioOutput`、`AudioOutputDevice`、`DeviceSelector` 类型。TTS：`createXiaomiTextToSpeech`、`XiaomiTextToSpeechOptions`、`SpeechAudio`、`SpeechAudioFormat`、`SpeechSynthesisRequest`、`TextToSpeech`。模型辅助函数：`resolveVoiceAgentModel()`。
 
 ## 开发
 
@@ -548,11 +552,11 @@ apps/chorus/
 # 仓库根目录
 vp install
 
-cd apps/chorus
+cd apps/voice-agent
 vp run check     # vp check —— 格式化、lint、类型检查
 vp run test      # vite.config.ts 中的 test 任务 → vp test，透传 XIAOMI_API_KEY
 vp run build     # vite.config.ts 中的 build 任务 → vp pack（先构建声明依赖）
-vp run start     # 按 chorus.config.ts 运行应用
+vp run start     # 按 voice-agent.config.ts 运行应用
 ```
 
 仓库根还提供 `vp run -r test`、`vp run -r build` 与 `vp ready`（`vp check && vp run -r test && vp run -r build`）。
@@ -573,10 +577,10 @@ vp run start     # 按 chorus.config.ts 运行应用
 以下事项在设计上已经固定，但在第一次实机联调前仍需要真实环境确认，因此在这里刻意标注为未验证：
 
 1. **decibri AEC 的实际效果。** 采集端启用了 `aec: 'tau'`，播放端会推送远端参考，但它在真实全双工设备（同机扬声器 + 麦克风）上的回声消除质量尚未测量。文本近似的 `SelfEchoFilter` 仍作为兜底保留，`aecMetrics()` 可用于诊断。
-2. **Xiaomi 模型 registry 的稳定性。** `resolveChorusModel()` 从 `@cieljs/model-kit/models` 读取 `models.getModel('xiaomi', 'mimo-v2.5')`；该 registry 是否会作为受支持的公共入口长期保留（而不是让 Chorus 自行注册 provider）尚未确定。
+2. **Xiaomi 模型 registry 的稳定性。** `resolveVoiceAgentModel()` 从 `@cieljs/model-kit/models` 读取 `models.getModel('xiaomi', 'mimo-v2.5')`；该 registry 是否会作为受支持的公共入口长期保留（而不是让 Voice Agent 自行注册 provider）尚未确定。
 3. **MiMo 预置音色 ID。** `tts.voice` 暂定默认为 `冰糖`，最终音色 ID 尚未确认。
 
-一个相关的开放问题属于*配置选择*而非设计决策：仓库中的 `chorus.config.ts` 使用 `minimumThinkIntervalMs: 200`，而 `defaultChorusConfig` 与设计基线使用 `2_000`。真实多人对话下的合适取值尚未在硬件上调参。
+一个相关的开放问题属于*配置选择*而非设计决策：仓库中的 `voice-agent.config.ts` 使用 `minimumThinkIntervalMs: 200`，而 `defaultVoiceAgentConfig` 与设计基线使用 `2_000`。真实多人对话下的合适取值尚未在硬件上调参。
 
 外部依据：
 

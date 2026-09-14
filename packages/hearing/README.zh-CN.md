@@ -402,7 +402,7 @@ vp run @cieljs/hearing#voiceprint -- --models-path ./models --output alice.voice
 
 ### 模型放在哪里
 
-`modelsPath` 归调用者。包只读它拿到的目录，也只往那个路径里安装；Blive Agent 与 Chorus 传的是各自数据目录下的 `join(dataDir, 'models')`，声纹路径同样由这一层决定。包的 `.gitignore` 排除了 `/models/` 与 `voiceprints`，所以两者都不会被提交。KWS 模型落在 `<modelsPath>/kws/<model>/`，安装时会调用系统的 `tar` 并用 `-xOf` 把固定的归档成员读到 stdout——归档里的路径和符号链接永远不会写到文件系统上。
+`modelsPath` 归调用者。包只读它拿到的目录，也只往那个路径里安装；Blive Agent 与 Voice Agent 传的是各自数据目录下的 `join(dataDir, 'models')`，声纹路径同样由这一层决定。包的 `.gitignore` 排除了 `/models/` 与 `voiceprints`，所以两者都不会被提交。KWS 模型落在 `<modelsPath>/kws/<model>/`，安装时会调用系统的 `tar` 并用 `-xOf` 把固定的归档成员读到 stdout——归档里的路径和符号链接永远不会写到文件系统上。
 
 ### 运行时模型配置
 
@@ -484,4 +484,4 @@ vp run build    # vp pack -> dist（index、worker、ciel）
 
 测试在 `tests/**/*.test.ts`，用模块替身换掉 `sherpa-onnx-node`，因此既不用下载模型，也不需要真实音频设备。`test` 任务把 `CIEL_NODE_EXECUTABLE` 声明为环境输入，`build` 则依赖 dependencies 里的同一个任务。`./worker` 必须保持为独立的 ESM 入口，因为 Electron 后端是把它当文件拉起的。
 
-使用方：[`@cieljs/perception`](../perception/README.zh-CN.md) 包装 `ASR` 来加视觉采样与 Agent 快照，而 `apps/blive-agent` 与 `apps/chorus` 各自在自己的数据目录里决定 `modelsPath` 和声纹布局。
+使用方：[`@cieljs/perception`](../perception/README.zh-CN.md) 包装 `ASR` 来加视觉采样与 Agent 快照，而 `apps/blive-agent` 与 `apps/voice-agent` 各自在自己的数据目录里决定 `modelsPath` 和声纹布局。

@@ -6,24 +6,24 @@ import type { SpeakerProfile } from '@cieljs/perception';
 
 import type { DeviceSelector } from './audio/types.ts';
 
-export interface ChorusAudioInputConfig {
+export interface VoiceAgentAudioInputConfig {
   device?: DeviceSelector;
   sampleRate: number;
   channels: number;
 }
 
-export interface ChorusAudioOutputConfig {
+export interface VoiceAgentAudioOutputConfig {
   device?: DeviceSelector;
 }
 
-export interface ChorusConversationConfig {
+export interface VoiceAgentConversationConfig {
   spaceId: string;
   sessionId: string;
   sources: string[];
   minimumThinkIntervalMs: number;
 }
 
-export interface ChorusPerceptionConfig {
+export interface VoiceAgentPerceptionConfig {
   asr: {
     speaker: SpeakerProfile[];
     speakerThreshold: number;
@@ -32,7 +32,7 @@ export interface ChorusPerceptionConfig {
   retentionMs: number;
 }
 
-export interface ChorusTtsConfig {
+export interface VoiceAgentTtsConfig {
   provider: 'xiaomi';
   model: 'mimo-v2.5-tts';
   voice: string;
@@ -40,22 +40,22 @@ export interface ChorusTtsConfig {
   instructions: string;
 }
 
-export interface ChorusConfig {
+export interface VoiceAgentConfig {
   embedding?: QwenEmbeddingOptions;
   mcp: {
     enabled: boolean;
     required?: boolean;
   };
   audio: {
-    input: ChorusAudioInputConfig;
-    output: ChorusAudioOutputConfig;
+    input: VoiceAgentAudioInputConfig;
+    output: VoiceAgentAudioOutputConfig;
   };
-  conversation: ChorusConversationConfig;
-  perception: ChorusPerceptionConfig;
-  tts: ChorusTtsConfig;
+  conversation: VoiceAgentConversationConfig;
+  perception: VoiceAgentPerceptionConfig;
+  tts: VoiceAgentTtsConfig;
 }
 
-export const defaultChorusConfig: ChorusConfig = {
+export const defaultVoiceAgentConfig: VoiceAgentConfig = {
   embedding: {
     cacheDir: join(homedir(), '.ciel', 'cache', 'embedding'),
   },
@@ -92,13 +92,13 @@ export const defaultChorusConfig: ChorusConfig = {
   },
 };
 
-export function defineChorusConfig(config: ChorusConfig): ChorusConfig {
-  validateChorusConfig(config);
+export function defineVoiceAgentConfig(config: VoiceAgentConfig): VoiceAgentConfig {
+  validateVoiceAgentConfig(config);
 
   return config;
 }
 
-function validateChorusConfig(config: ChorusConfig) {
+function validateVoiceAgentConfig(config: VoiceAgentConfig) {
   if (config.embedding?.cacheDir !== undefined) {
     assertNonEmpty(config.embedding.cacheDir, 'embedding.cacheDir');
   }
