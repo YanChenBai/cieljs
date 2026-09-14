@@ -183,6 +183,6 @@ export class RuntimeEventHub implements RuntimeEventBus {
   }
 }
 
-export function shouldPersistRuntimeEvent(event: RuntimeEvent) {
+export function shouldPersistRuntimeEvent(event: RuntimeEvent): boolean {
   return event.type !== 'message_update' && event.type !== 'tool_execution_update';
 }
