@@ -1,20 +1,50 @@
 <h1 align="center">@cieljs/mcp</h1>
 
-<p align="center">把任意 MCP Server 暴露的工具，动态转换成 Ciel Agent 可以直接调用的工具。</p>
+<p align="center">Turn the tools of any MCP server into Ciel Agent tools, dynamically.</p>
 
-`@cieljs/mcp` 是 Ciel 的外部工具来源。它通过 MCP `tools/list` 在启动时发现工具定义，把每个 MCP Tool 转换成一个普通的 `AgentTool`；Agent 调用工具时，再通过 `tools/call` 转发给对应的 MCP Server。
+<p align="center">
+  <a href="./README.zh-CN.md">简体中文</a> ·
+  <a href="#overview">Overview</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#environment-variables">Env vars</a> ·
+  <a href="#tool-filtering">Filtering</a> ·
+  <a href="#namespaces-and-name-collisions">Namespaces</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#scope-and-non-goals">Scope</a> ·
+  <a href="#api-reference">API</a>
+</p>
 
-> MCP 由宿主持有。多个 runtime 可以复用同一个实例；runtime 不创建或关闭 MCP 服务。
+## Overview
 
-| 概念             | 作用                                         |
-| ---------------- | -------------------------------------------- |
-| MCP Server       | 用 stdio 启动的外部进程，暴露一组 Tool       |
-| `.ciel/mcp.json` | 声明要连接哪些 MCP Server 以及各自的配置     |
-| `AgentTool[]`    | pi-agent-core 的统一工具形态，直接交给 Agent |
+`@cieljs/mcp` is Ciel's source of external tools. It discovers tool definitions at start-up through MCP `tools/list` and converts each MCP tool into an ordinary `AgentTool`; when the Agent calls one, the call is forwarded to the matching MCP server through `tools/call`.
 
-## 基本使用
+```text
+MCP Server ──tools/list──▶ AgentTool[] ──Agent call──▶ tools/call ──▶ MCP Server
+```
 
-在项目目录创建 `.ciel/mcp.json`：
+> [!NOTE]
+> MCP is owned by the host. Several runtimes may reuse one instance; a runtime never creates or closes the MCP service.
+
+## Concepts
+
+| Concept          | Role                                                                    |
+| ---------------- | ----------------------------------------------------------------------- |
+| MCP Server       | An external process started over stdio that exposes a set of tools      |
+| `.ciel/mcp.json` | Declares which MCP servers to connect to and how each one is configured |
+| `AgentTool[]`    | pi-agent-core's uniform tool shape, handed to the Agent as-is           |
+
+## Install
+
+```bash
+pnpm add @cieljs/mcp
+```
+
+The package is ESM-only and exposes two entry points: `"."` → `dist/index.mjs` and `"./package.json"`. It depends on `@modelcontextprotocol/client` for the protocol and on `@earendil-works/pi-agent-core` / `@earendil-works/pi-ai` for the Agent tool and content types. Inside this monorepo, dependants declare it with the `workspace:` protocol.
+
+## Quick start
+
+Create `.ciel/mcp.json` in your project directory:
 
 ```json
 {
@@ -27,7 +57,7 @@
 }
 ```
 
-使用 `@cieljs/runtime` 时，传入已连接的 MCP 实例：
+With `@cieljs/runtime`, pass the already-connected MCP instance in:
 
 ```ts
 import { defineCiel } from 'cieljs';
@@ -47,7 +77,7 @@ await ciel.start();
 await ciel.close();
 ```
 
-直接使用 Agent 时，也可以直接打开 MCP，把 `mcp.tools` 与本地工具一起交给 Agent：
+When you use the Agent directly, you can open MCP yourself and hand `mcp.tools` to the Agent together with your local tools:
 
 ```ts
 import { createMcp } from '@cieljs/mcp';
@@ -62,9 +92,9 @@ const tools = [...mcp.tools];
 await mcp.close();
 ```
 
-Server 暴露的工具会在启动时自动发现，不需要提前声明 `webSearch()`、`webFetch()` 之类的函数。
+The tools a server exposes are discovered automatically at start-up — there is no need to declare `webSearch()`, `webFetch()` or similar functions up front.
 
-## 连接多个 Server
+### Connecting to several servers
 
 ```json
 {
@@ -81,16 +111,65 @@ Server 暴露的工具会在启动时自动发现，不需要提前声明 `webSe
 }
 ```
 
-所有 Server 的工具会合并到同一个 `mcp.tools`：
+The tools of all servers are merged into the same `mcp.tools`:
 
 ```ts
 console.log(mcp.tools.map(tool => tool.name));
 // ["web_search", "web_fetch", "search_video", "get_video_info", "get_dynamic"]
 ```
 
-## 环境变量
+## Configuration
 
-配置支持引用环境变量，避免把 API Key 直接写进 `.ciel/mcp.json`：
+The config file is a JSON object with a single `mcpServers` key. Each entry is one stdio server:
+
+| Key            | Type                     | Default     | Description                                                                              |
+| -------------- | ------------------------ | ----------- | ---------------------------------------------------------------------------------------- |
+| `command`      | `string`                 | —           | Required, non-empty: the command that starts the MCP server                              |
+| `args`         | `string[]`               | —           | Arguments passed to `command`                                                            |
+| `env`          | `Record<string, string>` | —           | Environment variables for the server; values support `${VAR}` expansion (see below)      |
+| `tools`        | `string[]`               | all tools   | Allow list: expose only these MCP tools                                                  |
+| `excludeTools` | `string[]`               | —           | Deny list; it wins when both are present                                                 |
+| `enabled`      | `boolean`                | `true`      | `false` skips the server entirely — it is not started and exposes nothing                |
+| `prefix`       | `boolean \| string`      | `false`     | Namespace for tool names: `true` uses the server name, a string uses that string         |
+| `cwd`          | `string`                 | project cwd | Working directory of the server; a relative path resolves against the project `cwd`      |
+| `timeout`      | `number`                 | —           | Per-request timeout in milliseconds, applied to `connect`, `tools/list` and `tools/call` |
+| `type`         | `"stdio"`                | `"stdio"`   | Only stdio is supported; any other value fails at load time                              |
+
+### Working directory and timeouts
+
+An MCP server inherits the Ciel project's cwd by default; use `cwd` for a relative path, and `timeout` for the per-request timeout in milliseconds:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "node",
+      "args": ["./server.js"],
+      "cwd": "./tools/filesystem",
+      "timeout": 30000
+    }
+  }
+}
+```
+
+### Where the config lives, and whether it is required
+
+MCP does not decide on a config directory. The caller must pass both the project directory and the config file explicitly:
+
+```ts
+const mcp = await createMcp({
+  cwd: '/path/to/project',
+  configFile: './config/mcp.json',
+});
+```
+
+`configFile` may be absolute; a relative path resolves against `cwd`. A missing file is not an error by default — `mcp.tools` is simply an empty array. If the current program genuinely depends on MCP, pass `required: true` and a missing config file fails immediately instead.
+
+Malformed configuration is always an error, whether or not it is required: the file must parse as JSON, the root and `mcpServers` must be objects, and each server must be an object with a non-empty `command`. `tools`, `excludeTools` and `args` must be `string[]`, `timeout` must be a finite number, `enabled` must be a boolean, and `prefix` must be a boolean or a non-empty string.
+
+## Environment variables
+
+The configuration can reference environment variables, so API keys never have to be written into `.ciel/mcp.json`:
 
 ```json
 {
@@ -106,11 +185,11 @@ console.log(mcp.tools.map(tool => tool.name));
 }
 ```
 
-引用的环境变量不存在时，MCP 初始化会直接失败。
+`${VAR}` is expanded from `process.env` while the config is loaded; the pattern is case-insensitive and matches names made of letters, digits and underscores. If a referenced variable does not exist, MCP initialization fails right away rather than starting a server with a missing key.
 
-## 工具过滤
+## Tool filtering
 
-默认暴露 Server 的全部工具，可以用 `tools` 只启用部分：
+All of a server's tools are exposed by default; `tools` narrows that to a subset:
 
 ```json
 {
@@ -124,11 +203,13 @@ console.log(mcp.tools.map(tool => tool.name));
 }
 ```
 
-也可以用 `excludeTools` 排除指定工具；两者同时存在时 `excludeTools` 优先。暂时不需要某个 Server 时，设置 `enabled: false`，它就不会启动，也不会暴露工具。
+You can also use `excludeTools` to exclude specific tools; when both are present, `excludeTools` wins. If you temporarily do not need a server, set `enabled: false` — it is not started and exposes no tools.
 
-## 工具名冲突
+Filtering happens against the MCP tool name, before any `prefix` is applied.
 
-不同 Server 可能提供同名工具，`@cieljs/mcp` 不会静默覆盖，而是直接报错。可以为 Server 开启 namespace：
+## Namespaces and name collisions
+
+Different servers may provide tools with the same name. `@cieljs/mcp` never silently overrides — it fails immediately. You can turn on a namespace for a server instead:
 
 ```json
 {
@@ -145,61 +226,76 @@ console.log(mcp.tools.map(tool => tool.name));
 }
 ```
 
-得到 `web__search`、`bili__search`。`prefix: true` 用 Server 名做前缀，也可以传自定义字符串。
+That yields `web__search` and `bili__search`. `prefix: true` uses the server name as the namespace; you can also pass a custom string. The joined name is `<namespace>__<toolName>`.
 
-## 工作目录与超时
+> [!WARNING]
+> Duplicate tool names after namespacing abort the whole `createMcp()` call with a `MCP tool name 冲突: "<name>"` error, so a mistyped `prefix` is caught at start-up instead of silently shadowing another server's tool.
 
-MCP Server 默认继承 Ciel 项目的 cwd，可用 `cwd` 指定相对路径；`timeout` 控制每次请求的超时（毫秒）：
+## How it works
 
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "node",
-      "args": ["./server.js"],
-      "cwd": "./tools/filesystem",
-      "timeout": 30000
-    }
-  }
-}
-```
+The MCP server owns the tool description. After connecting, `@cieljs/mcp` calls `tools/list` once per server and turns every tool into an `AgentTool`:
 
-## 配置位置与可选性
+| `AgentTool` field | Source                                                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `name`            | The MCP tool name, optionally namespaced with `prefix`                                                                           |
+| `label`           | `tool.title`, then `annotations.title`, then the MCP tool name                                                                   |
+| `description`     | `tool.description`, or `MCP tool "<tool>" from "<server>"` when absent                                                           |
+| `parameters`      | The MCP `inputSchema`, used directly — MCP schemas are already JSON Schema, which is what pi-agent-core / TypeBox use at runtime |
+| `execute()`       | Forwards to `tools/call` on that server with `arguments`, the caller's `signal` and the configured `timeout`                     |
 
-MCP 不决定配置目录，调用方必须显式传入项目目录和配置文件：
+A call that comes back with `isError` throws, using the returned text content (falling back to `structuredContent`, then to `MCP tool execution failed`). Successful results become `AgentToolResult`s whose `details` carry `{ server, tool, structuredContent, meta }`.
 
-```ts
-const mcp = await createMcp({
-  cwd: '/path/to/project',
-  configFile: './config/mcp.json',
-});
-```
+MCP content is converted to Agent content:
 
-文件不存在时默认不报错，`mcp.tools` 返回空数组；如果当前程序必须依赖 MCP，传 `required: true`，配置文件缺失时直接失败。
+| MCP block         | Becomes                                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `text`            | Text content                                                                                                       |
+| `image`           | Image content (data + mime type)                                                                                   |
+| `audio`           | A text placeholder, `[MCP audio: <mimeType>]`                                                                      |
+| `resource_link`   | Text describing name, URI, description and mime type                                                               |
+| embedded resource | Text when it carries `text`, an image when it is an image blob, otherwise a text descriptor with URI and mime type |
+| anything else     | JSON of the raw block                                                                                              |
 
-## 工作原理
+When a result has no visible content but does have `structuredContent`, that JSON is rendered as a text block so the model still sees the payload.
 
-MCP Server 负责描述工具，`@cieljs/mcp` 在连接后执行 `tools/list`，把每个工具的 `inputSchema`（JSON Schema）直接作为 AgentTool 的参数 schema：
+### Ownership and lifecycle
 
-```text
-MCP Server
-  ↓ tools/list
-AgentTool[]
-  ↓ Agent 调用
-tools/call
-  ↓
-MCP Server
-```
+`mcp` is an `AsyncDisposable`: `close()` (and `await using`) shuts every server client down, in reverse connection order, and repeated calls share one promise. The host owns the instance — several runtimes may reuse it, and a runtime must not close it. If opening fails partway through, the clients that were already connected are cleaned up instead of leaking.
 
-## 作用范围
+## Scope and non-goals
 
-当前支持 stdio transport、工具发现、工具调用、多 Server、工具过滤与 namespace、环境变量、MCP Content → Agent Content、AbortSignal 与超时。
+Currently supported: stdio transport, tool discovery, tool calls, multiple servers, tool filtering and namespacing, environment variables, MCP Content → Agent Content, `AbortSignal` and timeouts.
 
-暂不处理 Resources、Prompts、Sampling、Elicitation、OAuth 和 Streamable HTTP。
+Not handled (yet): Resources, Prompts, Sampling, Elicitation, OAuth and Streamable HTTP.
 
-## 开发
+## API reference
+
+| Export                 | Kind     | Description                                                                               |
+| ---------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `createMcp`            | function | `createMcp({ cwd, configFile, required })` → `Promise<Mcp>`; same as `Mcp.open()`         |
+| `Mcp`                  | class    | Connected instance: `servers`, `tools`, `close()`, `Symbol.asyncDispose`, static `open()` |
+| `loadMcpConfig`        | function | Reads, parses and normalizes the config file without connecting to anything               |
+| `McpConfig`            | type     | `{ mcpServers?: Record<string, McpServerConfig> }`                                        |
+| `McpOptions`           | type     | `{ cwd: string; configFile: string; required?: boolean }`                                 |
+| `McpServerConfig`      | type     | The normalized per-server configuration (see the table above)                             |
+| `McpStdioServerConfig` | type     | Alias source of `McpServerConfig`; only `type: 'stdio'` is supported                      |
+| `McpServer`            | type     | `{ name, client, config }` — `client` is an `@modelcontextprotocol/client` `Client`       |
+| `McpRuntime`           | type     | `McpTools` plus `servers` and `close()` — what a runtime consumes                         |
+| `McpTools`             | type     | `{ readonly tools: readonly AgentTool[] }`                                                |
+| `McpToolDetails`       | type     | `{ server, tool, structuredContent?, meta? }`, present on every tool result               |
+
+## Design notes
+
+Tools are discovered at start-up rather than at call time: each server is listed once while connecting, so an Agent always sees a stable tool list, and a server that changes its tools needs a reconnect. The MCP `inputSchema` is reused verbatim as the parameter schema instead of being rebuilt, which keeps validation exactly as the server declared it.
+
+Collisions are errors, because silently overriding a tool name would let an Agent call an unpredictable server; duplicate names abort start-up and point at `prefix`. Servers themselves come only from configuration — `createMcp()` takes an explicit `cwd` and `configFile` instead of searching for them, which keeps the package usable from any layout. The host owns the lifecycle: `Mcp` connects eagerly and closes explicitly, so a runtime can share one instance across several agents.
+
+## Development
 
 ```bash
-vp check
-vp run build
+vp check        # format, lint and type check
+vp test --run   # unit tests
+vp run build    # build the package
 ```
+
+Tests live in `tests/lifecycle.test.ts` and cover client cleanup when connecting or listing tools fails, reverse-order shutdown, repeated-close sharing, and suppressed cleanup errors. `packages/mcp/package.json` defines the `check` (`vp check`) and `prepublishOnly` (`vp run build`) scripts; the `build` (`vp pack`) and `test` tasks themselves come from `vite.config.ts`.

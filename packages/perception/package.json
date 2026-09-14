@@ -4,8 +4,7 @@
   "description": "Multimodal perception snapshots for Ciel agents.",
   "license": "MIT",
   "files": [
-    "dist",
-    "docs"
+    "dist"
   ],
   "type": "module",
   "exports": {

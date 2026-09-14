@@ -1,31 +1,48 @@
 <h1 align="center">@cieljs/session</h1>
 
-<p align="center">让 Agent 记得聊过什么，也能找回当时的原话。</p>
+<p align="center">Agent sessions that keep the full history, compress what no longer fits, and can still find the exact words.</p>
 
 <p align="center">
-  <a href="./docs/compaction.md">会话压缩</a> ·
-  <a href="./docs/embedding.md">向量检索</a>
+  <a href="./README.zh-CN.md">简体中文</a> ·
+  <a href="#concepts">Concepts</a> ·
+  <a href="#context-and-compaction">Compaction</a> ·
+  <a href="#retrieval">Retrieval</a> ·
+  <a href="#agent-tools">Agent tools</a> ·
+  <a href="#api-reference">API reference</a>
 </p>
 
-一段对话聊久了，会留下许多值得记住的东西：最初的目标、几次讨论后的决定，还有那些说好稍后再做的事。下一次打开会话时，我们希望能接着聊；上下文装不下时，也希望重要的信息能留下来。
+A conversation that runs for a long time accumulates things worth keeping: the original goal, the decision reached after three rounds of discussion, the things that were agreed to be done later. When you come back you want to continue the conversation, and when the context window runs out you want the important parts to survive.
 
-`@cieljs/session` 为这些内容提供一个本地的存放处。它用 PGlite 保存完整消息，用递归摘要整理较早的对话，再通过历史检索把需要的细节找回来。
+`@cieljs/session` is a local store for exactly that. It keeps every message in PGlite, folds older conversation into a recursive summary, and retrieves the details again when they are needed.
 
-一个 `spaceId` 表示稳定的业务空间，例如某个直播间；同一空间可以包含多段 Session。`sources` 保存主播昵称、房间标题和其他可检索来源，不参与空间隔离。
+A `spaceId` is a stable business space — a livestream room, for example — and one space can hold many sessions. `sources` holds searchable labels such as a streamer nickname or a room title; it takes no part in space isolation.
 
-## 对话可以留下什么？
+## Concepts
 
-- **完整的历史。** 用户消息、助手回复和工具结果按顺序保存，重新打开会话就能恢复上下文。
-- **持续更新的摘要。** 上一份摘要与新增的旧消息合并成新摘要，最近的原文继续保留，工具调用与结果保持在同一轮次里。
-- **能找回的细节。** 全文、模糊和向量检索共同查找历史，也可以根据消息序号回到原始对话。
-- **你选择的模型。** 摘要和 Embedding 分别配置，可以连接云端服务，也可以接入本地模型。
+| Concept      | Storage                       | Role                                                                    |
+| ------------ | ----------------------------- | ----------------------------------------------------------------------- |
+| Session      | Message rows in the database  | The factual log of a conversation, restored on reopen                   |
+| Space        | A `spaceId` namespace         | Isolation boundary; one space holds many sessions                       |
+| Sources      | Searchable labels per session | Business identifiers used to discover sessions, not an isolation key    |
+| Compaction   | `session_compaction` records  | A cumulative summary plus the boundary it covers                        |
+| Search index | Derived chunks and vectors    | Full text, trigram and vector retrieval over message bodies and sources |
 
 > [!NOTE]
-> 压缩整理的是送给模型的上下文。原始消息仍留在数据库里，随时可以搜索和读取。
+> Compaction reorganizes the context handed to the model. The original messages stay in the database and remain searchable and readable.
 
-## 试一下
+## Install
 
-打开一个会话，写入消息，再取回它的当前上下文：
+`@cieljs/session` is part of the Ciel monorepo and is consumed through the workspace:
+
+```bash
+vp install
+```
+
+A session needs a `Storage` instance, and vector retrieval additionally needs a `VectorService` from [`@cieljs/vector`](../vector/README.md) that is backed by an `EmbeddingProvider` from [`@cieljs/model-kit`](../model-kit/README.md).
+
+## Quick start
+
+Open a space and a session, append a message, then read back the current context:
 
 ```ts
 import { Storage } from '@cieljs/storage';
@@ -39,7 +56,7 @@ const manager = await SessionManager.open({ storage, namespace: 'session' });
 const space = manager.space('blive:room:21452505');
 
 try {
-  // ID 已存在时复用已有 Session。
+  // An existing id is reused, so reopening continues the same conversation.
   const session = await space.session({
     id: 'conversation-1',
     sources: ['project:ciel', 'user:alice'],
@@ -58,67 +75,226 @@ try {
 }
 ```
 
-`context()` 返回可直接交给 Agent 的 `AgentMessage[]`。存在累计摘要时，摘要会作为第一条历史消息，后面是它尚未覆盖的原文。再次使用相同的数据目录、空间 ID 和会话 ID，就可以继续读取这段历史。
+`context()` returns an `AgentMessage[]` that can be handed to an agent directly. When a cumulative summary exists it is returned as the first history message, followed by the raw messages it does not yet cover. Reusing the same data directory, space id and session id resumes the same history.
 
-消息完成后等待 `appendMessage()`；使用结束、停止提交新任务后再关闭存储。`close()` 会等待已排队的压缩和索引任务。
+Await `appendMessage()` before treating a message as written, and close storage only after you stopped submitting new work — `close()` waits for queued compaction and indexing tasks.
 
-## 对话越来越长时
+## Context and compaction
 
-我们沿用 Pi 的方式判断上下文用量：优先读取最近有效的模型 usage，再估算后续新增消息。用量超过 `contextWindow - reserveTokens` 时，调用 `session.compact()` 就会尝试压缩较早的对话。
-
-`contextWindow` 使用对话模型的窗口大小，`reserveTokens` 默认预留 16,384 tokens。你也可以通过 `keepRecentMessages` 指定至少保留最近多少条原文，默认是 10 条。
-
-每次压缩都接着上一份摘要往下整理：
+Context usage follows the same approach as Pi: read the most recent valid model usage first, then estimate the messages added after it. Compaction is attempted when
 
 ```text
-旧消息                 → 摘要 S1
-S1 + 新增的旧消息      → 摘要 S2
-S2 + 最近保留的原文    → 当前上下文
+contextTokens > contextWindow - reserveTokens
 ```
 
-每次压缩成功后都会向 `storage.events` 追加一条 `session_compaction` 事件，记录累计摘要与压缩边界；Trace 等消费者重放流水就能看到这一步。
+Equality does not trigger compaction.
 
-摘要模型由你提供，上层决定什么时候检查压缩、什么时候更新模型上下文。模型配置、完整示例和 token 计算细节放在[会话压缩文档](./docs/compaction.md)里。
+| Option               | Meaning                                                           | Default  |
+| -------------------- | ----------------------------------------------------------------- | -------- |
+| `contextWindow`      | Context window of the **conversation** model, in tokens           | required |
+| `reserveTokens`      | Tokens reserved for the next generation; must be below the window | 16,384   |
+| `keepRecentMessages` | Minimum number of recent raw messages to keep                     | 10       |
+| `force`              | Skip the threshold check but still respect round boundaries       | `false`  |
+| `signal`             | Cancellation or timeout signal                                    | —        |
 
-## 找回之前聊过的内容
+Usage is measured as follows:
 
-Agent Tool 从独立入口导入。通过 `sessionTools({ session, space })`，可以同时获得当前会话和当前空间的历史工具：
+1. Walk backwards to the most recent valid assistant usage, skipping errors, cancellations and all-zero usage.
+2. Prefer `usage.totalTokens`; when it is zero, use `input + output + cacheRead + cacheWrite`.
+3. Estimate only what was added after that message and add it to the usage. History already covered by the usage and by the summary is not counted twice.
+4. Without a valid usage, estimate the latest summary plus every uncompressed message: characters divided by four, rounded up, per message; thinking blocks, tool names and JSON arguments count too; every image counts as 1,200 tokens.
 
-- `search_current_session_messages`：找到当前 Session 的相关历史片段。
-- `read_current_session_messages`：读取当前 Session 中某条消息附近的上下文。
-- `find_sessions_by_source`：在当前空间中根据业务 ID、名称、昵称、标题或别名等 `sources` 发现相关会话。
-- `search_discovered_session_messages`：搜索已经发现的会话。
-- `read_discovered_session_messages`：读取已经发现的会话中某条消息附近的上下文。
+Like Pi this is "real usage plus a tail estimate", not an exact tokenizer. Character-based estimation tends to undercount Chinese text, and without a usage it cannot see the system prompt and tool definitions that the storage layer never receives — leave a healthy margin.
 
-### 跨空间搜索与读取
+After a compaction, usage values still attached to retained messages may describe the pre-compaction context. The session excludes usages older than the compaction write and estimates instead, until a fresh valid assistant usage appears.
 
-默认不开放跨空间访问，消息正文、来源发现和后续读取都受各自范围约束：当前会话正文直接搜索，同空间的其他会话先按来源发现，再逐个搜索。没有直接搜索当前空间全部会话正文的工具。
+### Recursive summaries
 
-| 配置                | 来源发现范围            | 正文搜索与读取范围                                          |
-| ------------------- | ----------------------- | ----------------------------------------------------------- |
-| 不传 `crossSpace`   | 当前 Space              | 当前 Session，以及已发现的同空间 Session                    |
-| `access: "related"` | 所传 Manager 的全部空间 | 当前 Session，以及按来源发现的 Session                      |
-| `access: "all"`     | 所传 Manager 的全部空间 | 额外允许直接搜索、读取该 Manager 中全部 Session，无需先发现 |
+```text
+older messages A          → summary S1
+S1 + newly old messages B → summary S2
+S2 + newly old messages C → summary S3
 
-下面三组工具是不同授权方式，按需要选择一组：
+current context           = S3 + the most recent raw messages
+```
+
+Every compaction reads only the messages not yet covered by a summary and passes the previous summary to the model, so summaries accumulate instead of restarting. Summaries are kept in the database for inspection, while `session.context()` always contains only the history belonging to the latest summary.
+
+The summary function is implemented by the caller. Endpoint, credentials, model, message serialization and output limits all stay outside this package: sessions never call a model and never inject prompts on their own. `DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT` is exported as an optional default.
+
+```ts
+import { DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT, type SessionSummarizer } from '@cieljs/session';
+
+const summarize: SessionSummarizer = async ({ summary, messages, signal }) => {
+  const response = await models.completeSimple(
+    summaryModel,
+    {
+      systemPrompt: DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: JSON.stringify({ summary, messages }),
+          timestamp: Date.now(),
+        },
+      ],
+    },
+    { maxTokens: 2048, signal },
+  );
+
+  // Never replace history with a failed or truncated summary.
+  if (response.stopReason !== 'stop') {
+    throw new Error(response.errorMessage ?? `摘要未完整生成：${response.stopReason}`);
+  }
+
+  return response.content
+    .filter(block => block.type === 'text')
+    .map(block => block.text)
+    .join('\n');
+};
+```
+
+Call `session.compact()` after a complete message has been written — either before starting the next user request, or after a batch of tool results has been written and before the next model request. The manager does not subscribe to agent events; the host decides when to check and how to feed the updated context to the model.
+
+```ts
+const result = await session.compact({
+  summarize,
+  contextWindow: 128_000,
+  reserveTokens: 16_384,
+  keepRecentMessages: 10,
+  signal: AbortSignal.timeout(60_000),
+});
+
+if (result) {
+  console.log(await session.context());
+}
+```
+
+`compact()` returns `null` when the budget is not exceeded or when there is no old round that can be compacted safely. The retention boundary is aligned backwards to a user message so that a tool call and its results never get split, which means more messages than configured may be kept. A single oversized round is never truncated, and compaction does not guarantee the result falls below the budget.
+
+When compaction never triggers, check `contextWindow`, `reserveTokens` and whether a valid usage exists at all — everything may simply still be inside the retention range, or inside a single round. If the context is still near the limit afterwards, look at the summary length and the size of the retained messages, then lower the summary output limit or `keepRecentMessages`, and re-evaluate the budget the host actually requests. A summary model that reports an over-long context is a separate limit: it has to hold the previous summary plus the messages being compacted, and the conversation budget guarantees nothing about that. After a failure, an empty summary or a cancellation, the compaction boundary does not advance; the caller gets the error and may retry, with the original history untouched. Concurrent calls in one session are serialized per manager, and the summary boundary is re-checked before writing, so a summary that someone else updated in the meantime is never overwritten.
+
+Every successful compaction appends a `session_compaction` event to `storage.events`, recording the cumulative summary and the boundary. Consumers such as [`@cieljs/trace`](../trace/README.md) can replay the log to observe the step.
+
+## Retrieval
+
+`session.search(query, options)` searches one session; `manager.searchAll(query, options)` searches every session in the manager. Both merge full-text and trigram matches with vector matches.
+
+| Mode        | Behaviour                                              |
+| ----------- | ------------------------------------------------------ |
+| `hybrid`    | Default; merges every available retrieval mode         |
+| `full_text` | Tokenized full-text search over message bodies         |
+| `trigram`   | Fuzzy substring matching, tolerant of partial wording  |
+| `vector`    | Semantic search; requires a configured `VectorService` |
+
+| Option                | Meaning                                         | Default |
+| --------------------- | ----------------------------------------------- | ------- |
+| `limit` / `offset`    | Page through hits                               | —       |
+| `candidateLimit`      | Candidates pulled from each mode before merging | —       |
+| `minVectorSimilarity` | Minimum cosine similarity for vector hits       | 0.35    |
+| `signal`              | Cancellation signal                             | —       |
+
+A hit reports the `spaceId`, the matched `SessionMessage`, an `excerpt`, a `score` and the `matches` that produced it, so a host can show why something was returned.
+
+Source discovery uses the same tokenizer as source full-text search and supports multi-keyword Chinese queries. `manager.findSessionsBySource(query, options)` resolves a business identifier to sessions, with `mode` of `auto`, `exact` or `text`. Changing the tokenizer means indexes have to be rebuilt — `rebuildIndexes()` rebuilds both the body and the source indexes.
+
+```ts
+const hits = await manager.searchAll('会话保存在哪里', { mode: 'hybrid' });
+const related = await manager.findSessionsBySource('主播昵称');
+```
+
+> [!TIP]
+> Start with full text and trigram search. Add an `EmbeddingProvider` that implements `embedBatch()` only when semantic retrieval is actually needed.
+
+### Embedding and indexes
+
+An embedding provider is described by a model id, an output dimension count and a batch function. The model id must distinguish provider and version: vectors from different models must never be compared even when the dimensions match.
+
+| Option       | Meaning                                      | Default  |
+| ------------ | -------------------------------------------- | -------- |
+| `model`      | Unique identity of the vector space          | required |
+| `dimensions` | Output dimension count, `1` to `16,000`      | required |
+| `batchSize`  | Maximum texts per indexing request           | 32       |
+| `embed`      | Optional single-text entry point             | —        |
+| `embedBatch` | Vectors in the same order as the input texts | required |
+
+```ts
+import { Storage } from '@cieljs/storage';
+import { VectorService, vectorStorage } from '@cieljs/vector';
+import { SessionManager, sessionStorage } from '@cieljs/session';
+
+await using storage = await Storage.open({
+  dataDir: '.ciel/storage',
+  modules: [sessionStorage, vectorStorage],
+});
+await using vectors = new VectorService({
+  storage,
+  provider: embedding,
+  providerId: 'provider',
+  revision: '1',
+  granularity: 'chunk',
+  inputConfig: 'raw',
+});
+const manager = await SessionManager.open({
+  storage,
+  namespace: 'session',
+  vectors,
+  onIndexError: error => console.error('向量索引失败', error),
+});
+
+await manager
+  .space('blive:room:21452505')
+  .session()
+  .then(session =>
+    session.appendMessage({
+      role: 'user',
+      content: '本次决定采用本地数据库保存会话。',
+      timestamp: Date.now(),
+    }),
+  );
+
+// Indexing is queued after the write; flush before searching what you just wrote.
+await manager.flushIndexes();
+const hits = await session.search('会话保存在哪里', { mode: 'vector' });
+```
+
+`options.purpose` is `document` for indexing and `query` for lookups; adapters that need different task types or prefixes map that themselves. Queries carry a `signal` that should be forwarded to the SDK or `fetch`. Returned vectors must match the configured dimensions, contain finite numbers, and must not be zero vectors.
+
+Indexing is derived data and never blocks a write. A query that misses may mean indexing has not finished, that the model id and dimensions do not match, or that `minVectorSimilarity` is too high. If the vector service is down, messages are still stored: hybrid `search()` reports the vector error and continues with full text and trigram, while an explicit `{ mode: 'vector' }` hands the error to the caller. After changing the model or the tokenizer, reopen storage with the new configuration and call `session.rebuildIndexes()`, or `manager.rebuildIndexes()` for every session; failed jobs can be retried with `manager.retryIndexes()`, and `manager.getIndexStatus()` reports the `pending`, `ready` and `failed` counts. Keep in mind that retrieval has no approximate index — it filters by model and dimensions and computes exact cosine similarity — so evaluate performance against your own data volume.
+
+Without `onIndexError` a warning is logged; a failed index job never rolls back a message.
+
+## Agent tools
+
+Agent tools live behind a separate entry point. `sessionTools({ session, space })` returns tools for both the current session and the history of the current space:
+
+- `search_current_session_messages` — find relevant history in the current session.
+- `read_current_session_messages` — read the context around one message of the current session.
+- `find_sessions_by_source` — discover sessions in the current space by business id, name, nickname, title or alias.
+- `search_discovered_session_messages` — search sessions that were already discovered.
+- `read_discovered_session_messages` — read the context around a message of a discovered session.
+
+Cross-space access is closed by default. The current session body is searchable directly, other sessions in the same space must be discovered by source first, and no tool searches the body of every session in a space without discovery.
+
+| Configuration       | Source discovery scope      | Body search and read scope                                      |
+| ------------------- | --------------------------- | --------------------------------------------------------------- |
+| no `crossSpace`     | the current space           | the current session, plus discovered sessions in the same space |
+| `access: "related"` | every space of that manager | the current session, plus sessions discovered by source         |
+| `access: "all"`     | every space of that manager | also every session of that manager directly, without discovery  |
 
 ```ts
 import { sessionTools } from '@cieljs/session/agent';
 
-// 默认：仅在当前空间内找回历史。
+// Default: only find history inside the current space.
 const localTools = sessionTools({ session, space });
 
-// 跨空间：先按来源发现会话，再搜索、读取。
+// Cross-space: discover sessions by source first, then search and read them.
 const relatedTools = sessionTools({
   session,
   space,
-  crossSpace: {
-    manager,
-    access: 'related',
-  },
+  crossSpace: { manager, access: 'related' },
 });
 
-// 跨空间：也允许直接搜索全部会话正文。
+// Cross-space: also allow searching every session body directly.
 const allTools = sessionTools({
   session,
   space,
@@ -126,43 +302,94 @@ const allTools = sessionTools({
 });
 ```
 
-跨空间配置对应的实际调用名称如下。`related` 复用基础工具名，扩大来源发现范围；`all` 额外增加两个工具：
+| Tool name                            | Available with            | Behaviour                                                   |
+| ------------------------------------ | ------------------------- | ----------------------------------------------------------- |
+| `search_current_session_messages`    | default, `related`, `all` | Always searches only the current session body               |
+| `read_current_session_messages`      | default, `related`, `all` | Always reads context around messages of the current session |
+| `find_sessions_by_source`            | default, `related`, `all` | Matches `sources` only; never searches bodies               |
+| `search_discovered_session_messages` | default, `related`, `all` | Searches the body of a discovered session by `sessionId`    |
+| `read_discovered_session_messages`   | default, `related`, `all` | Reads context by `sessionId` and `messageId`                |
+| `search_all_session_messages`        | `all` only                | Searches message bodies across every space, not `sources`   |
+| `read_any_session_messages`          | `all` only                | Reads by `sessionId` and `messageId` without discovery      |
 
-| Tool name                            | 可用配置               | 行为                                                       |
-| ------------------------------------ | ---------------------- | ---------------------------------------------------------- |
-| `search_current_session_messages`    | 默认、`related`、`all` | 始终只搜索当前 Session 正文                                |
-| `read_current_session_messages`      | 默认、`related`、`all` | 始终只读取当前 Session 的消息前后文                        |
-| `find_sessions_by_source`            | 默认、`related`、`all` | 只匹配 `sources`，按上表范围发现会话，不搜索正文           |
-| `search_discovered_session_messages` | 默认、`related`、`all` | 按 `sessionId` 搜索已发现会话的正文                        |
-| `read_discovered_session_messages`   | 默认、`related`、`all` | 按 `sessionId`、`messageId` 读取已发现会话的消息前后文     |
-| `search_all_session_messages`        | 仅 `all`               | 跨全部空间搜索消息正文，不搜索 `sources`                   |
-| `read_any_session_messages`          | 仅 `all`               | 按 `sessionId`、`messageId` 直接读取消息前后文，无需先发现 |
+`related` follows `find_sessions_by_source` → `search_discovered_session_messages` → `read_discovered_session_messages`. Discovery results carry `session.id`, `session.spaceId` and `matchedSources`; feed `session.id` back as `sessionId` and the `message.id` of a body hit as `messageId`. Discovery records live as long as the tool instance — recreating the tools means discovering again.
 
-`related` 的调用顺序是 `find_sessions_by_source` → `search_discovered_session_messages` → `read_discovered_session_messages`。发现结果包含 `session.id`、`session.spaceId` 和 `matchedSources`；用 `session.id` 作为后续的 `sessionId`，用正文搜索结果的 `message.id` 作为 `messageId`。发现记录在这组工具实例存续期间有效，重新创建工具后需要重新发现。
+`all` can call `search_all_session_messages` directly and pass the returned `message.sessionId` and `message.id` to `read_any_session_messages`. Reading tools return the target message plus the neighbouring messages requested through `before` and `after`; they never return a whole conversation.
 
-`all` 可以直接调用 `search_all_session_messages`，再将结果的 `message.sessionId` 和 `message.id` 交给 `read_any_session_messages`。读取工具返回目标消息及 `before`、`after` 指定的相邻消息，不会返回整段会话。
+Every tool is read-only. `all` covers only the session database behind the manager that was passed in, never another independent database. There is no `list_sessions` tool; a host that needs an administration list calls `space.list()` or `manager.list()`.
 
-这些工具全部只读。`all` 只覆盖所传 Manager 的会话库，不会搜索其他独立数据库。Agent Tool 不提供 `list_sessions`；宿主若需要管理列表，可以调用 `space.list()` 或 `manager.list()`。
+A standalone question-answering agent can keep its own sessions in a separate data directory and use a normal space's manager purely as a cross-session query source, so its history never mixes with product data.
 
-独立全局问答 Agent 可以用另一个数据目录保存自身 Session，再把普通空间的 Manager 只作为跨会话查询来源。这样问答历史不会混入普通空间数据。
+## API reference
 
-> [!TIP]
-> 可以先从全文和模糊检索开始。需要语义检索时，再接入一个提供 `embedBatch()` 的 Embedding Provider。
+`@cieljs/session`
 
-向量模型的维数、批量接口和索引维护方式，请看[向量检索文档](./docs/embedding.md)。
+| Export                                                                                    | Kind     | Description                                                                                                                    |
+| ----------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `SessionManager`                                                                          | class    | Opens sessions in one storage namespace; entry point for the package                                                           |
+| `SessionManager.open(options)`                                                            | method   | `{ storage, namespace, vectors?, tokenize?, onIndexError? }`                                                                   |
+| `sessionStorage`                                                                          | const    | Storage module registering the session schema and migrations                                                                   |
+| `DEFAULT_SESSION_SUMMARY_SYSTEM_PROMPT`                                                   | const    | Optional default system prompt for summary models                                                                              |
+| `tokenizeSearchText`                                                                      | function | The tokenizer used by full-text and source search                                                                              |
+| `estimateContextTokens`                                                                   | function | Context usage estimate for a set of messages                                                                                   |
+| `estimateAgentMessageTokens`                                                              | function | Per-message token estimate                                                                                                     |
+| `SessionError` and subclasses                                                             | class    | `SessionNotFoundError`, `SessionAccessError`, `SessionCompactionConflictError`, `SessionClosedError`, `SessionValidationError` |
+| `Session`, `SessionSpace`, `SessionInfo`                                                  | type     | Session handles and their metadata                                                                                             |
+| `SessionMessage`, `SessionCompaction`                                                     | type     | Stored message and summary records                                                                                             |
+| `SessionOptions`, `SessionListOptions`, `SessionMessageListOptions`, `UpdateSessionInput` | type     | Session-level inputs                                                                                                           |
+| `CompactionOptions`, `SessionSummarizer`, `SummarizeInput`, `AppendCompactionInput`       | type     | Compaction inputs and the summarizer contract                                                                                  |
+| `SessionSearchOptions`, `SessionSearchMode`, `SessionSearchMatch`, `SessionSearchHit`     | type     | Search inputs and results                                                                                                      |
+| `FindSessionsBySourceOptions`, `SessionSourceHit`, `SessionSourceSearchMode`              | type     | Source discovery inputs and results                                                                                            |
+| `SessionIndexStatus`, `SessionContext`, `SessionManagerOptions`, `SessionSource`          | type     | Index status, context and manager options                                                                                      |
 
-宿主需要跨会话查找时，使用 `manager.searchAll(query)`；`session.search(query)` 始终只查询当前会话。通过 `manager.findSessionsBySource(query)` 可以按来源定位会话。
+`SessionManager`
 
-来源全文检索与查询使用同一个 tokenizer，支持中文多关键词查询。更换 tokenizer 后，`rebuildIndexes()` 会同时重建正文与来源索引。
+| Member                                                   | Description                                                |
+| -------------------------------------------------------- | ---------------------------------------------------------- |
+| `space(spaceId)`                                         | Returns a `SessionSpace` handle                            |
+| `getAnySession(id)`                                      | Looks a session up across spaces                           |
+| `list(options)`                                          | Lists session metadata                                     |
+| `searchAll(query, options)`                              | Merges retrieval across every session in the manager       |
+| `findSessionsBySource(query, options)`                   | Resolves business identifiers to sessions                  |
+| `getIndexStatus()`                                       | `{ pending, ready, failed }`                               |
+| `flushIndexes()` / `retryIndexes()` / `rebuildIndexes()` | Drain, retry or rebuild derived indexes                    |
+| `close()`                                                | Waits for queued work; never closes the underlying storage |
 
-## 开发
+`Session`
 
-在本包目录运行：
+| Member                                                                                      | Description                                                            |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `appendMessage(message)` / `getMessages(options)`                                           | Append an `AgentMessage` and page through stored messages              |
+| `getMessagesAfter(afterSeq)` / `getMessagesRange(fromSeq, toSeq)` / `getMessage(messageId)` | Read specific parts of the log                                         |
+| `context()`                                                                                 | Latest summary plus the raw messages it does not cover                 |
+| `compact(options)`                                                                          | Run one compaction round; `null` when nothing was compacted            |
+| `search(query, options)`                                                                    | Retrieval inside this session only                                     |
+| `record(event, metadata?)` / `appendCompaction(input)`                                      | Append a runtime event, or a summary with an optimistic boundary check |
+| `getLatestCompaction()` / `getLastMessage()` / `getActiveMessageRows()`                     | Inspect the current summary, tail and active rows                      |
+| `getInfo()` / `update(input)` / `delete()`                                                  | Session metadata and lifetime                                          |
+| `rebuildIndexes()`                                                                          | Rebuild the text and vector projections of this session                |
+
+`@cieljs/session/agent`
+
+| Export                                     | Kind     | Description                                     |
+| ------------------------------------------ | -------- | ----------------------------------------------- |
+| `sessionTools(options)`                    | function | Builds the read-only session tools for an agent |
+| `CrossSpaceAccess`, `CrossSpaceOptions`    | type     | `"related"` / `"all"` cross-space authorization |
+| `SessionToolsOptions`, `SessionToolLimits` | type     | Tool options and result limits                  |
+
+## Behavior notes
+
+- **Writes and errors.** Messages are facts; indexes are derived. A failed index job is reported through `onIndexError` and never cancels a write.
+- **Concurrency.** Compaction calls are serialized per manager, and `appendCompaction()` refuses to overwrite a summary that moved while it was being generated.
+- **Ownership.** A manager borrows storage and the vector service. Closing it releases neither, and closing storage while a manager is still open is a misuse.
+- **Isolation.** A space never merges with another space implicitly; cross-space reads happen only through explicitly authorized tools or through a manager the host handed over.
+
+## Development
 
 ```bash
 vp check
-vp test
+vp test --run
 vp run build
 ```
 
-测试使用本地数据库和模型替身，无需 API Key。你可以直接验证会话恢复、递归压缩、token 判断与历史检索，再接入自己的模型服务。
+Tests use a local database and model doubles, so no API key is required. Session recovery, recursive compaction, token accounting and history retrieval can all be verified before connecting a real model service.

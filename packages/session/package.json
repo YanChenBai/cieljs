@@ -13,8 +13,7 @@
     "url": "git+https://github.com/author/library.git"
   },
   "files": [
-    "dist",
-    "docs"
+    "dist"
   ],
   "type": "module",
   "exports": {
