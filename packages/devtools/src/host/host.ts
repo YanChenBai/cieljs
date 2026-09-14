@@ -16,7 +16,16 @@ import { AgentTrace, type AgentTraceMetadata } from './agent-trace.ts';
 import { TraceStore } from './store.ts';
 import { preview } from './trace-content.ts';
 import { createTraceStep } from './trace-step.ts';
-import { TraceUsageTally } from './usage.ts';
+import { TraceUsageTally, type TraceUsageTallyState } from './usage.ts';
+
+interface ProjectionState {
+  version: 1;
+  cursor: number;
+  sequence: number;
+  tally: TraceUsageTallyState;
+  runNumbers: Array<[string, Array<[string, number]>]>;
+  sessionProgress: Array<[string, { turn: number; steps: number; seen: string[] }]>;
+}
 
 /** 宿主保存独立的完整快照；内存列表淘汰不删除磁盘记录。 */
 export class DevtoolsHost implements AsyncDisposable {
@@ -36,7 +45,10 @@ export class DevtoolsHost implements AsyncDisposable {
   private readonly tally = new TraceUsageTally();
   /** 轮次按 Agent 运行分配：同一 run 的所有事件共用一个轮次号。 */
   private readonly runNumbers = new Map<string, Map<string, number>>();
-  private readonly sessionProgress = new Map<string, { turn: number; steps: Set<string> }>();
+  private readonly sessionProgress = new Map<
+    string,
+    { turn: number; steps: number; seen: Set<string> }
+  >();
   private sequence = 0;
   readonly store: TraceStore;
   private eventSequence = 0;
@@ -60,6 +72,10 @@ export class DevtoolsHost implements AsyncDisposable {
     this.store = new TraceStore(storage);
   }
 
+  private get persistsProjectionState() {
+    return this.source === this.storage.journal && this.writer === this.storage.journal;
+  }
+
   static async open(options: {
     storage: Storage;
     source?: RuntimeReader;
@@ -75,18 +91,21 @@ export class DevtoolsHost implements AsyncDisposable {
       options.capacity,
     );
     host.sequence = await host.store.sequence();
+    if (host.persistsProjectionState) await host.restoreProjectionState();
     host.unsubscribe = host.source.subscribe(() => {
       // 失败保留在 projection 中，由 flushRecords/close 向调用者报告。
       void host.catchUp().catch(() => {});
     });
     if (options.awaitReplay ?? true) {
       await host.catchUp();
+      await host.persistProjectionState();
     } else {
       // 重放历史随会话数增长，不能在窗口显示前等它跑完；完成后补一次推送，
       // 让只依赖重放的用量快照也能上屏。
       void host
         .catchUp()
-        .catch(() => {})
+        .then(() => host.persistProjectionState())
+        .catch(error => host.captureProjectionFailure(error))
         .finally(() => {
           if (!host.closed) host.scheduleFlush();
         });
@@ -131,17 +150,17 @@ export class DevtoolsHost implements AsyncDisposable {
       }
     });
     // 后台失败不能只留在 Promise 链中，否则界面会永久停在旧快照。
-    void this.projection.catch(error => {
-      if (this.projectionFailure) return;
-      this.projectionFailure = error;
-      const cause = error instanceof Error ? (error.cause ?? error) : error;
-      console.error(
-        'Devtools 事件处理失败',
-        cause instanceof Error ? cause.message : String(cause),
-      );
-      this.scheduleFlush();
-    });
+    void this.projection.catch(error => this.captureProjectionFailure(error));
     return this.projection;
+  }
+
+  private captureProjectionFailure(error: unknown) {
+    if (this.projectionFailure) return;
+
+    this.projectionFailure = error;
+    const cause = error instanceof Error ? (error.cause ?? error) : error;
+    console.error('Devtools 事件处理失败', cause instanceof Error ? cause.message : String(cause));
+    this.scheduleFlush();
   }
 
   assertHealthy() {
@@ -164,7 +183,7 @@ export class DevtoolsHost implements AsyncDisposable {
   sessions(): DevtoolsSession[] {
     return this.tally.sessions().map(session => {
       const progress = this.sessionProgress.get(session.id);
-      return { ...session, turn: progress?.turn ?? 0, steps: progress?.steps.size ?? 0 };
+      return { ...session, turn: progress?.turn ?? 0, steps: progress?.steps ?? 0 };
     });
   }
 
@@ -264,6 +283,7 @@ export class DevtoolsHost implements AsyncDisposable {
     this.unsubscribe?.();
     try {
       await this.flushRecords();
+      await this.persistProjectionState();
     } finally {
       this.closed = true;
       this.lifetime.abort();
@@ -361,7 +381,7 @@ export class DevtoolsHost implements AsyncDisposable {
   private trackSessionProgress(step: TraceEntry) {
     let progress = this.sessionProgress.get(step.sessionId);
     if (!progress) {
-      progress = { turn: 0, steps: new Set() };
+      progress = { turn: 0, steps: 0, seen: new Set() };
       this.sessionProgress.set(step.sessionId, progress);
     }
 
@@ -380,7 +400,51 @@ export class DevtoolsHost implements AsyncDisposable {
       key = `${scope}:turn:${step.turnId}`;
     }
 
-    progress.steps.add(key);
+    if (step.name === 'agent_start') progress.seen.clear();
+
+    if (!progress.seen.has(key)) {
+      progress.seen.add(key);
+      progress.steps += 1;
+    }
+
+    if (step.name === 'agent_end') progress.seen.clear();
+  }
+
+  private projectionState(): ProjectionState {
+    return {
+      version: 1,
+      cursor: this.cursor,
+      sequence: this.sequence,
+      tally: this.tally.state(),
+      runNumbers: [...this.runNumbers].map(([sessionId, runs]) => [sessionId, [...runs]]),
+      sessionProgress: [...this.sessionProgress].map(([sessionId, progress]) => [
+        sessionId,
+        { turn: progress.turn, steps: progress.steps, seen: [...progress.seen] },
+      ]),
+    };
+  }
+
+  private async restoreProjectionState() {
+    const state = await this.store.projectionState<ProjectionState>();
+    if (!state || state.version !== 1) return;
+
+    this.cursor = state.cursor;
+    this.sequence = Math.max(this.sequence, state.sequence);
+    this.tally.restore(state.tally);
+
+    for (const [sessionId, runs] of state.runNumbers) {
+      this.runNumbers.set(sessionId, new Map(runs));
+    }
+    for (const [sessionId, progress] of state.sessionProgress) {
+      this.sessionProgress.set(sessionId, { ...progress, seen: new Set(progress.seen) });
+    }
+  }
+
+  private async persistProjectionState() {
+    if (!this.persistsProjectionState) return;
+
+    this.store.saveProjectionState(this.sequence, this.projectionState());
+    await this.store.flush();
   }
 
   // 将同一批 token 的摘要合并后推送，原始事件已即时落盘，不受节流影响。

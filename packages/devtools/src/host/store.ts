@@ -31,6 +31,7 @@ export const devtoolsStorage: StorageModule = {
 };
 
 export class TraceStore {
+  private static readonly projectionStateId = 'devtools:projection-state';
   private pending = Promise.resolve();
   private error: unknown;
   constructor(private readonly storage: Storage) {
@@ -38,9 +39,29 @@ export class TraceStore {
   }
   async sequence() {
     const result = await this.storage.db.execute<{ n: string }>(
-      sql`SELECT COALESCE(MAX(sequence), 0) AS n FROM devtools.records`,
+      sql`SELECT COALESCE(MAX(sequence), 0) AS n
+          FROM devtools.records
+          WHERE category = 'entry'`,
     );
     return Number(result.rows[0]!.n);
+  }
+  async projectionState<T>() {
+    await this.flush();
+    const result = await this.storage.db.execute<{ value: Uint8Array }>(
+      sql`SELECT value FROM devtools.records
+          WHERE id = ${TraceStore.projectionStateId} AND category = 'projection_state'`,
+    );
+    const row = result.rows[0];
+
+    return row ? (JSON.parse(Buffer.from(row.value).toString('utf8')) as T) : undefined;
+  }
+  saveProjectionState(sequence: number, value: unknown) {
+    this.write(
+      TraceStore.projectionStateId,
+      'projection_state',
+      sequence,
+      Buffer.from(JSON.stringify(value)),
+    );
   }
   put(
     id: string,
@@ -51,6 +72,17 @@ export class TraceStore {
     sessionId?: string,
   ) {
     const bytes = serialize(snapshot(value));
+
+    this.write(id, category, sequence, bytes, runId, sessionId);
+  }
+  private write(
+    id: string,
+    category: string,
+    sequence: number,
+    bytes: Uint8Array,
+    runId?: string,
+    sessionId?: string,
+  ) {
     this.pending = this.pending
       .then(async () => {
         await this.storage.db.execute(
@@ -61,7 +93,18 @@ export class TraceStore {
                 sequence = EXCLUDED.sequence,
                 run_id = EXCLUDED.run_id,
                 value = EXCLUDED.value,
-                session_id = EXCLUDED.session_id`,
+                session_id = EXCLUDED.session_id
+              WHERE (devtools.records.category,
+                     devtools.records.sequence,
+                     devtools.records.run_id,
+                     devtools.records.value,
+                     devtools.records.session_id)
+                    IS DISTINCT FROM
+                    (EXCLUDED.category,
+                     EXCLUDED.sequence,
+                     EXCLUDED.run_id,
+                     EXCLUDED.value,
+                     EXCLUDED.session_id)`,
         );
       })
       .catch(error => {

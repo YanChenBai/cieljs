@@ -8,6 +8,7 @@ import { RPCLink } from '@orpc/client/message-port';
 import { createRouterClient } from '@orpc/server';
 import type { RouterClient } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/message-port';
+import { sql } from 'drizzle-orm';
 import { afterEach, expect, it, vi } from 'vite-plus/test';
 
 import { createDevtoolsClient } from '../client/index.ts';
@@ -269,6 +270,55 @@ it('后台重放不阻塞 open()，追平后条目与用量与阻塞重放一致
     cacheWrite: 0,
     total: 940,
   });
+});
+
+it('重放内容未变化时不重写已有投影', async () => {
+  const host = await openHost();
+  await host.agentListener('replay')({
+    type: 'message_end',
+    message: { role: 'user', content: '保持不变', timestamp: 1 },
+  });
+  await host.flushRecords();
+
+  const before = await host.storage.db.execute<{ xmin: string }>(
+    sql`SELECT xmin::text AS xmin FROM devtools.records WHERE id = 'step:1'`,
+  );
+  await host.close();
+  const state = await host.storage.db.execute<{ head: string }>(sql`
+    SELECT encode(substring(value FROM 1 FOR 1), 'hex') AS head
+    FROM devtools.records
+    WHERE category = 'projection_state'
+  `);
+
+  const read = vi.spyOn(host.storage.journal, 'read');
+  const reopened = await DevtoolsHost.open({ storage: host.storage });
+  cleanup.push(() => reopened.close());
+  const after = await host.storage.db.execute<{ xmin: string }>(
+    sql`SELECT xmin::text AS xmin FROM devtools.records WHERE id = 'step:1'`,
+  );
+
+  expect(state.rows).toEqual([{ head: '7b' }]);
+  expect(read).toHaveBeenCalledWith(1);
+  expect(after.rows[0]?.xmin).toBe(before.rows[0]?.xmin);
+});
+
+it('运行中重启会延续步骤去重状态', async () => {
+  const host = await openHost();
+  const receive = host.agentListener('running');
+  const message = { role: 'user' as const, content: '继续运行', timestamp: 1 };
+  await receive({ type: 'agent_start' });
+  await receive({ type: 'message_start', message });
+  await host.flushRecords();
+  const before = host.sessions().find(session => session.id === 'running')!;
+  await host.close();
+
+  const reopened = await DevtoolsHost.open({ storage: host.storage });
+  cleanup.push(() => reopened.close());
+  await reopened.agentListener('running')({ type: 'message_end', message });
+  await reopened.flushRecords();
+  const after = reopened.sessions().find(session => session.id === 'running')!;
+
+  expect(after.steps).toBe(before.steps);
 });
 
 it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {

@@ -10,9 +10,22 @@ type Usage = {
   totalTokens: number;
 };
 
+export interface TraceUsageTallyState {
+  total: TraceUsage;
+  context: TraceUsage | null;
+  contextSessionId: string | null;
+  sessions: Array<{
+    id: string;
+    startedAt: number;
+    endedAt: number;
+    total: TraceUsage;
+    context: TraceUsage | null;
+  }>;
+}
+
 /**
  * 累计模型用量。message_end 是每条 assistant 消息唯一一次收尾，按它求和不会像
- * message_update 那样把同一次请求重复计入；宿主每次启动完整重放事件，计数随之重建。
+ * message_update 那样把同一次请求重复计入；宿主关闭时持久化累计状态，重启后只消费新增事件。
  */
 export class TraceUsageTally {
   private readonly total = empty();
@@ -81,6 +94,37 @@ export class TraceUsageTally {
         steps: 0,
       }))
       .sort((left, right) => left.startedAt - right.startedAt);
+  }
+
+  state(): TraceUsageTallyState {
+    return {
+      total: { ...this.total },
+      context: this.context && { ...this.context },
+      contextSessionId: this.contextSessionId,
+      sessions: [...this.sessionStates].map(([id, session]) => ({
+        id,
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        total: { ...session.total },
+        context: session.context && { ...session.context },
+      })),
+    };
+  }
+
+  restore(state: TraceUsageTallyState) {
+    Object.assign(this.total, state.total);
+    this.context = state.context && { ...state.context };
+    this.contextSessionId = state.contextSessionId;
+    this.sessionStates.clear();
+
+    for (const session of state.sessions) {
+      this.sessionStates.set(session.id, {
+        startedAt: session.startedAt,
+        endedAt: session.endedAt,
+        total: { ...session.total },
+        context: session.context && { ...session.context },
+      });
+    }
   }
 }
 

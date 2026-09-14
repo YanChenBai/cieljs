@@ -114,14 +114,15 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
     }
     const operation = this.pending.then(async () => {
       await this.db.transaction(async tx => {
-        const result = await tx.execute<{ sequence: number | string }>(
-          sql`INSERT INTO storage.events (id, session_id, message_id, record)
-              VALUES (${record.id}, ${sessionId}, ${messageId ?? null}, ${JSON.stringify(record)}::jsonb)
-              RETURNING sequence`,
-        );
+        const result = await tx.execute<{ sequence: number | string }>(sql`
+          SELECT nextval(pg_get_serial_sequence('storage.events', 'sequence')) AS sequence
+        `);
         record.sequence = Number(result.rows[0]!.sequence);
+
         await tx.execute(
-          sql`UPDATE storage.events SET record = ${JSON.stringify(record)}::jsonb WHERE id = ${record.id}`,
+          sql`INSERT INTO storage.events (id, sequence, session_id, message_id, record)
+              OVERRIDING SYSTEM VALUE
+              VALUES (${record.id}, ${record.sequence}, ${sessionId}, ${messageId ?? null}, ${JSON.stringify(record)}::jsonb)`,
         );
         await project?.(tx, record);
       });

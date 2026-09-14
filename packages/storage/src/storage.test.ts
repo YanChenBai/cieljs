@@ -92,3 +92,19 @@ test('事件和投影原子提交，重复事件不会丢失后注册的投影',
   expect(await storage.journal.read()).toHaveLength(1);
   await expect(storage.journal.flush()).rejects.toThrow('projection failed');
 }, 20_000);
+
+test('事件首次写入即持久化生成后的序号', async () => {
+  await using storage = await Storage.open({ dataDir: 'memory://' });
+  const record = await storage.journal.record('session', {
+    type: 'message_end',
+    message: { role: 'user', content: 'hello', timestamp: 1 },
+  });
+
+  const result = await storage.db.execute<{ sequence: number; storedSequence: number }>(sql`
+    SELECT sequence, (record->>'sequence')::bigint AS "storedSequence"
+    FROM storage.events
+    WHERE id = ${record.id}
+  `);
+
+  expect(result.rows).toEqual([{ sequence: record.sequence, storedSequence: record.sequence }]);
+});
