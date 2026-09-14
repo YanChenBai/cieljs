@@ -2,6 +2,11 @@ import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  test: {
+    testTimeout: 15_000,
+    fileParallelism: false,
+    sequence: { groupOrder: 1 },
+  },
   run: {
     tasks: {
       build: {

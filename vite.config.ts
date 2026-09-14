@@ -2,8 +2,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   test: {
-    // PGlite 集成测试全仓并发时初始化会超过 Vitest 默认的 5 秒。
-    testTimeout: 15_000,
+    projects: ['packages/*', 'apps/*'],
   },
   staged: {
     '*': 'vp check --fix',
