@@ -12,7 +12,7 @@ export function createTraceStep(
 ): TraceEntry {
   const liveUpdate = trace.event.type.endsWith('_update');
   const step: TraceEntry = {
-    id: liveUpdate ? `step:live:${trace.id}` : 'step:' + trace.sequence,
+    id: liveUpdate ? liveStepId(trace) : 'step:' + trace.sequence,
     sequence: trace.sequence,
     sessionId: trace.sessionId,
     runId: trace.runId,
@@ -45,6 +45,20 @@ export function createTraceStep(
   }
   attachDisplayMetadata(step, trace.event, tools, model);
   return step;
+}
+
+/**
+ * live update 必须覆盖同一条临时步骤，不能每个 delta 都生成新 ID。
+ * durable start/end 仍按 sequence 保持不可变事件身份。
+ */
+function liveStepId(trace: TraceEvent) {
+  if (trace.event.type === 'message_update' && trace.messageId) {
+    return `step:live:message:${trace.messageId}`;
+  }
+  if (trace.event.type === 'tool_execution_update') {
+    return `step:live:tool:${trace.toolExecutionId ?? trace.toolCallId ?? trace.id}`;
+  }
+  return `step:live:${trace.id}`;
 }
 
 function eventErrorPath(event: RuntimeEvent): string[] | undefined {
