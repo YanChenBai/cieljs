@@ -7,7 +7,7 @@ import { onMounted, onUnmounted, shallowRef } from 'vue';
 import type { RoomInfo } from '../../../shared/types.ts';
 import { rpc, watchBridge } from '../rpc.ts';
 
-import '@cieljs/devtools/style.css';
+import '@cieljs/console/style.css';
 import '@cieljs/investigation/style.css';
 
 const currentRoom = shallowRef<RoomInfo>();
@@ -51,7 +51,7 @@ onUnmounted(() => unsubscribe?.());
       <InvestigationChat
         v-model:sidebar-collapsed="sidebarCollapsed"
         :client="rpc.investigation"
-        :devtools-client="rpc.investigationDevtools"
+        :trace-client="rpc.investigationTrace"
         :current-room="currentRoom"
       />
     </main>

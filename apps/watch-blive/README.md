@@ -40,11 +40,11 @@ An Electron application with Vue and TypeScript
 
 声纹从同一数据目录的 `voiceprints/*.voiceprint` 自动加载，去掉后缀的文件名作为说话人名称，例如 `弥生.voiceprint` 显示为“弥生”。每次开始直播或录播重新扫描；新增、改名或删除文件后重新开始观看即可。声纹加载保留侧栏选择的 ASR 模型和缓冲设置，损坏文件由听觉初始化报错。
 
-`main/application.ts` 的 `createWatchApplication(mainWindow)` 统一持有存储、Devtools、MCP、直播页面和观看运行时，并返回 `router` 与 `close()`。账号与观看路由直接使用应用内状态；`main/ipc.ts` 只负责连接接入与回收。
+`main/application.ts` 的 `createWatchApplication(mainWindow)` 统一持有存储、TraceHost、MCP、直播页面和观看运行时，并返回 `router` 与 `close()`。账号与观看路由直接使用应用内状态；`main/ipc.ts` 只负责连接接入与回收。
 
 直播默认启用「夏尔」关键词唤醒，`wake: false` 可关闭。首次启用会准备独立的 KWS 模型，音频仍持续进入 ASR。命中只让下一轮优先思考：至少等 1.5 秒收集后续话语，语音结束后优先思考，最多等待 4 秒；若已有思考运行，则等它结束再处理。4 秒是调度等待上限，不保证 ASR 已完成转写或模型已返回。录播不启用唤醒。
 
-唤醒不会自动发弹幕——被叫到不等于要马上开口，发不发由该轮内容按弹幕规则决定。15 秒冷却内及同一次待处理唤醒期间合并重复命中，该轮上下文包含关键词、音频时间和「不要抢着发言」的提示，DevTools 中也可查看唤醒记录；切房或停止会取消待处理唤醒。配置修改后重启生效。
+唤醒不会自动发弹幕——被叫到不等于要马上开口，发不发由该轮内容按弹幕规则决定。15 秒冷却内及同一次待处理唤醒期间合并重复命中，该轮上下文包含关键词、音频时间和「不要抢着发言」的提示，Ciel Console 中也可查看唤醒记录；切房或停止会取消待处理唤醒。配置修改后重启生效。
 
 ## Recommended IDE Setup
 

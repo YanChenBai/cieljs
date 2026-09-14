@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MessageRendererProps } from '@cieljs/devtools';
+import type { MessageRendererProps } from '@cieljs/console';
 import { computed } from 'vue';
 
 const props = defineProps<MessageRendererProps>();

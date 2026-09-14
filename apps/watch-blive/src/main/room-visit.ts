@@ -1,6 +1,6 @@
-import type { DevtoolsHost } from '@cieljs/devtools/host';
 import type { ASRModelId, KWS, WakeEvent } from '@cieljs/hearing';
 import type { Perception } from '@cieljs/perception';
+import type { TraceHost } from '@cieljs/trace/host';
 import type { CielSession } from 'cieljs';
 
 import type { RoomInfo, WatchEvent, WatchMode } from '../shared/types.ts';
@@ -10,7 +10,7 @@ import { ThoughtScheduler } from './scheduling/thought-scheduler.ts';
 import { createWakeContext, type WatchWakeOptions } from './scheduling/wake.ts';
 
 interface RoomVisitOptions {
-  devtools?: DevtoolsHost;
+  trace?: TraceHost;
   generation: number;
   room: RoomInfo;
   mode: WatchMode;
@@ -87,7 +87,7 @@ export class RoomVisit {
   }
 
   start() {
-    this.unsubscribeAgent = this.options.devtools?.observe(this.session.agent, this.session.id);
+    this.unsubscribeAgent = this.options.trace?.observe(this.session.agent, this.session.id);
     this.unsubscribePerceptionError = this.options.perception.on('error', error =>
       this.options.emit({ type: 'error', stage: 'perception', error }),
     );
@@ -106,7 +106,7 @@ export class RoomVisit {
         const timestamp = `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60)
           .toString()
           .padStart(2, '0')}`;
-        this.options.devtools?.recordMessage(`视频语音 · ${timestamp}`, content, this.session.id);
+        this.options.trace?.recordMessage(`视频语音 · ${timestamp}`, content, this.session.id);
       });
       this.options.media.start();
       return;
@@ -133,7 +133,7 @@ export class RoomVisit {
     if (!wake || this.cancelled || Date.now() - this.lastWakeAt < wake.options.cooldownMs) return;
     if (!this.scheduler.wake(event, wake.options)) return;
     this.lastWakeAt = Date.now();
-    this.options.devtools?.recordMessage('关键词唤醒', createWakeContext(event), this.session.id);
+    this.options.trace?.recordMessage('关键词唤醒', createWakeContext(event), this.session.id);
   }
 
   cancel(): void {

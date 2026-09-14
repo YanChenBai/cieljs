@@ -1,4 +1,4 @@
-import type { DevtoolsHost } from '@cieljs/devtools/host';
+import type { TraceHost } from '@cieljs/trace/host';
 import type { Ciel } from 'cieljs';
 
 import type { WatchEvent } from '../../shared/types.ts';
@@ -24,10 +24,10 @@ export async function selectExplorationRoom(options: {
   previous?: PreviousVisit;
   /** 当前仍在冷却期内的房间快照。 */
   cooling?: readonly RoomDeparture[];
-  devtools?: DevtoolsHost;
+  trace?: TraceHost;
   emit: (event: WatchEvent) => void;
 }) {
-  const { areaId, signal, ciel, api, previous, cooling = [], devtools, emit } = options;
+  const { areaId, signal, ciel, api, previous, cooling = [], trace, emit } = options;
   const candidates = await api.rooms(areaId);
   signal.throwIfAborted();
 
@@ -36,10 +36,10 @@ export async function selectExplorationRoom(options: {
     cooling,
   });
   // 记录的是模型真正看到的候选；被冷却拿掉的另记一条，便于对照 API 原始结果。
-  devtools?.record('list_live_rooms', filtered.candidates, 'bilibili:exploration');
+  trace?.record('list_live_rooms', filtered.candidates, 'bilibili:exploration');
 
   if (filtered.cooled.length > 0) {
-    devtools?.record(
+    trace?.record(
       'exclude_revisits',
       { currentRoomId: previous?.room.roomId, cooled: filtered.cooled, relaxed: filtered.relaxed },
       'bilibili:exploration',

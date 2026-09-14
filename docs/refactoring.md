@@ -5,8 +5,8 @@
 - core/ciel.ts：启动、会话、调查与统一关闭；storage.ts：三类存储目录的隔离规则。
 - core/agents：普通会话与只读调查各自组装工具和上下文，共用 session-sources.ts 同步来源。ManagedAgent 保留上游 Agent API。
 - model-kit：独立于 Agent 的模型能力契约与校验，当前包含 embedding；embed：Qwen 推理实现；agent-kit：工具定义与提示词。
-- devtools/host：采集、快照与批量通知；trace-step.ts：原始事件到展示步骤的投影；router.ts：oRPC 查询与订阅。
-- devtools/ui：CielDevtools 组合视图，ExecutionView 管理执行列表与分栏，useDevtools 管理连接和分页，useTraceValue 管理按需加载与取消。
+- trace/host：采集、快照与批量通知；trace-step.ts：原始事件到展示步骤的投影；router.ts：oRPC 查询与订阅。
+- console：CielConsole 组合视图，ExecutionView 管理执行列表与分栏，useConsole 管理连接和分页，useTraceValue 管理按需加载与取消。
 - watch-blive/main/ipc.ts：Electron 连接来源校验与端口释放；router.ts：业务 RPC；runtime.ts：启动、停止、切房和资源生命周期。
 - watch-blive/main/agent/ciel.ts：Ciel 配置；exploration.ts：候选查询与选房校验；decisions.ts：结构化决策解析。RoomVisit、LiveMedia 与调度器继续各自管理房间、媒体和思考节流。
 
@@ -14,7 +14,7 @@
 
 Embedding 类型与函数从 @cieljs/agent-kit 改为 @cieljs/model-kit，仓库内消费者已迁移。TTS 等能力待具体需求明确后在独立模块定义。
 
-Devtools 不再导出旧 request/transport 协议或专用连接工厂。应用传入 oRPC link，或直接将已有 oRPC client 的 devtools 分支传给面板。鉴权、适配器和连接生命周期由应用管理，具体示例见 packages/devtools/README.md。
+Trace 不再导出旧 request/transport 协议。应用传入 oRPC link，或直接将已有 oRPC client 的 trace 分支传给 Ciel Console。鉴权、适配器和连接生命周期由应用管理，具体示例见 packages/trace/README.md 与 packages/console/README.md。
 
 ## 保持的行为与修复
 
@@ -26,7 +26,7 @@ Devtools 不再导出旧 request/transport 协议或专用连接工厂。应用�
 
 TypeScript 文件统一使用 kebab-case，Vue 组件保留 PascalCase.vue；composable 的导出函数仍使用 useXxx，文件名为 use-xxx.ts。apps/chorus 不在本轮范围内。
 
-Devtools 的 router.ts 仅组装 routes 下的查询、内容读取、事件与更新订阅。host.ts 管理存储与通知，agent-trace.ts 按运行生命周期、消息、工具调用分别归并事件。trace-step.ts 分开处理分类、内容引用和展示元数据。调查工具按 memory/sessions 拆工厂；Memory 工具按 read/search/write 拆模块，入口仅装配授权工具。
+Trace 的 router.ts 仅组装 routes 下的查询、内容读取、事件与更新订阅。host.ts 管理存储与通知，agent-trace.ts 按运行生命周期、消息、工具调用分别归并事件。trace-step.ts 分开处理分类、内容引用和展示元数据。调查工具按 memory/sessions 拆工厂；Memory 工具按 read/search/write 拆模块，入口仅装配授权工具。
 
 ## 直播下播
 
@@ -36,7 +36,7 @@ Devtools 的 router.ts 仅组装 routes 下的查询、内容读取、事件与�
 
 ## 界面组织与样式
 
-Devtools UI 的公开入口为 `ui/index.ts`。`components` 按 content、conversation、execution 分组；`composables` 维护连接和详情加载；`directives` 存放跟随滚动；`utils` 处理内容格式与记录归并；`styles/main.css` 保持独立的包样式出口。
+Ciel Console 的公开入口为 `ui/index.ts`。`components` 按 content、conversation、execution 分组；`composables` 维护连接和详情加载；`directives` 存放跟随滚动；`utils` 处理内容格式与记录归并；`styles/main.css` 保持独立的包样式出口。
 
 watch-blive 使用 Tailwind CSS 4：布局放在 SFC 工具类中，共用控件通过 `@apply` 保留语义类，Electron 拖拽区域和滚动条使用原生 CSS。迁移保留原有色值、间距、字体、折叠布局和交互状态。
 

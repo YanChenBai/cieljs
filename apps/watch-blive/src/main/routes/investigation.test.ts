@@ -141,7 +141,7 @@ it('同一调查拒绝并发回答', async () => {
   await first;
 });
 
-it('从 DevTools 历史恢复 Investigation 会话并允许继续提问', async () => {
+it('从 Trace 历史恢复 Investigation 会话并允许继续提问', async () => {
   const routes = createInvestigationRoutes({
     storage: {} as never,
     resolveModel: () => ({ model: { id: 'test' } as never }),

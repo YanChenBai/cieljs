@@ -20,7 +20,8 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
-    "@cieljs/devtools": "workspace:*",
+    "@cieljs/console": "workspace:*",
+    "@cieljs/trace": "workspace:*",
     "@vuetify/v0": "catalog:"
   },
   "devDependencies": {

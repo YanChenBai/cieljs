@@ -267,7 +267,7 @@ test('压缩保留原始消息并向 context 注入累计摘要', async () => {
   ]);
 });
 
-test('压缩把累计摘要写入事实流水，供 Devtools 等消费者回放', async () => {
+test('压缩把累计摘要写入事实流水，供 Trace 等消费者回放', async () => {
   const storage = await openStorage();
   const local = await SessionManager.open({ storage, namespace: 'test' });
 

@@ -2,9 +2,9 @@ import { Storage } from '@cieljs/storage';
 import { afterAll } from 'vite-plus/test';
 const storage = await Storage.open({ dataDir: 'memory://' });
 afterAll(() => storage.close());
-import type { DevtoolsHost } from '@cieljs/devtools/host';
 import type { ASRResult, WakeEvent } from '@cieljs/hearing';
 import { createPerception, type Perception, type PerceptionOptions } from '@cieljs/perception';
+import type { TraceHost } from '@cieljs/trace/host';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
 import type { DefineCielOptions, OpenSessionOptions } from 'cieljs';
@@ -77,7 +77,7 @@ let runtime: WatchBlive;
 let faux: ReturnType<typeof registerFauxProvider>;
 
 function setup(
-  devtools?: DevtoolsHost,
+  trace?: TraceHost,
   wake?: WatchWakeOptions,
   perceptionOptions?: WatchBliveOptions['perception'],
   thinkingLevel?: ThinkingLevel,
@@ -130,7 +130,7 @@ function setup(
   });
   runtime = createWatchBlive({
     dataDir: 'C:\\watch-blive',
-    devtools,
+    trace,
     storage,
     model: faux.getModel(),
     livePage: page as unknown as LivePage,
@@ -261,7 +261,7 @@ describe('观看生命周期', () => {
   });
   it('视频对话保留无转写文本的声音事件', async () => {
     const recordMessage = vi.fn();
-    const { asrOn } = setup({ observe: vi.fn(), recordMessage } as unknown as DevtoolsHost);
+    const { asrOn } = setup({ observe: vi.fn(), recordMessage } as unknown as TraceHost);
     await runtime.start({
       mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
     });

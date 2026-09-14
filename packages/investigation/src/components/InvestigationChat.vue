@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { CielConversation, type DevtoolsClient, vFollowScroll } from '@cieljs/devtools';
+import { CielChat, vFollowScroll } from '@cieljs/console';
+import type { TraceClient } from '@cieljs/trace';
 import { Button } from '@vuetify/v0/components';
 import { onMounted, shallowRef, useTemplateRef } from 'vue';
 
@@ -11,7 +12,7 @@ import InvestigationSidebar from './InvestigationSidebar.vue';
 
 const props = defineProps<{
   client: InvestigationClient;
-  devtoolsClient: DevtoolsClient;
+  traceClient: TraceClient;
   currentRoom?: InvestigationRoom;
 }>();
 const sidebarCollapsed = defineModel<boolean>('sidebarCollapsed', { default: false });
@@ -129,10 +130,10 @@ onMounted(() => {
 
         <p v-if="error" class="investigation-error" role="alert">{{ error }}</p>
 
-        <CielConversation
+        <CielChat
           v-if="conversation"
           class="investigation-conversation"
-          :client="devtoolsClient"
+          :client="traceClient"
           :session-id="conversation.sessionId"
           empty-text="这是一个新的调查。可以分析直播记录，也可以直接管理目标范围内的记忆。"
         />

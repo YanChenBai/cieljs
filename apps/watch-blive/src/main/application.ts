@@ -1,15 +1,10 @@
 import { join } from 'node:path';
 
-import {
-  createDevtoolsRouter,
-  DevtoolsHost,
-  devtoolsStorage,
-  type DevtoolsRouter,
-} from '@cieljs/devtools/host';
 import { createMcp } from '@cieljs/mcp';
 import { memoryStorage } from '@cieljs/memory';
 import { sessionStorage } from '@cieljs/session';
 import { Storage } from '@cieljs/storage';
+import { createTraceRouter, TraceHost, traceStorage, type TraceRouter } from '@cieljs/trace/host';
 import { vectorStorage } from '@cieljs/vector';
 import { os } from '@orpc/server';
 import type { BrowserWindow } from 'electron';
@@ -54,7 +49,7 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
   const storage = resources.use(
     await Storage.open({
       dataDir: join(dataDirectory, 'storage'),
-      modules: [sessionStorage, memoryStorage, vectorStorage, devtoolsStorage],
+      modules: [sessionStorage, memoryStorage, vectorStorage, traceStorage],
     }),
   );
   // PGlite 没有后台 checkpointer：不推进 checkpoint 的话，进程被强杀后下次启动要重放
@@ -72,7 +67,7 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
     clearTimeout(firstCheckpoint);
   });
   // 历史重放留给后台：它随会话数增长，不能排在窗口显示前面。
-  const devtools = resources.use(await DevtoolsHost.open({ storage, awaitReplay: false }));
+  const trace = resources.use(await TraceHost.open({ storage, awaitReplay: false }));
   const mcp = resources.use(
     await createMcp({
       cwd: dataDirectory,
@@ -95,7 +90,7 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
     api,
     resolveModel: () => resolveWatchModel(resolveWatchConfig()),
     current: () => ({ room: runtime?.room, sessionId: runtime?.sessionId }),
-    history: () => devtools.sessions(),
+    history: () => trace.sessions(),
   });
   resources.defer(() => investigation.close());
 
@@ -110,7 +105,7 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
       apiKey: ai.apiKey,
       livePage,
       api,
-      devtools,
+      trace,
       storage,
       dataDir: dataDirectory,
       ffmpegPath: config.ffmpegPath,
@@ -127,7 +122,7 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
       ...config.interaction,
     });
     unsubscribe = runtime.onEvent(event => {
-      devtools.record(event.type, event);
+      trace.record(event.type, event);
       const value: WatchBridgeEvent =
         event.type === 'error'
           ? { type: 'error', stage: event.stage, message: event.error.message }
@@ -137,17 +132,17 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
     return runtime;
   }
 
-  // 显式使用公开 DevtoolsRouter，避免声明推断泄漏构建产物的私有类型。
+  // 显式使用公开 TraceRouter，避免声明推断泄漏构建产物的私有类型。
   const isInvestigationSession = (sessionId: string) => sessionId.startsWith('investigation:');
-  const devtoolsRouter: DevtoolsRouter = createDevtoolsRouter(devtools, {
+  const traceRouter: TraceRouter = createTraceRouter(trace, {
     session: sessionId => !isInvestigationSession(sessionId),
   });
-  const investigationDevtoolsRouter: DevtoolsRouter = createDevtoolsRouter(devtools, {
+  const investigationTraceRouter: TraceRouter = createTraceRouter(trace, {
     session: isInvestigationSession,
   });
   const router = {
-    devtools: devtoolsRouter,
-    investigationDevtools: investigationDevtoolsRouter,
+    trace: traceRouter,
+    investigationTrace: investigationTraceRouter,
     investigation: investigation.router,
     account: {
       get: os.handler(() => livePage.account()),

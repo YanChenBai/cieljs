@@ -15,7 +15,7 @@ export interface SessionCompactionEvent {
   throughSeq: number;
   createdAt: number;
   /**
-   * 压缩后的上下文 token 估算（摘要加保留的原文），供 Devtools 等消费者立即更新
+   * 压缩后的上下文 token 估算（摘要加保留的原文），供 Trace 等消费者立即更新
    * 「当前上下文」；旧记录可能没有这个字段。不含系统提示与工具定义开销。
    */
   contextTokens?: number;

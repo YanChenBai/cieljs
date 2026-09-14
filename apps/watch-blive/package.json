@@ -8,7 +8,7 @@
   "main": "./out/main/index.js",
   "dependencies": {
     "@cieljs/agent-kit": "workspace:*",
-    "@cieljs/devtools": "workspace:*",
+    "@cieljs/console": "workspace:*",
     "@cieljs/hearing": "workspace:*",
     "@cieljs/investigation": "workspace:*",
     "@cieljs/mcp": "workspace:*",
@@ -17,6 +17,7 @@
     "@cieljs/perception": "workspace:*",
     "@cieljs/session": "workspace:*",
     "@cieljs/storage": "workspace:*",
+    "@cieljs/trace": "workspace:*",
     "@cieljs/vector": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",

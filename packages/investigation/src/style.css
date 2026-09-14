@@ -378,8 +378,8 @@
   font-size: 11px;
 }
 
-/* CielConversation 默认是嵌入式固定面板；调查窗口改为正文自然撑高。 */
-.investigation-conversation.ciel-devtools {
+/* CielChat 默认是嵌入式固定面板；调查窗口改为正文自然撑高。 */
+.investigation-conversation.ciel-console {
   flex: 1 0 auto;
   height: auto;
   min-height: 240px;

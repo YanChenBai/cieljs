@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ToolRendererProps } from '@cieljs/devtools';
+import type { ToolRendererProps } from '@cieljs/console';
 import { computed } from 'vue';
 
 const props = defineProps<ToolRendererProps>();

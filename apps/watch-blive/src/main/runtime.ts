@@ -1,10 +1,10 @@
 import { join } from 'node:path';
 
-import type { DevtoolsHost } from '@cieljs/devtools/host';
 import { createKWS, type ASRModelId, type ASROptions, type KWS } from '@cieljs/hearing';
 import type { McpTools } from '@cieljs/mcp';
 import { createPerception, type PerceptionOptions } from '@cieljs/perception';
 import type { Storage } from '@cieljs/storage';
+import type { TraceHost } from '@cieljs/trace/host';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { Ciel, CielSession } from 'cieljs';
@@ -39,7 +39,7 @@ export type { WatchWakeOptions } from './scheduling/wake.ts';
 export interface WatchBliveOptions {
   mcp?: McpTools;
   storage: Storage;
-  devtools?: DevtoolsHost;
+  trace?: TraceHost;
   model: Model<Api>;
   apiKey?: string;
   livePage: LivePage;
@@ -347,7 +347,7 @@ class WatchBliveRuntime implements WatchBlive {
           }
         : undefined,
       cooling: this.roomHistory.cooling(),
-      devtools: this.options.devtools,
+      trace: this.options.trace,
       emit: event => this.emit(event),
     });
 
@@ -422,7 +422,7 @@ class WatchBliveRuntime implements WatchBlive {
         onStopped: error => monitor.mediaStopped(error),
       });
       const visit = new RoomVisit({
-        devtools: this.options.devtools,
+        trace: this.options.trace,
         generation,
         room,
         mode: this.requireStartOptions().mode,
@@ -495,7 +495,7 @@ class WatchBliveRuntime implements WatchBlive {
           }),
       });
       const visit = new RoomVisit({
-        devtools: this.options.devtools,
+        trace: this.options.trace,
         generation,
         room,
         mode,

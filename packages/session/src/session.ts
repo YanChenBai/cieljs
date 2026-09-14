@@ -204,7 +204,7 @@ export class Session {
         retained.length,
       ).tokens;
 
-      // 压缩也要进事实流水，Devtools 与其他消费者才能看到这一步并回放。
+      // 压缩也要进事实流水，Trace 与其他消费者才能看到这一步并回放。
       await this.record({
         type: 'session_compaction',
         summary: compaction.summary,

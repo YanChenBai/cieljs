@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CielDevtools, type MessageRenderers, type ToolRenderers } from '@cieljs/devtools';
+import { CielConsole, type MessageRenderers, type ToolRenderers } from '@cieljs/console';
 import {
   ArrowUp,
   ExternalLink,
@@ -17,7 +17,7 @@ import { computed, ref } from 'vue';
 
 import type { StartWatchOptions } from '../../../shared/types.ts';
 
-import '@cieljs/devtools/style.css';
+import '@cieljs/console/style.css';
 import { useSidebar } from '../composables/use-sidebar.ts';
 import { useWatchBlive } from '../composables/use-watch-blive.ts';
 import { rpc, watchBridge } from '../rpc.ts';
@@ -71,7 +71,7 @@ function scrollSidebarToTop() {
   sidebar.value?.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// DevTools 按工具名挑选渲染组件，避免把原始 JSON 直接摆给使用者；用普通常量，不要放进 reactive。
+// Ciel Console 按工具名挑选渲染组件，避免把原始 JSON 直接摆给使用者；用普通常量，不要放进 reactive。
 const toolRenderers: ToolRenderers = {
   send_danmaku: SendDanmakuToolCall,
   get_streamer_dynamics: StreamerHistoryToolCall,
@@ -186,9 +186,9 @@ const videoProgressLabel = computed(() => {
       <Button.Root
         class="action icon-button"
         :aria-expanded="!right.collapsed.value"
-        aria-controls="watch-devtools"
-        aria-label="展开或收起 DevTools"
-        title="展开或收起 DevTools"
+        aria-controls="watch-console"
+        aria-label="展开或收起 Ciel Console"
+        title="展开或收起 Ciel Console"
         @click="right.collapsed.value = !right.collapsed.value"
       >
         <PanelRightOpen v-if="right.collapsed.value" :size="16" />
@@ -202,7 +202,7 @@ const videoProgressLabel = computed(() => {
         'grid-cols-[var(--sidebar-width)_3px_minmax(0,1fr)]': !collapsed,
         'grid-cols-[minmax(0,1fr)]': collapsed,
       }"
-      :style="{ '--sidebar-width': `${width}px`, '--devtools-width': `${right.width.value}px` }"
+      :style="{ '--sidebar-width': `${width}px`, '--console-width': `${right.width.value}px` }"
     >
       <div v-show="!collapsed" class="relative flex min-h-0 max-w-[560px] min-w-[260px] flex-col">
         <aside
@@ -270,7 +270,7 @@ const videoProgressLabel = computed(() => {
         class="viewer-container bg-surface grid min-h-0 min-w-0 overflow-hidden rounded-tl-xl border border-r-0 border-b-0 border-[#ffffff16] [box-shadow:0_2px_12px_#00000018,inset_0_1px_0_#ffffff04]"
         :class="{
           '-ml-0.5': !collapsed,
-          'grid-cols-[minmax(240px,1fr)_3px_var(--devtools-width)]': !right.collapsed.value,
+          'grid-cols-[minmax(240px,1fr)_3px_var(--console-width)]': !right.collapsed.value,
           'grid-cols-[minmax(0,1fr)]': right.collapsed.value,
           'rounded-tr-xl': right.collapsed.value,
         }"
@@ -315,12 +315,12 @@ const videoProgressLabel = computed(() => {
         </section>
         <div
           v-show="!right.collapsed.value"
-          class="resize-handle devtools-divider"
+          class="resize-handle console-divider"
           role="separator"
           tabindex="0"
-          aria-label="调整 DevTools 宽度"
+          aria-label="调整 Ciel Console 宽度"
           aria-orientation="vertical"
-          aria-controls="watch-devtools"
+          aria-controls="watch-console"
           :aria-valuenow="right.width.value"
           :aria-valuemin="260"
           :aria-valuemax="right.maxWidth.value"
@@ -333,11 +333,11 @@ const videoProgressLabel = computed(() => {
         />
         <aside
           v-show="!right.collapsed.value"
-          id="watch-devtools"
+          id="watch-console"
           class="min-h-0 min-w-0 overflow-hidden"
         >
-          <CielDevtools
-            :client="rpc.devtools"
+          <CielConsole
+            :client="rpc.trace"
             :session-id="activeSessionId"
             :auto-scroll="active"
             :tool-renderers="toolRenderers"

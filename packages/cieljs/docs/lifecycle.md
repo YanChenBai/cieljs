@@ -2,9 +2,9 @@
 
 ## 共享存储
 
-宿主创建一个 Storage，注册 sessionStorage、memoryStorage 和可选的 vectorStorage、devtoolsStorage。每个模块在自己的 PostgreSQL schema 中维护迁移版本。普通会话和调查会话通过 namespace 隔离，Memory 独立维护业务规则。
+宿主创建一个 Storage，注册 sessionStorage、memoryStorage 和可选的 vectorStorage、traceStorage。每个模块在自己的 PostgreSQL schema 中维护迁移版本。普通会话和调查会话通过 namespace 隔离，Memory 独立维护业务规则。
 
-关闭顺序为 Agent / Core、DevTools、VectorService，最后 Storage。Manager 只借用数据库，不负责关闭它。
+关闭顺序为 Agent / Core、TraceHost、VectorService，最后 Storage。Manager 只借用数据库，不负责关闭它。
 
 ## 启动
 

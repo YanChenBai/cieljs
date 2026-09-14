@@ -329,9 +329,9 @@ importers:
       '@cieljs/agent-kit':
         specifier: workspace:*
         version: link:../../packages/agent-kit
-      '@cieljs/devtools':
+      '@cieljs/console':
         specifier: workspace:*
-        version: link:../../packages/devtools
+        version: link:../../packages/console
       '@cieljs/hearing':
         specifier: workspace:*
         version: link:../../packages/hearing
@@ -356,6 +356,9 @@ importers:
       '@cieljs/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@cieljs/trace':
+        specifier: workspace:*
+        version: link:../../packages/trace
       '@cieljs/vector':
         specifier: workspace:*
         version: link:../../packages/vector
@@ -498,23 +501,11 @@ importers:
         specifier: 'catalog:'
         version: 0.3.0(@types/node@24.13.4)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.13.4)(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0))(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0)
 
-  packages/devtools:
+  packages/console:
     dependencies:
-      '@cieljs/agent-kit':
+      '@cieljs/trace':
         specifier: workspace:*
-        version: link:../agent-kit
-      '@cieljs/storage':
-        specifier: workspace:*
-        version: link:../storage
-      '@earendil-works/pi-agent-core':
-        specifier: 'catalog:'
-        version: 0.85.1(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
-      '@orpc/client':
-        specifier: 'catalog:'
-        version: 2.0.0-beta.33
-      '@orpc/server':
-        specifier: 'catalog:'
-        version: 2.0.0-beta.33
+        version: link:../trace
       '@vuetify/v0':
         specifier: 'catalog:'
         version: 1.2.2(@floating-ui/dom@1.8.0)(@js-temporal/polyfill@0.5.1)(vue@3.6.0-rc.8(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2))
@@ -527,22 +518,16 @@ importers:
       vue-json-pretty:
         specifier: ^2.6.0
         version: 2.6.0(vue@3.6.0-rc.8(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2))
-      zod:
-        specifier: 'catalog:'
-        version: 4.6.4
     devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 24.13.4
       '@vitejs/plugin-vue':
         specifier: 'catalog:'
-        version: 6.0.8(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.13.4)(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0))(vue@3.6.0-rc.8(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2))
+        version: 6.0.8(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0))(vue@3.6.0-rc.8(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2))
       typescript:
         specifier: npm:typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2
         version: typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2
       vite-plus:
         specifier: 'catalog:'
-        version: 0.3.0(@types/node@24.13.4)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.13.4)(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0))(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0)
+        version: 0.3.0(@types/node@26.5.0)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0))(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0)
 
   packages/embed:
     dependencies:
@@ -599,9 +584,12 @@ importers:
 
   packages/investigation:
     dependencies:
-      '@cieljs/devtools':
+      '@cieljs/console':
         specifier: workspace:*
-        version: link:../devtools
+        version: link:../console
+      '@cieljs/trace':
+        specifier: workspace:*
+        version: link:../trace
       '@vuetify/v0':
         specifier: 'catalog:'
         version: 1.2.2(@floating-ui/dom@1.8.0)(@js-temporal/polyfill@0.5.1)(vue@3.6.0-rc.8(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2))
@@ -752,12 +740,12 @@ importers:
         specifier: 'catalog:'
         version: 1.3.28
     devDependencies:
-      '@cieljs/devtools':
-        specifier: workspace:*
-        version: link:../devtools
       '@cieljs/storage':
         specifier: workspace:*
         version: link:../storage
+      '@cieljs/trace':
+        specifier: workspace:*
+        version: link:../trace
       '@cieljs/vector':
         specifier: workspace:*
         version: link:../vector
@@ -828,6 +816,37 @@ importers:
       drizzle-orm:
         specifier: 'catalog:'
         version: 1.0.0-rc.4(@electric-sql/pglite@0.5.8)(typebox@1.3.28)(zod@4.5.4)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.4
+      typescript:
+        specifier: npm:typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2
+        version: typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.3.0(@types/node@24.13.4)(@voidzero-dev/vite-plus-core@0.3.0(@types/node@26.5.0)(esbuild@0.28.1)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.0))(esbuild@0.28.1)(jiti@2.7.0)(typescript-native-bridge@6.0.3-bridge.17.tsgo.7.0.2)(yaml@2.9.0)
+
+  packages/trace:
+    dependencies:
+      '@cieljs/agent-kit':
+        specifier: workspace:*
+        version: link:../agent-kit
+      '@cieljs/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@earendil-works/pi-agent-core':
+        specifier: 'catalog:'
+        version: 0.85.1(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
+      '@orpc/client':
+        specifier: 'catalog:'
+        version: 2.0.0-beta.33
+      '@orpc/server':
+        specifier: 'catalog:'
+        version: 2.0.0-beta.33
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.4
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

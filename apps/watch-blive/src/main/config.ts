@@ -136,7 +136,7 @@ export async function migrateWatchResources() {
       continue;
     }
 
-    for (const name of ['session', 'memory', 'investigation', 'devtools', 'mcp.json']) {
+    for (const name of ['session', 'memory', 'investigation', 'trace', 'mcp.json']) {
       const source = join(previous, name);
       const target = join(root, name);
 

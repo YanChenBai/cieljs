@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 @import 'markstream-vue/index.css' layer(components);
 
-/* 保留原来的精确色值；Devtools 也读取这些宿主变量。 */
+/* 保留原来的精确色值；Ciel Console 也读取这些宿主变量。 */
 @theme inline {
   --color-accent: var(--accent);
   --color-surface: var(--surface);
@@ -91,8 +91,8 @@ select:focus-visible {
 .resize-handle {
   @apply cursor-col-resize touch-none;
 }
-/* DevTools 的分界线画在拖拽区里，拖拽栏本身就不再是一条空档。 */
-.devtools-divider {
+/* Ciel Console 的分界线画在拖拽区里，拖拽栏本身就不再是一条空档。 */
+.console-divider {
   padding: 0 1px;
   background-color: #ffffff16;
   background-clip: content-box;
@@ -109,7 +109,7 @@ select:focus-visible {
 .resizing webview {
   @apply pointer-events-none;
 }
-.viewer-container .ciel-devtools {
+.viewer-container .ciel-console {
   @apply rounded-none;
 }
 .spinning {

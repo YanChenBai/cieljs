@@ -27,8 +27,8 @@
     "typebox": "catalog:"
   },
   "devDependencies": {
-    "@cieljs/devtools": "workspace:*",
     "@cieljs/storage": "workspace:*",
+    "@cieljs/trace": "workspace:*",
     "@cieljs/vector": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
