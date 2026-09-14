@@ -176,6 +176,63 @@ it('轮数按 Session 内的 run 顺序累计，同一 run 的多个轮次共用
   expect(grouped.map(step => step.turnNumber)).toEqual([1, 1, 2]);
 });
 
+it('进程重启后 live revision 从小值重新开始也不会把同一轮拆开', () => {
+  const grouped = groupTraceSteps([
+    entry(1300, {
+      id: 'agent-start',
+      name: 'agent_start',
+      runId: 'run-1',
+      turnNumber: 1,
+      startedAt: 1000,
+    }),
+    entry(1301, {
+      id: 'message-start',
+      kind: 'message',
+      name: 'message_start',
+      label: 'Ciel',
+      runId: 'run-1',
+      messageId: 'message-1',
+      turnNumber: 1,
+      startedAt: 1010,
+    }),
+    entry(2, {
+      id: 'live-update',
+      kind: 'message',
+      name: 'message_update',
+      label: 'Ciel',
+      runId: 'run-1',
+      messageId: 'message-1',
+      turnNumber: 1,
+      startedAt: 1020,
+      revision: 2,
+    }),
+    entry(1302, {
+      id: 'message-end',
+      kind: 'message',
+      name: 'message_end',
+      label: 'Ciel',
+      runId: 'run-1',
+      messageId: 'message-1',
+      turnNumber: 1,
+      startedAt: 1030,
+      endedAt: 1030,
+    }),
+    entry(1303, {
+      id: 'second-run',
+      name: 'agent_start',
+      runId: 'run-2',
+      turnNumber: 2,
+      startedAt: 2000,
+    }),
+  ]);
+
+  expect(grouped.map(step => [step.runId, step.turnNumber, traceStepLabel(step)])).toEqual([
+    ['run-1', 1, 'Agent 运行'],
+    ['run-1', 1, 'Ciel 回复'],
+    ['run-2', 2, 'Agent 运行'],
+  ]);
+});
+
 it('未结束分组的耗时定格在所在 run 最后一次事件，不读墙上时钟', () => {
   const grouped = groupTraceSteps([
     entry(1, { name: 'agent_start', runId: 'run', turnNumber: 1, startedAt: 1_000 }),
