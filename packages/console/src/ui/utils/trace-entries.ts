@@ -22,7 +22,11 @@ export interface TraceStepGroup extends TraceEntry {
 /** 原始事件仍独立保存；列表按业务对象合并，Inspect 可逐个回读完整快照。 */
 export function groupTraceSteps(steps: TraceEntry[]): TraceStepGroup[] {
   const records = new Map<string, TraceStepGroup>();
-  for (const step of steps.toSorted((left, right) => left.sequence - right.sequence)) {
+  // durable sequence 和进程内 live revision 不是同一个序号域；跨重启时 live revision 会重新从 1 开始。
+  // 分组生命周期必须按实际发生时间合并，否则 update 可能跑到 durable start 前面，破坏开始时间和轮次顺序。
+  for (const step of steps.toSorted(
+    (left, right) => left.startedAt - right.startedAt || left.sequence - right.sequence,
+  )) {
     const scope = JSON.stringify([step.sessionId, step.runId]);
     let key = step.id;
     let name = step.name;
@@ -101,6 +105,14 @@ export function groupTraceSteps(steps: TraceEntry[]): TraceStepGroup[] {
 
     group.turnNumber = sessionRuns.get(runId);
   }
+
+  // 同一轮必须在列表中连续。live update 的临时 revision 不能把消息组拆到 durable 生命周期之前。
+  groups.sort((left, right) => {
+    const leftTurn = left.turnNumber ?? Number.MAX_SAFE_INTEGER;
+    const rightTurn = right.turnNumber ?? Number.MAX_SAFE_INTEGER;
+    if (leftTurn !== rightTurn) return leftTurn - rightTurn;
+    return left.startedAt - right.startedAt || left.sequence - right.sequence;
+  });
 
   // 未结束分组的耗时定格在所在 run 最后一次观察到的事件上，而不是墙上时钟：
   // 被中断的 run 不再无限增长，仍在输出的 run 也会随新事件持续推进。
