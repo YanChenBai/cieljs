@@ -3,6 +3,7 @@ import { vector } from '@electric-sql/pglite-pgvector';
 import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 import { drizzle } from 'drizzle-orm/pglite';
 
+import { RuntimeEventHub } from './events.ts';
 import { RuntimeJournal } from './journal.ts';
 
 export type Database = ReturnType<typeof drizzle>;
@@ -20,6 +21,7 @@ export interface StorageOptions {
 
 export class Storage implements AsyncDisposable {
   readonly journal: RuntimeJournal;
+  readonly events: RuntimeEventHub;
   private closing?: Promise<void>;
   private readonly modules = new Set<string>();
 
@@ -29,6 +31,7 @@ export class Storage implements AsyncDisposable {
     private readonly checkpointOnClose: boolean,
   ) {
     this.journal = new RuntimeJournal(db);
+    this.events = new RuntimeEventHub(this.journal);
   }
 
   static async open(options: StorageOptions): Promise<Storage> {
@@ -121,6 +124,7 @@ export class Storage implements AsyncDisposable {
   private async closeResources() {
     await using disposables = new AsyncDisposableStack();
     disposables.defer(() => this.client.close());
+    this.events.close();
     await this.journal.close();
     if (this.checkpointOnClose) {
       // 所有写入排空后再推进最终 checkpoint，正常退出不把 WAL 恢复留给下次启动。

@@ -38,7 +38,7 @@ export function createMessageRoutes(host: TraceHost) {
   return {
     get: os
       .input(z.object({ messageId: z.string().min(1).max(200) }))
-      .handler(({ input }) => host.store.get<unknown>(input.messageId + ':output')),
+      .handler(({ input }) => host.value(input.messageId + ':output')),
   };
 }
 
@@ -61,7 +61,7 @@ function listRecords(
 }
 
 async function readEntry(host: TraceHost, id: string) {
-  const entry = await host.store.get<TraceEntry>(id);
+  const entry = await host.entry(id);
   if (!entry) throw new ORPCError('NOT_FOUND');
   return entry;
 }

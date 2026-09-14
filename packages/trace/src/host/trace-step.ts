@@ -4,14 +4,15 @@ import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 import type { TraceEntry, TraceEvent } from '../protocol/index.ts';
 import { messageContent } from './trace-content.ts';
 
-/** 每个原始事件对应一个不可变步骤，sequence 同时用于分页与客户端去重。 */
+/** 每个 durable 原始事件对应一个不可变步骤；live update 只通过推送暴露。 */
 export function createTraceStep(
   trace: TraceEvent,
   tools?: Array<Omit<Agent['state']['tools'][number], 'execute'>>,
   model?: Agent['state']['model'],
 ): TraceEntry {
+  const liveUpdate = trace.event.type.endsWith('_update');
   const step: TraceEntry = {
-    id: 'step:' + trace.sequence,
+    id: liveUpdate ? `step:live:${trace.id}` : 'step:' + trace.sequence,
     sequence: trace.sequence,
     sessionId: trace.sessionId,
     runId: trace.runId,
@@ -19,20 +20,20 @@ export function createTraceStep(
     turnId: trace.turnId,
     messageId: trace.messageId,
     toolCallId: trace.toolCallId,
+    toolExecutionId: trace.toolExecutionId,
     kind: eventKind(trace.event),
     name: trace.event.type,
     status: 'completed',
     startedAt: trace.timestamp,
     endedAt: trace.timestamp,
     raw: { id: trace.id, preview: trace.event.type },
-    revision: trace.sequence,
+    revision: trace.revision,
   };
-  if (trace.event.type.endsWith('_start') || trace.event.type.endsWith('_update')) {
+  if (trace.event.type.endsWith('_start') || liveUpdate) {
     step.status = 'running';
     step.endedAt = undefined;
   }
   attachContentReferences(step, trace);
-  // 压缩不是 Agent 事件，但同样需要一行可读的轨迹与摘要。
   if (trace.event.type === 'session_compaction') {
     step.label = '上下文压缩';
     step.text = trace.event.summary;
@@ -65,7 +66,6 @@ function eventKind(event: RuntimeEvent): TraceEntry['kind'] {
 }
 
 function attachContentReferences(step: TraceEntry, trace: TraceEvent) {
-  // 引用指向事件快照中的字段，避免在步骤中再次复制图片和完整消息。
   const outputKey = ['message', 'result', 'partialResult', 'messages'].find(
     key => key in trace.event,
   );

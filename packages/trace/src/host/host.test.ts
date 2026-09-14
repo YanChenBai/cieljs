@@ -99,13 +99,13 @@ describe('Trace 按需内容', () => {
     const listener = vi.fn();
     value.subscribe(listener);
     const receive = value.agentListener('room:1');
-    receive({
+    await receive({
       type: 'tool_execution_start',
       toolCallId: 'call:1',
       toolName: 'search',
       args: { query: '主播' },
     });
-    receive({
+    await receive({
       type: 'tool_execution_end',
       toolCallId: 'call:1',
       toolName: 'search',
@@ -120,6 +120,7 @@ describe('Trace 按需内容', () => {
       status: 'completed',
       input: { preview: 'Object' },
       output: { preview: 'Object' },
+      toolExecutionId: expect.any(String),
     });
   });
 
@@ -167,7 +168,7 @@ describe('Trace 按需内容', () => {
 
   it('会话压缩事件进入轨迹步骤，摘要可从详情读取', async () => {
     const value = await host();
-    await value.storage.journal.record('room:compaction', {
+    await value.storage.events.publish('room:compaction', {
       type: 'session_compaction',
       summary: '累计摘要',
       throughSeq: 3,

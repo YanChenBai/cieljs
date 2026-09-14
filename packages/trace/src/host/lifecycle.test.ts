@@ -95,7 +95,7 @@ it('运行日志的消息输出、工具输入输出和原始事件均可通过�
   expect(entries.filter(entry => entry.kind === 'message')).toHaveLength(1);
 });
 
-it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原对象变化', async () => {
+it('完整保存多轮事件、稳定消息 ID、toolCallId 和 toolExecutionId，快照不随原对象变化', async () => {
   const host = await openHost();
   cleanup.push(() => host.close());
   const receive = host.agentListener('session');
@@ -148,6 +148,8 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
   expect(events[2]!.messageId).toBe(events[3]!.messageId);
   expect(events[2]!.turnId).not.toBe(events[8]!.turnId);
   expect(events[4]!.toolCallId).toBe('call-1');
+  expect(events[4]!.toolExecutionId).toBeTruthy();
+  expect(events[5]!.toolExecutionId).toBe(events[4]!.toolExecutionId);
   const entries = await host.store.list<TraceEntry>('entry');
   expect(entries.find(entry => entry.kind === 'message')!.text).toHaveLength(20000);
   expect(await host.store.get(`${events[2]!.messageId}:output`)).toMatchObject({
@@ -423,6 +425,7 @@ it('两万条已投影历史从持久化游标启动，不重新扫描旧事件'
         'version', 1,
         'id', 'bulk-' || number,
         'sequence', number,
+        'revision', number,
         'sessionId', 'large-history',
         'runId', 'bulk-run',
         'timestamp', number,
@@ -502,10 +505,12 @@ it('宿主关闭会结束等待中的更新订阅', async () => {
   expect((await pending).done).toBe(true);
 });
 
-it('缺少工具 start 的 update 仍保存原始事件', async () => {
+it('缺少工具 start 的 update 仍实时分发，但不进入 durable journal', async () => {
   const host = await openHost();
   cleanup.push(() => host.close());
-  host.agentListener('late')({
+  const listener = vi.fn();
+  host.storage.events.subscribe(listener);
+  await host.agentListener('late')({
     type: 'tool_execution_update',
     toolCallId: 'unknown',
     toolName: 'search',
@@ -513,9 +518,12 @@ it('缺少工具 start 的 update 仍保存原始事件', async () => {
     partialResult: { text: '部分结果' },
   });
   await host.flushRecords();
-  const events = await host.storage.journal.read();
-  expect(events).toHaveLength(1);
-  expect(events[0]?.toolCallId).toBe('unknown');
+  expect(listener).toHaveBeenCalledTimes(1);
+  expect(listener.mock.calls[0]?.[0]).toMatchObject({
+    toolCallId: 'unknown',
+    event: { type: 'tool_execution_update' },
+  });
+  expect(await host.storage.journal.read()).toEqual([]);
 });
 
 it('两个观察器交错执行时保持独立的消息和 run 关联', async () => {

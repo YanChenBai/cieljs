@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { sql } from 'drizzle-orm';
-import { expect, test } from 'vite-plus/test';
+import { expect, test, vi } from 'vite-plus/test';
 
 import { Storage, type StorageModule } from './storage.ts';
 
@@ -70,22 +70,23 @@ test('checkpoint 可随时推进，关闭后再推进是空操作', async () => 
   }
 }, 30_000);
 
-test('事件和投影原子提交，重复事件不会丢失后注册的投影', async () => {
+test('事件和投影原子提交，重复观察同一事件不会重复落盘', async () => {
   await using storage = await Storage.open({ dataDir: 'memory://' });
   const event = {
     type: 'message_end' as const,
     message: { role: 'user' as const, content: 'hello', timestamp: 1 },
   };
-  const record = await storage.journal.record('session', event);
-  const projected = await storage.journal.record('session', event, {}, async transaction => {
+  const first = await storage.events.publish('session', event);
+  const record = (await storage.journal.read())[0]!;
+  const projected = await storage.events.publishWithProject('session', event, {}, async transaction => {
     await transaction.execute(sql`CREATE TABLE storage.projection (id text)`);
     await transaction.execute(sql`INSERT INTO storage.projection VALUES (${record.messageId!})`);
   });
-  expect(projected.id).toBe(record.id);
+  expect(projected.id).toBe(first.id);
   expect(await storage.journal.read()).toHaveLength(1);
 
   await expect(
-    storage.journal.record('session', { type: 'agent_start' }, {}, async () => {
+    storage.events.publishWithProject('session', { type: 'agent_start' }, {}, async () => {
       throw new Error('projection failed');
     }),
   ).rejects.toThrow('projection failed');
@@ -93,17 +94,63 @@ test('事件和投影原子提交，重复事件不会丢失后注册的投影',
   await expect(storage.journal.flush()).rejects.toThrow('projection failed');
 }, 20_000);
 
+test('update 实时分发但不进入 durable journal，start/end 共享稳定实体 ID', async () => {
+  await using storage = await Storage.open({ dataDir: 'memory://' });
+  const listener = vi.fn();
+  storage.events.subscribe(listener);
+
+  const start = await storage.events.publish('session', {
+    type: 'message_start',
+    message: { role: 'assistant', content: [], timestamp: 1 },
+  });
+  const update = await storage.events.publish('session', {
+    type: 'message_update',
+    message: { role: 'assistant', content: [], timestamp: 1 },
+    assistantMessageEvent: { type: 'text_delta', delta: 'hello' },
+  });
+  const end = await storage.events.publish('session', {
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'hello' }],
+      timestamp: 1,
+      api: 'openai-completions',
+      provider: 'test',
+      model: 'test',
+      stopReason: 'stop',
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    },
+  });
+
+  expect(listener).toHaveBeenCalledTimes(3);
+  expect(start.messageId).toBeTruthy();
+  expect(update.messageId).toBe(start.messageId);
+  expect(end.messageId).toBe(start.messageId);
+  expect((await storage.journal.read()).map(record => record.event.type)).toEqual([
+    'message_start',
+    'message_end',
+  ]);
+});
+
 test('事件首次写入即持久化生成后的序号', async () => {
   await using storage = await Storage.open({ dataDir: 'memory://' });
-  const record = await storage.journal.record('session', {
+  const envelope = await storage.events.publish('session', {
     type: 'message_end',
     message: { role: 'user', content: 'hello', timestamp: 1 },
   });
+  const record = (await storage.journal.read())[0]!;
 
   const result = await storage.db.execute<{ sequence: number; storedSequence: number }>(sql`
     SELECT sequence, (record->>'sequence')::bigint AS "storedSequence"
     FROM storage.events
-    WHERE id = ${record.id}
+    WHERE id = ${envelope.id}
   `);
 
   expect(result.rows).toEqual([{ sequence: record.sequence, storedSequence: record.sequence }]);
@@ -122,7 +169,7 @@ test('关闭等待进行中的事件提交并拒绝后续写入', async () => {
 
   try {
     const storage = await Storage.open({ dataDir: directory });
-    const recording = storage.journal.record('session', { type: 'agent_start' }, {}, async () => {
+    const recording = storage.events.publishWithProject('session', { type: 'agent_start' }, {}, async () => {
       markTransactionStarted();
       await transactionPending;
     });
@@ -136,16 +183,16 @@ test('关闭等待进行中的事件提交并拒绝后续写入', async () => {
 
     await Promise.resolve();
     expect(closed).toBe(false);
-    await expect(storage.journal.record('session', { type: 'agent_start' })).rejects.toThrow(
+    await expect(storage.events.publish('session', { type: 'agent_start' })).rejects.toThrow(
       '已关闭',
     );
 
     releaseTransaction();
-    const record = await recording;
+    const envelope = await recording;
     await closing;
 
     await using reopened = await Storage.open({ dataDir: directory });
-    expect((await reopened.journal.read()).map(item => item.id)).toEqual([record.id]);
+    expect((await reopened.journal.read()).map(item => item.id)).toEqual([envelope.id]);
   } finally {
     releaseTransaction();
     await rm(directory, { recursive: true, force: true });

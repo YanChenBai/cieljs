@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
-import type { RuntimeReader, RuntimeWriter } from '@cieljs/agent-kit/protocol';
+import type {
+  RuntimeEventBus,
+  RuntimeEventEnvelope,
+  RuntimeReader,
+  RuntimeRecord,
+} from '@cieljs/agent-kit/protocol';
+import { isRuntimeUpdateEvent } from '@cieljs/agent-kit/protocol';
 import { sql, type Storage } from '@cieljs/storage';
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
 
@@ -29,18 +35,21 @@ interface ProjectionState {
   sessionProgress: Array<[string, { turn: number; steps: number; seen: string[] }]>;
 }
 
-/** 宿主保存独立的完整快照；内存列表淘汰不删除磁盘记录。 */
+/** 宿主保存独立的完整快照；update 只参与实时投影，不进入 TraceStore。 */
 export class TraceHost implements AsyncDisposable {
   private readonly observers = new Map<string, AgentTrace>();
   private projection = Promise.resolve();
   private projectionFailure: unknown;
   private cursor = 0;
   private unsubscribe?: () => void;
+  private unsubscribeLive?: () => void;
   private currentTrace?: TraceEvent;
   private currentEntrySequence?: number;
   private currentTurnNumber?: number;
+  private currentLive = false;
   private entryOrdinal = 0;
   private readonly entries = new Map<string, TraceEntry>();
+  private readonly liveValues = new Map<string, unknown>();
   private readonly listeners = new Set<(update: TraceUpdate) => void>();
   private readonly dirty = new Set<string>();
   private readonly stepChanges = new Map<string, TraceEntry>();
@@ -69,7 +78,7 @@ export class TraceHost implements AsyncDisposable {
   private constructor(
     readonly storage: Storage,
     private readonly source: RuntimeReader,
-    private readonly writer: RuntimeWriter,
+    private readonly eventBus: RuntimeEventBus,
     readonly store: TraceStore,
     private readonly capacity = 300,
   ) {
@@ -78,13 +87,13 @@ export class TraceHost implements AsyncDisposable {
   }
 
   private get persistsProjectionState() {
-    return this.source === this.storage.journal && this.writer === this.storage.journal;
+    return this.source === this.storage.journal;
   }
 
   static async open(options: {
     storage: Storage;
     source?: RuntimeReader;
-    writer?: RuntimeWriter;
+    events?: RuntimeEventBus;
     capacity?: number;
     /** 历史重放是否在 open() 内完成。后台重放与之共用 projection 链，顺序和最终状态不变。 */
     awaitReplay?: boolean;
@@ -93,7 +102,7 @@ export class TraceHost implements AsyncDisposable {
     const host = new TraceHost(
       options.storage,
       options.source ?? options.storage.journal,
-      options.writer ?? options.storage.journal,
+      options.events ?? options.storage.events,
       store,
       options.capacity,
     );
@@ -102,6 +111,10 @@ export class TraceHost implements AsyncDisposable {
     host.unsubscribe = host.source.subscribe(() => {
       // 失败保留在 projection 中，由 flushRecords/close 向调用者报告。
       void host.catchUp().catch(() => {});
+    });
+    host.unsubscribeLive = host.eventBus.subscribe(event => {
+      if (!isRuntimeUpdateEvent(event.event)) return;
+      void host.receiveLive(event).catch(error => host.captureProjectionFailure(error));
     });
     if (options.awaitReplay ?? true) {
       await host.catchUp();
@@ -131,15 +144,7 @@ export class TraceHost implements AsyncDisposable {
             : `${trace.id}:0`;
           const previous = await this.projectionStore.get<TraceEntry>(entryId);
 
-          let observer = this.observers.get(trace.sessionId);
-          if (!observer) {
-            observer = new AgentTrace(trace.sessionId, {
-              createEntry: (id, kind, name) => this.createEntry(id, kind, name),
-              saveEntry: entry => this.saveEntry(entry),
-              storeValue: (id, value) => this.storeValue(id, value),
-            });
-            this.observers.set(trace.sessionId, observer);
-          }
+          const observer = this.observer(trace.sessionId);
           this.currentTrace = trace;
           this.currentEntrySequence = previous?.sequence;
           this.currentTurnNumber = this.resolveTurnNumber(trace);
@@ -161,6 +166,49 @@ export class TraceHost implements AsyncDisposable {
     return this.projection;
   }
 
+  private receiveLive(envelope: RuntimeEventEnvelope) {
+    this.projection = this.projection.then(async () => {
+      if (this.closed) return;
+      const trace: RuntimeRecord = { ...envelope, sequence: envelope.revision };
+      const entryId = trace.event.type.startsWith('message_') ? trace.messageId : undefined;
+      const previous = entryId
+        ? (this.entries.get(entryId) ?? (await this.projectionStore.get<TraceEntry>(entryId)))
+        : undefined;
+
+      this.currentLive = true;
+      this.currentTrace = trace;
+      this.currentEntrySequence = previous?.sequence;
+      this.currentTurnNumber = this.resolveTurnNumber(trace);
+      this.entryOrdinal = 0;
+      this.eventSequence = trace.sequence;
+
+      try {
+        this.observer(trace.sessionId).receive(trace);
+        this.saveLiveEvent(trace, trace.metadata);
+      } finally {
+        this.currentLive = false;
+        this.currentTrace = undefined;
+        this.currentEntrySequence = undefined;
+        this.currentTurnNumber = undefined;
+      }
+    });
+    void this.projection.catch(error => this.captureProjectionFailure(error));
+    return this.projection;
+  }
+
+  private observer(sessionId: string) {
+    let observer = this.observers.get(sessionId);
+    if (!observer) {
+      observer = new AgentTrace(sessionId, {
+        createEntry: (id, kind, name) => this.createEntry(id, kind, name),
+        saveEntry: entry => this.saveEntry(entry),
+        storeValue: (id, value) => this.storeValue(id, value),
+      });
+      this.observers.set(sessionId, observer);
+    }
+    return observer;
+  }
+
   private captureProjectionFailure(error: unknown) {
     if (this.projectionFailure) return;
 
@@ -177,7 +225,7 @@ export class TraceHost implements AsyncDisposable {
   }
 
   async flushRecords() {
-    await this.writer.flush();
+    await this.eventBus.flush();
     await this.catchUp();
     await this.persistProjectionState();
     await this.finishProjection();
@@ -231,12 +279,23 @@ export class TraceHost implements AsyncDisposable {
     });
   }
 
-  /** 创建独立的 Agent 事件归并器；宿主只分配序号并保存归并结果。 */
+  /** 创建独立的 Agent 事件发布器；关联、去重和持久化策略统一由 RuntimeEventBus 负责。 */
   agentListener(sessionId: string, metadata?: () => AgentTraceMetadata) {
     return (event: AgentEvent, context?: AgentTraceMetadata) => {
       if (this.closed) return;
-      return this.writer.record(sessionId, event, { ...metadata?.(), ...context });
+      return this.eventBus.publish(sessionId, event, { ...metadata?.(), ...context });
     };
+  }
+
+  /** 读取实时 partial value；最终结果到达后同一 id 会自动切回持久化快照。 */
+  value(id: string) {
+    if (this.liveValues.has(id)) return Promise.resolve(this.liveValues.get(id));
+    return this.store.get<unknown>(id);
+  }
+
+  entry(id: string) {
+    const live = this.entries.get(id);
+    return live ? Promise.resolve({ ...live }) : this.store.get<TraceEntry>(id);
   }
 
   private saveEvent(trace: TraceEvent, metadata: AgentTraceMetadata) {
@@ -252,6 +311,15 @@ export class TraceHost implements AsyncDisposable {
     this.scheduleFlush();
 
     for (const wake of this.wakeListeners) wake();
+  }
+
+  private saveLiveEvent(trace: TraceEvent, metadata: AgentTraceMetadata) {
+    const step = createTraceStep(trace, metadata.tools, metadata.model);
+    step.turnNumber = this.currentTurnNumber;
+    this.trackSessionProgress(step);
+    // update 只参与本轮推送，不进入 TraceStore，也不唤醒 durable events 订阅。
+    this.stepChanges.set(step.id, step);
+    this.scheduleFlush();
   }
 
   async *events(afterSequence = 0, signal?: AbortSignal): AsyncGenerator<TraceEvent> {
@@ -290,6 +358,7 @@ export class TraceHost implements AsyncDisposable {
 
   private async closeResources() {
     this.unsubscribe?.();
+    this.unsubscribeLive?.();
     try {
       await this.flushRecords();
     } finally {
@@ -302,6 +371,7 @@ export class TraceHost implements AsyncDisposable {
       clearTimeout(this.timer);
       this.listeners.clear();
       this.entries.clear();
+      this.liveValues.clear();
       this.dirty.clear();
     }
   }
@@ -325,6 +395,12 @@ export class TraceHost implements AsyncDisposable {
   }
 
   private storeValue(id: string, value: unknown): ValueRef {
+    if (this.currentLive) {
+      this.liveValues.set(id, structuredClone(value));
+      return { id, preview: preview(value) };
+    }
+
+    this.liveValues.delete(id);
     const trace = this.currentTrace;
     const sharedMessage =
       this.source === this.storage.journal &&
@@ -341,10 +417,12 @@ export class TraceHost implements AsyncDisposable {
 
   private saveEntry(entry: TraceEntry) {
     entry.turnNumber ??= this.currentTurnNumber;
-    this.tally.touch(entry.sessionId, entry.endedAt ?? entry.startedAt);
-    this.put(entry.id, 'entry', entry.sequence, entry, entry.runId, entry.sessionId);
-    if (entry.name === 'agent_start') {
-      this.put(`run:${entry.id}`, 'run', entry.sequence, entry, entry.runId, entry.sessionId);
+    if (!this.currentLive) {
+      this.tally.touch(entry.sessionId, entry.endedAt ?? entry.startedAt);
+      this.put(entry.id, 'entry', entry.sequence, entry, entry.runId, entry.sessionId);
+      if (entry.name === 'agent_start') {
+        this.put(`run:${entry.id}`, 'run', entry.sequence, entry, entry.runId, entry.sessionId);
+      }
     }
 
     this.entries.set(entry.id, { ...entry });
@@ -494,7 +572,7 @@ export class TraceHost implements AsyncDisposable {
     }
   }
 
-  // 将同一批 token 的摘要合并后推送，原始事件已即时落盘，不受节流影响。
+  // 将同一批 token 的摘要合并后推送，durable facts 已即时落盘，不受节流影响。
   private scheduleFlush() {
     this.timer ??= setTimeout(() => this.flush(), 60);
   }

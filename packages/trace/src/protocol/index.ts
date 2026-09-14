@@ -14,6 +14,7 @@ export interface TraceEntry {
   turnNumber?: number;
   messageId?: string;
   toolCallId?: string;
+  toolExecutionId?: string;
   model?: { id: string; name: string; provider: string };
   revision?: number;
   raw?: ValueRef;
@@ -73,4 +74,5 @@ export interface TraceUpdate {
   sessions: TraceSession[];
 }
 
+/** events.subscribe 只暴露 durable facts；实时 update 通过 TraceUpdate 分发。 */
 export type TraceEvent = RuntimeRecord;

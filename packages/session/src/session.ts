@@ -1,5 +1,6 @@
 import type { RuntimeEvent, RuntimeMetadata } from '@cieljs/agent-kit/protocol';
 import type { Storage } from '@cieljs/storage';
+import { shouldPersistRuntimeEvent } from '@cieljs/storage';
 import type { VectorIndex } from '@cieljs/vector';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
@@ -59,7 +60,7 @@ export class Session {
 
   record(event: RuntimeEvent, metadata?: RuntimeMetadata) {
     return this.services.operate(async () => {
-      const record = await this.services.storage.journal.record(
+      const envelope = await this.services.storage.events.publishWithProject(
         this.id,
         event,
         metadata,
@@ -70,8 +71,9 @@ export class Session {
         },
       );
 
-      this.services.embeddingIndex.enqueue();
-      return record;
+      // update 是纯实时信号，不产生新的可检索事实，也不需要推进向量索引。
+      if (shouldPersistRuntimeEvent(event)) this.services.embeddingIndex.enqueue();
+      return envelope;
     });
   }
 

@@ -1,144 +1,70 @@
-import { randomUUID } from 'node:crypto';
-
 import type {
-  RuntimeEvent,
-  RuntimeMetadata,
+  RuntimeEventEnvelope,
   RuntimeReader,
   RuntimeRecord,
-  RuntimeWriter,
 } from '@cieljs/agent-kit/protocol';
 import { asc, gt, sql } from 'drizzle-orm';
 
 import { runtimeRecords } from './schema.ts';
 import type { Database, Transaction } from './storage.ts';
 
-interface Correlation {
-  runId: string;
-  turnId?: string;
-  messageId?: string;
-  calls: Map<string, string>;
-}
+export type RuntimeProjector = (tx: Transaction, record: RuntimeRecord) => Promise<void>;
 
-export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
-  private readonly states = new Map<string, Correlation>();
+/** Durable journal：只负责事实追加、读取和唤醒，不理解 Agent 生命周期。 */
+export class RuntimeJournal implements RuntimeReader {
   private readonly listeners = new Set<() => void>();
-  private readonly seen = new WeakMap<RuntimeEvent, Map<string, Promise<RuntimeRecord>>>();
   private pending = Promise.resolve();
   private failure: unknown;
   private closed = false;
 
   constructor(private readonly db: Database) {}
 
-  /** 同一事件对象可由多个观察器提交，但只持久化一次。投影在同一事务内提交。 */
-  record(
-    sessionId: string,
-    event: RuntimeEvent,
-    metadata: RuntimeMetadata = {},
-    project?: (tx: Transaction, record: RuntimeRecord) => Promise<void>,
-  ): Promise<RuntimeRecord> {
+  record(envelope: RuntimeEventEnvelope, project?: RuntimeProjector): Promise<RuntimeRecord> {
     if (this.closed) {
       return Promise.reject(new Error('RuntimeJournal 已关闭'));
     }
-    const previous = this.seen.get(event)?.get(sessionId);
-    if (previous) {
-      if (!project) {
-        return previous;
-      }
 
-      return previous.then(async record => {
-        await this.db.transaction(transaction => project(transaction, record));
-        return record;
-      });
-    }
-    const state = this.states.get(sessionId) ?? {
-      runId: randomUUID(),
-      calls: new Map<string, string>(),
-    };
-    this.states.set(sessionId, state);
-    if (event.type === 'agent_start') {
-      state.runId = randomUUID();
-      state.turnId = undefined;
-      state.messageId = undefined;
-      state.calls.clear();
-    }
-    if (event.type === 'turn_start') {
-      state.turnId = randomUUID();
-    }
-    if (event.type === 'message_start' || (event.type.startsWith('message_') && !state.messageId))
-      state.messageId = randomUUID();
-    if ('message' in event && event.message.role === 'assistant') {
-      for (const block of event.message.content) {
-        if (block.type === 'toolCall' && state.messageId)
-          state.calls.set(block.id, state.messageId);
-      }
-    }
-    let toolCallId: string | undefined;
-    if ('toolCallId' in event) {
-      toolCallId = event.toolCallId;
-    } else if ('message' in event && event.message.role === 'toolResult') {
-      toolCallId = event.message.toolCallId;
-    }
-
-    let messageId: string | undefined;
-    if (event.type.startsWith('message_')) {
-      messageId = state.messageId;
-    } else if (toolCallId) {
-      messageId = state.calls.get(toolCallId);
-    }
-    // 事件中的 message 在流式生成时会被原地修改，入队前固定快照。
-    const snapshot = structuredClone(event);
+    // Live envelope 可能仍被观察者持有；入队前固定完整快照。
     const record: RuntimeRecord = {
-      version: 1,
-      id: randomUUID(),
+      ...structuredClone(envelope),
       sequence: 0,
-      sessionId,
-      runId: state.runId,
-      turnId: state.turnId,
-      messageId,
-      toolCallId,
-      parentRunId: metadata.parentRunId,
-      timestamp: Date.now(),
-      event: snapshot,
-      metadata: {
-        ...metadata,
-        tools: metadata.tools?.map(tool => ({
-          name: tool.name,
-          label: tool.label,
-          description: tool.description,
-          parameters: tool.parameters,
-        })),
-      },
     };
-    if (event.type === 'message_end') {
-      state.messageId = undefined;
-    }
+
     const operation = this.pending.then(async () => {
       await this.db.transaction(async tx => {
         const result = await tx.execute<{ sequence: number | string }>(sql`
           SELECT nextval(pg_get_serial_sequence('storage.events', 'sequence')) AS sequence
         `);
-        record.sequence = Number(result.rows[0]!.sequence);
+        const sequence = Number(result.rows[0]!.sequence);
+        record.sequence = sequence;
+        record.revision = sequence;
 
         await tx.execute(
           sql`INSERT INTO storage.events (id, sequence, session_id, message_id, record)
               OVERRIDING SYSTEM VALUE
-              VALUES (${record.id}, ${record.sequence}, ${sessionId}, ${messageId ?? null}, ${JSON.stringify(record)}::jsonb)`,
+              VALUES (${record.id}, ${record.sequence}, ${record.sessionId}, ${record.messageId ?? null}, ${JSON.stringify(record)}::jsonb)`,
         );
         await project?.(tx, record);
       });
+
       for (const listener of this.listeners) listener();
       return record;
     });
+
     this.pending = operation.then(
       () => {},
       error => {
         this.failure = error;
       },
     );
-    const entries = this.seen.get(event) ?? new Map<string, Promise<RuntimeRecord>>();
-    entries.set(sessionId, operation);
-    this.seen.set(event, entries);
     return operation;
+  }
+
+  project(record: RuntimeRecord, project: RuntimeProjector): Promise<void> {
+    if (this.closed) {
+      return Promise.reject(new Error('RuntimeJournal 已关闭'));
+    }
+    return this.db.transaction(transaction => project(transaction, record));
   }
 
   async read(after = 0, limit = 100): Promise<RuntimeRecord[]> {
@@ -164,6 +90,7 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
       pending = this.pending;
       await pending;
     } while (pending !== this.pending);
+
     if (this.failure) {
       const error = this.failure;
       this.failure = undefined;

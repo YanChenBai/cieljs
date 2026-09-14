@@ -134,6 +134,7 @@ export class AgentTrace {
     const tool = metadata.tools?.find(tool => tool.name === event.toolName);
 
     entry.toolCallId = event.toolCallId;
+    entry.toolExecutionId = trace.toolExecutionId;
     entry.messageId = this.callMessages.get(event.toolCallId);
     entry.label = tool?.label;
     entry.description = tool?.description;
@@ -149,6 +150,7 @@ export class AgentTrace {
     // 缺失 start 时无法构造完整工具摘要，但 receive 仍返回原始事件供宿主持久化。
     if (!entry) return;
 
+    entry.toolExecutionId ??= trace.toolExecutionId;
     if (event.type === 'tool_execution_end') {
       entry.output = this.recorder.storeValue(entry.id + ':output', event.result);
       entry.status = event.isError ? 'error' : 'completed';
@@ -166,7 +168,7 @@ export class AgentTrace {
     entry.runId = trace.runId;
     entry.turnId = trace.turnId;
     entry.parentRunId = trace.parentRunId;
-    entry.revision = trace.sequence;
+    entry.revision = trace.revision;
     entry.raw = { id: trace.id, preview: trace.event.type };
 
     if (metadata.model) {
