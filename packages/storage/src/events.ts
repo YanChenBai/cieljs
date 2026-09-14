@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import type {
   RuntimeEvent,
@@ -25,7 +26,7 @@ interface PublishedEvent {
 
 /**
  * Runtime 事件入口：负责关联 ID、实时分发和 durable 策略。
- * 同一原始事件可能同时被 Session 与 Trace 观察；WeakMap 保证每个 session 只发布一次。
+ * 同一原始事件可能同时被 Session 与 Trace 观察；只有对象及其内容快照都相同才视为同一次观察。
  */
 export class RuntimeEventHub implements RuntimeEventBus {
   private readonly listeners = new Set<(event: RuntimeEventEnvelope) => void>();
@@ -53,7 +54,9 @@ export class RuntimeEventHub implements RuntimeEventBus {
     if (this.closed) throw new Error('RuntimeEventHub 已关闭');
 
     const existing = this.seen.get(event)?.get(sessionId);
-    if (existing) {
+    // Pi 的流式实现可能复用同一个 event 对象并原地更新 message/delta。
+    // WeakMap 只能用来合并 Session + Trace 对“同一快照”的双重观察，不能永久吞掉后续 mutation。
+    if (existing && isDeepStrictEqual(existing.envelope.event, event)) {
       if (existing.durable) {
         const record = await existing.durable;
         if (project) await this.journal.project(record, project);
