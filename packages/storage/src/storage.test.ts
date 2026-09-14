@@ -57,7 +57,6 @@ test('checkpoint 可随时推进，关闭后再推进是空操作', async () => 
     await storage.db.execute(sql`INSERT INTO public.items VALUES ('kept')`);
     await storage.checkpoint();
     await storage.close();
-    // 关闭后周期任务可能还会打一次；不能抛出，也不能复活连接。
     await storage.checkpoint();
 
     await using reopened = await Storage.open({ dataDir: directory });
@@ -99,14 +98,16 @@ test('update 实时分发但不进入 durable journal，start/end 共享稳定�
   const listener = vi.fn();
   storage.events.subscribe(listener);
 
+  const message = { role: 'assistant' as const, content: [], timestamp: 1 };
   const start = await storage.events.publish('session', {
     type: 'message_start',
-    message: { role: 'assistant', content: [], timestamp: 1 },
+    message,
   });
   const update = await storage.events.publish('session', {
     type: 'message_update',
-    message: { role: 'assistant', content: [], timestamp: 1 },
-    assistantMessageEvent: { type: 'text_delta', delta: 'hello' },
+    message,
+    // 这里只验证 Runtime 的生命周期语义，不绑定 pi-ai 某一版 delta 的附加字段。
+    assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'hello' } as never,
   });
   const end = await storage.events.publish('session', {
     type: 'message_end',
@@ -169,10 +170,15 @@ test('关闭等待进行中的事件提交并拒绝后续写入', async () => {
 
   try {
     const storage = await Storage.open({ dataDir: directory });
-    const recording = storage.events.publishWithProject('session', { type: 'agent_start' }, {}, async () => {
-      markTransactionStarted();
-      await transactionPending;
-    });
+    const recording = storage.events.publishWithProject(
+      'session',
+      { type: 'agent_start' },
+      {},
+      async () => {
+        markTransactionStarted();
+        await transactionPending;
+      },
+    );
     await transactionStarted;
 
     const closing = storage.close();
