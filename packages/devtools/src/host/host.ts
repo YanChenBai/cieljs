@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { RuntimeReader, RuntimeWriter } from '@cieljs/agent-kit/protocol';
 import type { Storage } from '@cieljs/storage';
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
+import { sql } from 'drizzle-orm';
 
 import type {
   DevtoolsUpdate,
@@ -19,7 +20,9 @@ import { createTraceStep } from './trace-step.ts';
 import { TraceUsageTally, type TraceUsageTallyState } from './usage.ts';
 
 interface ProjectionState {
-  version: 1;
+  version: 2;
+  /** records 使用 V8 wire format；运行时变化后必须从 JSON Journal 重建。 */
+  serializationRuntime: string;
   cursor: number;
   sequence: number;
   tally: TraceUsageTallyState;
@@ -50,13 +53,15 @@ export class DevtoolsHost implements AsyncDisposable {
     { turn: number; steps: number; seen: Set<string> }
   >();
   private sequence = 0;
-  readonly store: TraceStore;
   private eventSequence = 0;
   private readonly wakeListeners = new Set<() => void>();
   private closed = false;
   private closing?: Promise<void>;
   private readonly lifetime = new AbortController();
   private timer?: ReturnType<typeof setTimeout>;
+  private projectionStore: TraceStore;
+  private rebuilding = false;
+  private rebuildCompletion?: Promise<void>;
 
   get signal() {
     return this.lifetime.signal;
@@ -66,10 +71,11 @@ export class DevtoolsHost implements AsyncDisposable {
     readonly storage: Storage,
     private readonly source: RuntimeReader,
     private readonly writer: RuntimeWriter,
+    readonly store: TraceStore,
     private readonly capacity = 300,
   ) {
     if (!Number.isSafeInteger(capacity) || capacity < 1) throw new Error('capacity 必须是正整数');
-    this.store = new TraceStore(storage);
+    this.projectionStore = store;
   }
 
   private get persistsProjectionState() {
@@ -84,27 +90,29 @@ export class DevtoolsHost implements AsyncDisposable {
     /** 历史重放是否在 open() 内完成。后台重放与之共用 projection 链，顺序和最终状态不变。 */
     awaitReplay?: boolean;
   }) {
+    const store = await TraceStore.open(options.storage);
     const host = new DevtoolsHost(
       options.storage,
       options.source ?? options.storage.journal,
       options.writer ?? options.storage.journal,
+      store,
       options.capacity,
     );
     host.sequence = await host.store.sequence();
-    if (host.persistsProjectionState) await host.restoreProjectionState();
+    if (host.persistsProjectionState) await host.prepareProjection();
     host.unsubscribe = host.source.subscribe(() => {
       // 失败保留在 projection 中，由 flushRecords/close 向调用者报告。
       void host.catchUp().catch(() => {});
     });
     if (options.awaitReplay ?? true) {
       await host.catchUp();
-      await host.persistProjectionState();
+      await host.finishProjection();
     } else {
       // 重放历史随会话数增长，不能在窗口显示前等它跑完；完成后补一次推送，
       // 让只依赖重放的用量快照也能上屏。
       void host
         .catchUp()
-        .then(() => host.persistProjectionState())
+        .then(() => host.finishProjection())
         .catch(error => host.captureProjectionFailure(error))
         .finally(() => {
           if (!host.closed) host.scheduleFlush();
@@ -122,7 +130,7 @@ export class DevtoolsHost implements AsyncDisposable {
           const entryId = trace.event.type.startsWith('message_')
             ? trace.messageId!
             : `${trace.id}:0`;
-          const previous = await this.store.get<TraceEntry>(entryId);
+          const previous = await this.projectionStore.get<TraceEntry>(entryId);
 
           let observer = this.observers.get(trace.sessionId);
           if (!observer) {
@@ -144,9 +152,9 @@ export class DevtoolsHost implements AsyncDisposable {
           this.currentTrace = undefined;
           this.currentEntrySequence = undefined;
           this.currentTurnNumber = undefined;
-          await this.store.flush();
           this.cursor = trace.sequence;
         }
+        await this.persistProjectionState();
       }
     });
     // 后台失败不能只留在 Promise 链中，否则界面会永久停在旧快照。
@@ -172,6 +180,8 @@ export class DevtoolsHost implements AsyncDisposable {
   async flushRecords() {
     await this.writer.flush();
     await this.catchUp();
+    await this.persistProjectionState();
+    await this.finishProjection();
     await this.store.flush();
   }
 
@@ -233,12 +243,12 @@ export class DevtoolsHost implements AsyncDisposable {
   private saveEvent(trace: TraceEvent, metadata: AgentTraceMetadata) {
     // 外部日志没有本地事件表记录，保留快照以支持同样的详情引用。
     if (this.source !== this.storage.journal) {
-      this.store.put(trace.id, 'value', trace.sequence, trace, trace.runId, trace.sessionId);
+      this.put(trace.id, 'value', trace.sequence, trace, trace.runId, trace.sessionId);
     }
     const step = createTraceStep(trace, metadata.tools, metadata.model);
     step.turnNumber = this.currentTurnNumber;
     this.trackSessionProgress(step);
-    this.store.put(step.id, 'step', trace.sequence, step, trace.runId, trace.sessionId);
+    this.put(step.id, 'step', trace.sequence, step, trace.runId, trace.sessionId);
     this.stepChanges.set(step.id, step);
     this.scheduleFlush();
 
@@ -283,7 +293,6 @@ export class DevtoolsHost implements AsyncDisposable {
     this.unsubscribe?.();
     try {
       await this.flushRecords();
-      await this.persistProjectionState();
     } finally {
       this.closed = true;
       this.lifetime.abort();
@@ -324,16 +333,9 @@ export class DevtoolsHost implements AsyncDisposable {
       id === `${trace.messageId}:output`;
 
     if (sharedMessage && trace) {
-      this.store.put(
-        id,
-        'message_reference',
-        this.eventSequence,
-        trace.id,
-        trace.runId,
-        trace.sessionId,
-      );
+      this.put(id, 'message_reference', this.eventSequence, trace.id, trace.runId, trace.sessionId);
     } else {
-      this.store.put(id, 'value', this.eventSequence, value, trace?.runId, trace?.sessionId);
+      this.put(id, 'value', this.eventSequence, value, trace?.runId, trace?.sessionId);
     }
     return { id, preview: preview(value) };
   }
@@ -341,9 +343,9 @@ export class DevtoolsHost implements AsyncDisposable {
   private saveEntry(entry: TraceEntry) {
     entry.turnNumber ??= this.currentTurnNumber;
     this.tally.touch(entry.sessionId, entry.endedAt ?? entry.startedAt);
-    this.store.put(entry.id, 'entry', entry.sequence, entry, entry.runId, entry.sessionId);
+    this.put(entry.id, 'entry', entry.sequence, entry, entry.runId, entry.sessionId);
     if (entry.name === 'agent_start') {
-      this.store.put(`run:${entry.id}`, 'run', entry.sequence, entry, entry.runId, entry.sessionId);
+      this.put(`run:${entry.id}`, 'run', entry.sequence, entry, entry.runId, entry.sessionId);
     }
 
     this.entries.set(entry.id, { ...entry });
@@ -412,7 +414,8 @@ export class DevtoolsHost implements AsyncDisposable {
 
   private projectionState(): ProjectionState {
     return {
-      version: 1,
+      version: 2,
+      serializationRuntime: process.versions.v8,
       cursor: this.cursor,
       sequence: this.sequence,
       tally: this.tally.state(),
@@ -424,10 +427,32 @@ export class DevtoolsHost implements AsyncDisposable {
     };
   }
 
-  private async restoreProjectionState() {
-    const state = await this.store.projectionState<ProjectionState>();
-    if (!state || state.version !== 1) return;
+  private async prepareProjection() {
+    let state: ProjectionState | undefined;
+    let stateReadFailed = false;
+    try {
+      state = await this.store.projectionState<ProjectionState>();
+    } catch (error) {
+      stateReadFailed = true;
+      console.warn('Devtools 投影状态不可读，将在后台重建', error);
+    }
 
+    const latest = await this.storage.db.execute<{ sequence: string }>(sql`
+      SELECT COALESCE(MAX(sequence), 0) AS sequence FROM storage.events
+    `);
+    const latestSequence = Number(latest.rows[0]!.sequence);
+    if (state && isProjectionState(state) && state.cursor <= latestSequence) {
+      this.restoreProjectionState(state);
+      return;
+    }
+    if (!state && !stateReadFailed && latestSequence === 0) return;
+
+    this.projectionStore = await this.store.createRebuild();
+    this.rebuilding = true;
+    this.cursor = 0;
+  }
+
+  private restoreProjectionState(state: ProjectionState) {
     this.cursor = state.cursor;
     this.sequence = Math.max(this.sequence, state.sequence);
     this.tally.restore(state.tally);
@@ -443,8 +468,31 @@ export class DevtoolsHost implements AsyncDisposable {
   private async persistProjectionState() {
     if (!this.persistsProjectionState) return;
 
-    this.store.saveProjectionState(this.sequence, this.projectionState());
-    await this.store.flush();
+    this.projectionStore.saveProjectionState(this.sequence, this.projectionState());
+    await this.projectionStore.flush();
+  }
+
+  private async finishProjection() {
+    if (!this.rebuilding) return;
+
+    this.rebuildCompletion ??= this.store.activate(this.projectionStore).then(() => {
+      this.rebuilding = false;
+    });
+    await this.rebuildCompletion;
+  }
+
+  private put(
+    id: string,
+    category: string,
+    sequence: number,
+    value: unknown,
+    runId?: string,
+    sessionId?: string,
+  ) {
+    this.projectionStore.put(id, category, sequence, value, runId, sessionId);
+    if (this.rebuilding && !this.currentTrace) {
+      this.store.put(id, category, sequence, value, runId, sessionId);
+    }
   }
 
   // 将同一批 token 的摘要合并后推送，原始事件已即时落盘，不受节流影响。
@@ -468,4 +516,65 @@ export class DevtoolsHost implements AsyncDisposable {
 
     for (const listener of this.listeners) listener(update);
   }
+}
+
+function isProjectionState(state: ProjectionState) {
+  return (
+    state.version === 2 &&
+    state.serializationRuntime === process.versions.v8 &&
+    Number.isSafeInteger(state.cursor) &&
+    state.cursor >= 0 &&
+    Number.isSafeInteger(state.sequence) &&
+    state.sequence >= 0 &&
+    isUsageTallyState(state.tally) &&
+    Array.isArray(state.runNumbers) &&
+    state.runNumbers.every(
+      item =>
+        Array.isArray(item) &&
+        typeof item[0] === 'string' &&
+        Array.isArray(item[1]) &&
+        item[1].every(
+          run =>
+            Array.isArray(run) &&
+            typeof run[0] === 'string' &&
+            Number.isSafeInteger(run[1]) &&
+            run[1] >= 0,
+        ),
+    ) &&
+    Array.isArray(state.sessionProgress) &&
+    state.sessionProgress.every(
+      item =>
+        Array.isArray(item) &&
+        typeof item[0] === 'string' &&
+        Number.isSafeInteger(item[1]?.turn) &&
+        item[1].turn >= 0 &&
+        Number.isSafeInteger(item[1]?.steps) &&
+        item[1].steps >= 0 &&
+        Array.isArray(item[1]?.seen) &&
+        item[1].seen.every(value => typeof value === 'string'),
+    )
+  );
+}
+
+function isUsageTallyState(state: TraceUsageTallyState) {
+  return (
+    isUsage(state?.total) &&
+    (state.context === null || isUsage(state.context)) &&
+    (state.contextSessionId === null || typeof state.contextSessionId === 'string') &&
+    Array.isArray(state.sessions) &&
+    state.sessions.every(
+      session =>
+        typeof session.id === 'string' &&
+        Number.isFinite(session.startedAt) &&
+        Number.isFinite(session.endedAt) &&
+        isUsage(session.total) &&
+        (session.context === null || isUsage(session.context)),
+    )
+  );
+}
+
+function isUsage(value: TraceUsageTallyState['total']) {
+  return [value?.input, value?.output, value?.cacheRead, value?.cacheWrite, value?.total].every(
+    item => Number.isFinite(item) && item! >= 0,
+  );
 }

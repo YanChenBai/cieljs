@@ -302,6 +302,150 @@ it('重放内容未变化时不重写已有投影', async () => {
   expect(after.rows[0]?.xmin).toBe(before.rows[0]?.xmin);
 });
 
+it('投影批次失败时记录和游标在同一事务回滚', async () => {
+  const storage = await Storage.open({ dataDir: 'memory://', modules: [devtoolsStorage] });
+  const host = await DevtoolsHost.open({ storage });
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  let constraintExists = false;
+  try {
+    await storage.db.execute(sql`
+      ALTER TABLE devtools.records
+      ADD CONSTRAINT reject_projection_state CHECK (category <> 'projection_state')
+    `);
+    constraintExists = true;
+    await host.agentListener('atomic')({
+      type: 'message_end',
+      message: { role: 'user', content: '事务回滚', timestamp: 1 },
+    });
+    await expect(host.flushRecords()).rejects.toThrow();
+
+    const projected = await storage.db.execute<{ count: string }>(sql`
+      SELECT COUNT(*) AS count FROM devtools.records WHERE category IN ('step', 'entry')
+    `);
+    expect(Number(projected.rows[0]!.count)).toBe(0);
+
+    await storage.db.execute(sql`
+      ALTER TABLE devtools.records DROP CONSTRAINT reject_projection_state
+    `);
+    constraintExists = false;
+    await host.close().catch(() => {});
+
+    const recovered = await DevtoolsHost.open({ storage });
+    expect(await recovered.store.list<TraceEntry>('entry')).toMatchObject([
+      { sessionId: 'atomic', text: '事务回滚' },
+    ]);
+    await recovered.close();
+  } finally {
+    if (constraintExists) {
+      await storage.db.execute(sql`
+        ALTER TABLE devtools.records DROP CONSTRAINT reject_projection_state
+      `);
+    }
+    await host.close().catch(() => {});
+    await storage.close();
+    log.mockRestore();
+  }
+});
+
+it('投影状态损坏时保留旧数据，后台重建后原子切换世代', async () => {
+  const storage = await Storage.open({ dataDir: 'memory://', modules: [devtoolsStorage] });
+  const original = await DevtoolsHost.open({ storage });
+  await original.agentListener('rebuild')({
+    type: 'message_end',
+    message: { role: 'user', content: '仍可读取', timestamp: 1 },
+  });
+  await original.flushRecords();
+  await original.close();
+  await storage.db.execute(sql`
+    UPDATE devtools.records SET value = ${Buffer.from('{invalid')}
+    WHERE category = 'projection_state'
+  `);
+
+  let releaseRead!: () => void;
+  const waitForRead = new Promise<void>(resolve => {
+    releaseRead = resolve;
+  });
+  const originalRead = storage.journal.read.bind(storage.journal);
+  const read = vi.spyOn(storage.journal, 'read');
+  read.mockImplementationOnce(async (...args) => {
+    await waitForRead;
+    return originalRead(...args);
+  });
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const rebuilt = await DevtoolsHost.open({ storage, awaitReplay: false });
+  try {
+    expect(await rebuilt.store.list<TraceEntry>('entry')).toHaveLength(1);
+
+    releaseRead();
+    await rebuilt.flushRecords();
+
+    const tables = await storage.db.execute<{ rebuild: string | null }>(sql`
+      SELECT to_regclass('devtools.records_rebuild')::text AS rebuild
+    `);
+    expect(tables.rows).toEqual([{ rebuild: null }]);
+    expect(await rebuilt.store.list<TraceEntry>('entry')).toMatchObject([
+      { sessionId: 'rebuild', text: '仍可读取' },
+    ]);
+  } finally {
+    releaseRead();
+    await rebuilt.close().catch(() => {});
+    await storage.close();
+    warning.mockRestore();
+  }
+});
+
+it('两万条已投影历史从持久化游标启动，不重新扫描旧事件', async () => {
+  const storage = await Storage.open({ dataDir: 'memory://', modules: [devtoolsStorage] });
+  const original = await DevtoolsHost.open({ storage });
+  await original.agentListener('large-history')({
+    type: 'message_end',
+    message: { role: 'user', content: '基准事件', timestamp: 1 },
+  });
+  await original.flushRecords();
+  await original.close();
+
+  const state = await storage.db.execute<{ value: Uint8Array }>(sql`
+    SELECT value FROM devtools.records WHERE category = 'projection_state'
+  `);
+  const projection = JSON.parse(Buffer.from(state.rows[0]!.value).toString('utf8'));
+  projection.cursor = 20_000;
+  await storage.db.execute(sql`
+    UPDATE devtools.records SET value = ${Buffer.from(JSON.stringify(projection))}
+    WHERE category = 'projection_state'
+  `);
+  await storage.db.execute(sql`
+    INSERT INTO storage.events (id, sequence, session_id, record)
+    OVERRIDING SYSTEM VALUE
+    SELECT
+      'bulk-' || number,
+      number,
+      'large-history',
+      jsonb_build_object(
+        'version', 1,
+        'id', 'bulk-' || number,
+        'sequence', number,
+        'sessionId', 'large-history',
+        'runId', 'bulk-run',
+        'timestamp', number,
+        'event', jsonb_build_object('type', 'agent_start'),
+        'metadata', jsonb_build_object()
+      )
+    FROM generate_series(2, 20000) AS number
+  `);
+
+  const read = vi.spyOn(storage.journal, 'read');
+  const startedAt = performance.now();
+  const reopened = await DevtoolsHost.open({ storage });
+  const elapsed = performance.now() - startedAt;
+  try {
+    expect(read).toHaveBeenCalledWith(20_000);
+    expect(elapsed).toBeLessThan(1_000);
+  } finally {
+    await reopened.close();
+    await storage.close();
+  }
+});
+
 it('运行中重启会延续步骤去重状态', async () => {
   const host = await openHost();
   const receive = host.agentListener('running');

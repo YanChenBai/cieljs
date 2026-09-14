@@ -1,6 +1,6 @@
 import { serialize, deserialize } from 'node:v8';
 
-import type { Storage, StorageModule } from '@cieljs/storage';
+import type { Storage, StorageModule, Transaction } from '@cieljs/storage';
 import { sql } from 'drizzle-orm';
 
 export const devtoolsStorage: StorageModule = {
@@ -30,26 +30,48 @@ export const devtoolsStorage: StorageModule = {
   ],
 };
 
+interface StoredRecord {
+  id: string;
+  category: string;
+  sequence: number;
+  bytes: Uint8Array;
+  value: unknown;
+  runId?: string;
+  sessionId?: string;
+}
+
 export class TraceStore {
   private static readonly projectionStateId = 'devtools:projection-state';
   private pending = Promise.resolve();
+  private readonly writes = new Map<string, StoredRecord>();
   private error: unknown;
-  constructor(private readonly storage: Storage) {
+  private constructor(
+    private readonly storage: Storage,
+    private table = 'devtools.records',
+  ) {
     storage.require(devtoolsStorage);
   }
+
+  static async open(storage: Storage) {
+    return new TraceStore(storage);
+  }
+
   async sequence() {
+    const table = sql.raw(this.table);
     const result = await this.storage.db.execute<{ n: string }>(
       sql`SELECT COALESCE(MAX(sequence), 0) AS n
-          FROM devtools.records
+          FROM ${table}
           WHERE category = 'entry'`,
     );
     return Number(result.rows[0]!.n);
   }
   async projectionState<T>() {
     await this.flush();
+    const table = sql.raw(this.table);
     const result = await this.storage.db.execute<{ value: Uint8Array }>(
-      sql`SELECT value FROM devtools.records
-          WHERE id = ${TraceStore.projectionStateId} AND category = 'projection_state'`,
+      sql`SELECT value FROM ${table}
+          WHERE id = ${TraceStore.projectionStateId}
+            AND category = 'projection_state'`,
     );
     const row = result.rows[0];
 
@@ -61,6 +83,7 @@ export class TraceStore {
       'projection_state',
       sequence,
       Buffer.from(JSON.stringify(value)),
+      value,
     );
   }
   put(
@@ -71,50 +94,33 @@ export class TraceStore {
     runId?: string,
     sessionId?: string,
   ) {
-    const bytes = serialize(snapshot(value));
+    const stored = snapshot(value);
+    const bytes = serialize(stored);
 
-    this.write(id, category, sequence, bytes, runId, sessionId);
+    this.write(id, category, sequence, bytes, stored, runId, sessionId);
   }
   private write(
     id: string,
     category: string,
     sequence: number,
     bytes: Uint8Array,
+    value: unknown,
     runId?: string,
     sessionId?: string,
   ) {
-    this.pending = this.pending
-      .then(async () => {
-        await this.storage.db.execute(
-          sql`INSERT INTO devtools.records (id, category, sequence, run_id, value, session_id)
-              VALUES (${id}, ${category}, ${sequence}, ${runId ?? null}, ${bytes}, ${sessionId ?? null})
-              ON CONFLICT (id) DO UPDATE SET
-                category = EXCLUDED.category,
-                sequence = EXCLUDED.sequence,
-                run_id = EXCLUDED.run_id,
-                value = EXCLUDED.value,
-                session_id = EXCLUDED.session_id
-              WHERE (devtools.records.category,
-                     devtools.records.sequence,
-                     devtools.records.run_id,
-                     devtools.records.value,
-                     devtools.records.session_id)
-                    IS DISTINCT FROM
-                    (EXCLUDED.category,
-                     EXCLUDED.sequence,
-                     EXCLUDED.run_id,
-                     EXCLUDED.value,
-                     EXCLUDED.session_id)`,
-        );
-      })
-      .catch(error => {
-        this.error = error;
-      });
+    this.writes.set(id, { id, category, sequence, bytes, value, runId, sessionId });
   }
   async get<T>(id: string): Promise<T | undefined> {
-    await this.flush();
+    const pending = this.writes.get(id);
+    if (pending && pending.category !== 'message_reference') return pending.value as T;
+    if (pending) return this.message<T>(pending.value);
+
+    // 同一投影批次里其他记录尚未落盘不影响当前 ID 的旧值，避免一次 get 拆散整个事务。
+    await this.pending;
+    this.throwPendingError();
+    const table = sql.raw(this.table);
     const result = await this.storage.db.execute<{ value: Uint8Array; category: string }>(
-      sql`SELECT category, value FROM devtools.records WHERE id = ${id}`,
+      sql`SELECT category, value FROM ${table} WHERE id = ${id}`,
     );
     const row = result.rows[0];
     if (!row) {
@@ -126,10 +132,7 @@ export class TraceStore {
 
     const value = deserialize(row.value);
     if (row.category === 'message_reference') {
-      const message = await this.storage.db.execute<{ message: T }>(
-        sql`SELECT record->'event'->'message' AS message FROM storage.events WHERE id = ${value}`,
-      );
-      return message.rows[0]?.message;
+      return this.message<T>(value);
     }
     return value as T;
   }
@@ -145,8 +148,9 @@ export class TraceStore {
     } = {},
   ): Promise<T[]> {
     await this.flush();
+    const table = sql.raw(this.table);
     const result = await this.storage.db.execute<{ value: Uint8Array }>(
-      sql`SELECT value FROM devtools.records
+      sql`SELECT value FROM ${table}
           WHERE category = ${category}
             AND sequence > ${options.after ?? 0}
             AND sequence < ${options.before ?? Number.MAX_SAFE_INTEGER}
@@ -159,15 +163,116 @@ export class TraceStore {
     return rows.map(row => deserialize(row.value) as T);
   }
   async flush() {
-    await this.pending;
-    if (this.error) {
-      const error = this.error;
-      this.error = undefined;
-      throw error;
+    while (this.writes.size) {
+      const writes = [...this.writes.values()];
+      this.writes.clear();
+      this.pending = this.pending
+        .then(() =>
+          this.storage.db.transaction(async tx => {
+            for (const record of writes) await this.persist(tx, record);
+          }),
+        )
+        .catch(error => {
+          this.error ??= error;
+        });
+      await this.pending;
     }
+    this.throwPendingError();
   }
+
+  async createRebuild() {
+    await this.flush();
+    await this.storage.db.transaction(async tx => {
+      await tx.execute(sql`DROP TABLE IF EXISTS devtools.records_rebuild`);
+      await tx.execute(sql`
+        CREATE TABLE devtools.records_rebuild (
+          id text PRIMARY KEY,
+          category text NOT NULL,
+          sequence bigint NOT NULL,
+          run_id text,
+          value bytea NOT NULL,
+          session_id text
+        )
+      `);
+      await tx.execute(sql`
+        CREATE INDEX records_rebuild_order
+        ON devtools.records_rebuild(category, sequence)
+      `);
+      await tx.execute(sql`
+        CREATE INDEX records_rebuild_run
+        ON devtools.records_rebuild(run_id, category, sequence)
+      `);
+      await tx.execute(sql`
+        CREATE INDEX records_rebuild_session
+        ON devtools.records_rebuild(session_id, category, sequence)
+      `);
+    });
+
+    return new TraceStore(this.storage, 'devtools.records_rebuild');
+  }
+
+  async activate(rebuilt: TraceStore) {
+    await this.flush();
+    await rebuilt.flush();
+    await this.storage.db.transaction(async tx => {
+      await tx.execute(sql`DROP TABLE IF EXISTS devtools.records_stale`);
+      await tx.execute(sql`ALTER TABLE devtools.records RENAME TO records_stale`);
+      await tx.execute(sql`ALTER TABLE devtools.records_rebuild RENAME TO records`);
+      await tx.execute(sql`DROP TABLE devtools.records_stale`);
+      await tx.execute(sql`ALTER INDEX devtools.records_rebuild_order RENAME TO records_order`);
+      await tx.execute(sql`ALTER INDEX devtools.records_rebuild_run RENAME TO records_run`);
+      await tx.execute(sql`ALTER INDEX devtools.records_rebuild_session RENAME TO records_session`);
+      await tx.execute(sql`
+        ALTER TABLE devtools.records RENAME CONSTRAINT records_rebuild_pkey TO records_pkey
+      `);
+    });
+    rebuilt.table = 'devtools.records';
+  }
+
   close() {
     return this.flush();
+  }
+
+  private async persist(tx: Transaction, record: StoredRecord) {
+    const table = sql.raw(this.table);
+    await tx.execute(
+      sql`INSERT INTO ${table} AS target
+            (id, category, sequence, run_id, value, session_id)
+          VALUES (${record.id}, ${record.category}, ${record.sequence}, ${record.runId ?? null},
+                  ${record.bytes}, ${record.sessionId ?? null})
+          ON CONFLICT (id) DO UPDATE SET
+            category = EXCLUDED.category,
+            sequence = EXCLUDED.sequence,
+            run_id = EXCLUDED.run_id,
+            value = EXCLUDED.value,
+            session_id = EXCLUDED.session_id
+          WHERE (target.category,
+                 target.sequence,
+                 target.run_id,
+                 target.value,
+                 target.session_id)
+                IS DISTINCT FROM
+                (EXCLUDED.category,
+                 EXCLUDED.sequence,
+                 EXCLUDED.run_id,
+                 EXCLUDED.value,
+                 EXCLUDED.session_id)`,
+    );
+  }
+
+  private async message<T>(eventId: unknown) {
+    const message = await this.storage.db.execute<{ message: T }>(
+      sql`SELECT record->'event'->'message' AS message FROM storage.events WHERE id = ${eventId}`,
+    );
+    return message.rows[0]?.message;
+  }
+
+  private throwPendingError() {
+    if (!this.error) return;
+
+    const error = this.error;
+    this.error = undefined;
+    throw error;
   }
 }
 
