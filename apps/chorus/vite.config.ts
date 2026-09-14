@@ -3,7 +3,10 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   run: {
     tasks: {
-      build: 'vp pack',
+      build: {
+        command: 'vp pack',
+        dependsOn: [{ task: 'build', from: 'dependencies' }],
+      },
       test: {
         command: 'vp test',
         env: ['XIAOMI_API_KEY'],

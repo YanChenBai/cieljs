@@ -3,7 +3,10 @@ import { defineConfig } from 'vite-plus';
 export default defineConfig({
   run: {
     tasks: {
-      build: 'vp pack',
+      build: {
+        command: 'vp pack',
+        dependsOn: [{ task: 'build', from: 'dependencies' }],
+      },
       test: {
         command: 'vp test',
         output: [],
@@ -13,7 +16,7 @@ export default defineConfig({
   },
   pack: {
     entry: ['src/index.ts', 'src/agent/index.ts'],
-    dts: { tsgo: true },
+    dts: {},
     exports: true,
   },
 });

@@ -108,3 +108,46 @@ test('事件首次写入即持久化生成后的序号', async () => {
 
   expect(result.rows).toEqual([{ sequence: record.sequence, storedSequence: record.sequence }]);
 });
+
+test('关闭等待进行中的事件提交并拒绝后续写入', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ciel-storage-'));
+  let markTransactionStarted!: () => void;
+  const transactionStarted = new Promise<void>(resolve => {
+    markTransactionStarted = resolve;
+  });
+  let releaseTransaction!: () => void;
+  const transactionPending = new Promise<void>(resolve => {
+    releaseTransaction = resolve;
+  });
+
+  try {
+    const storage = await Storage.open({ dataDir: directory });
+    const recording = storage.journal.record('session', { type: 'agent_start' }, {}, async () => {
+      markTransactionStarted();
+      await transactionPending;
+    });
+    await transactionStarted;
+
+    const closing = storage.close();
+    let closed = false;
+    void closing.then(() => {
+      closed = true;
+    });
+
+    await Promise.resolve();
+    expect(closed).toBe(false);
+    await expect(storage.journal.record('session', { type: 'agent_start' })).rejects.toThrow(
+      '已关闭',
+    );
+
+    releaseTransaction();
+    const record = await recording;
+    await closing;
+
+    await using reopened = await Storage.open({ dataDir: directory });
+    expect((await reopened.journal.read()).map(item => item.id)).toEqual([record.id]);
+  } finally {
+    releaseTransaction();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 20_000);

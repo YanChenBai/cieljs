@@ -36,9 +36,18 @@ export default defineConfig({
   },
   run: {
     tasks: {
-      'typecheck:node': 'tsc --noEmit -p tsconfig.node.json --composite false',
-      'typecheck:web': 'vue-tsc --noEmit -p tsconfig.web.json --composite false',
-      typecheck: ['vpr typecheck:node ', ' vpr typecheck:web'],
+      'typecheck:node': {
+        command: 'tsc --noEmit -p tsconfig.node.json --composite false',
+        dependsOn: [{ task: 'build', from: 'dependencies' }],
+      },
+      'typecheck:web': {
+        command: 'vue-tsc --noEmit -p tsconfig.web.json --composite false',
+        dependsOn: [{ task: 'build', from: 'dependencies' }],
+      },
+      typecheck: {
+        command: ['vpr typecheck:node', 'vpr typecheck:web'],
+        dependsOn: [{ task: 'build', from: 'dependencies' }],
+      },
       start: {
         command: 'vld preview',
         cache: false,

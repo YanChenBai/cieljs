@@ -7,3 +7,4 @@ export {
 } from './storage.ts';
 export { RuntimeJournal } from './journal.ts';
 export { runtimeRecords } from './schema.ts';
+export { sql } from 'drizzle-orm';

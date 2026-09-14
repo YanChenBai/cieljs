@@ -1,7 +1,6 @@
 import { serialize, deserialize } from 'node:v8';
 
-import type { Storage, StorageModule, Transaction } from '@cieljs/storage';
-import { sql } from 'drizzle-orm';
+import { sql, type Storage, type StorageModule, type Transaction } from '@cieljs/storage';
 
 export const devtoolsStorage: StorageModule = {
   id: 'devtools',

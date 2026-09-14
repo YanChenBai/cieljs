@@ -3,12 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MessageChannel } from 'node:worker_threads';
 
-import { Storage } from '@cieljs/storage';
+import { sql, Storage } from '@cieljs/storage';
 import { RPCLink } from '@orpc/client/message-port';
 import { createRouterClient } from '@orpc/server';
 import type { RouterClient } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/message-port';
-import { sql } from 'drizzle-orm';
 import { afterEach, expect, it, vi } from 'vite-plus/test';
 
 import { createDevtoolsClient } from '../client/index.ts';

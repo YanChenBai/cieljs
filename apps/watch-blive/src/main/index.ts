@@ -7,10 +7,12 @@ import { closeBrowseWindow } from './browse-window.ts';
 import { prepareWatchResources, migrateWatchResources } from './config.ts';
 import { closeInvestigationWindow } from './investigation-window.ts';
 import { registerWatchBliveIpc } from './ipc.ts';
+import { ShutdownCoordinator } from './shutdown.ts';
 import { browserUserAgent } from './user-agent.ts';
 
 /** 浏览窗口也计入 getAllWindows()，判断主窗口是否还活着只能靠这个引用。 */
 let activeMainWindow: BrowserWindow | undefined;
+const shutdown = new ShutdownCoordinator();
 
 async function createWindow(): Promise<void> {
   const mainWindow = new BrowserWindow({
@@ -38,6 +40,17 @@ async function createWindow(): Promise<void> {
   // registerWatchBliveIpc 先同步登记 IPC 通道，再异步准备存储与运行时；这里不 await，
   // 让下面的 loadURL 立刻开始加载渲染进程，两边并行。
   const ipc = registerWatchBliveIpc(mainWindow);
+  let closingApplication: Promise<void> | undefined;
+  const closeApplication = () => {
+    // 初始化失败时 registerWatchBliveIpc 已回收已创建的资源，不应阻止应用退出。
+    closingApplication ??= ipc.then(
+      dispose => dispose(),
+      () => {},
+    );
+
+    return closingApplication;
+  };
+  const unregisterApplication = shutdown.register(closeApplication);
 
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     if (!isAllowedPageUrl(params.src)) {
@@ -60,21 +73,25 @@ async function createWindow(): Promise<void> {
     });
   });
 
-  let closing = false;
   mainWindow.on('close', event => {
-    if (closing) return;
-    event.preventDefault();
-    closing = true;
+    if (shutdown.isComplete) return;
 
-    void ipc
-      .then(dispose => dispose())
-      .catch(error => console.error('关闭观看运行时失败', error))
-      .finally(() => {
+    event.preventDefault();
+
+    void closeApplication()
+      .then(() => {
         // 浏览窗口若还开着，window-all-closed 不会触发，应用会变成只剩浏览器的孤儿进程。
+        unregisterApplication();
         closeBrowseWindow();
         closeInvestigationWindow();
         mainWindow.destroy();
-      });
+      })
+      .catch(error => console.error('关闭观看运行时失败，已保留窗口', error));
+  });
+
+  mainWindow.on('closed', () => {
+    unregisterApplication();
+    if (activeMainWindow === mainWindow) activeMainWindow = undefined;
   });
 
   mainWindow.on('ready-to-show', () => {
@@ -119,3 +136,24 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+let quitRequested = false;
+app.on('before-quit', event => {
+  if (shutdown.isComplete) return;
+
+  event.preventDefault();
+  if (quitRequested) return;
+
+  quitRequested = true;
+  void shutdown
+    .close()
+    .then(() => app.quit())
+    .catch(error => {
+      quitRequested = false;
+      console.error('保存应用状态失败，已取消退出', error);
+    });
+});
+
+const requestQuit = () => app.quit();
+process.on('SIGINT', requestQuit);
+process.on('SIGTERM', requestQuit);

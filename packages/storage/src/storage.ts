@@ -26,6 +26,7 @@ export class Storage implements AsyncDisposable {
   private constructor(
     private readonly client: PGlite,
     readonly db: Database,
+    private readonly checkpointOnClose: boolean,
   ) {
     this.journal = new RuntimeJournal(db);
   }
@@ -55,7 +56,11 @@ export class Storage implements AsyncDisposable {
         session_id text NOT NULL, message_id text, record jsonb NOT NULL
       );
       CREATE INDEX IF NOT EXISTS events_session ON storage.events(session_id, sequence);`);
-    const storage = new Storage(client, drizzle({ client }));
+    const storage = new Storage(
+      client,
+      drizzle({ client }),
+      !options.dataDir.startsWith('memory://'),
+    );
     for (const module of modules) {
       await client.transaction(async tx => {
         await tx.exec(`CREATE SCHEMA IF NOT EXISTS "${module.id}";
@@ -117,5 +122,9 @@ export class Storage implements AsyncDisposable {
     await using disposables = new AsyncDisposableStack();
     disposables.defer(() => this.client.close());
     await this.journal.close();
+    if (this.checkpointOnClose) {
+      // 所有写入排空后再推进最终 checkpoint，正常退出不把 WAL 恢复留给下次启动。
+      await this.client.exec('CHECKPOINT');
+    }
   }
 }

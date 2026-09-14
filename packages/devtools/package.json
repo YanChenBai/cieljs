@@ -20,7 +20,6 @@
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",
     "@vuetify/v0": "catalog:",
-    "drizzle-orm": "catalog:",
     "markstream-vue": "catalog:",
     "vue-json-pretty": "^2.6.0",
     "zod": "catalog:"

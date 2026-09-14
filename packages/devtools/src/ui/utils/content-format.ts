@@ -11,7 +11,7 @@ export function messageText(value: unknown): string | undefined {
 }
 
 /** 整串能解析成 JSON 对象/数组时给出解析结果；混合文本、标量和非法 JSON 都返回 undefined。 */
-export function wholeJson(text: string): unknown | undefined {
+export function wholeJson(text: string): object | undefined {
   const trimmed = text.trim();
   if (!/^[[{]/.test(trimmed)) return undefined;
 

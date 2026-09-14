@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -31,7 +31,7 @@ it('按文件名读取声纹，并在下一次加载时反映新增、重命名�
   expect(loadVoiceprints(root).map(profile => profile.name)).toEqual(
     expect.arrayContaining(['弥生.直播', '夏尔']),
   );
-  rmSync(join(directory, '夏尔.voiceprint'));
+  unlinkSync(join(directory, '夏尔.voiceprint'));
   expect(loadVoiceprints(root)).toEqual([
     { name: '弥生.直播', file: join(directory, '弥生.直播.voiceprint') },
   ]);

@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import type { RuntimeReader, RuntimeWriter } from '@cieljs/agent-kit/protocol';
-import type { Storage } from '@cieljs/storage';
+import { sql, type Storage } from '@cieljs/storage';
 import type { Agent, AgentEvent } from '@earendil-works/pi-agent-core';
-import { sql } from 'drizzle-orm';
 
 import type {
   DevtoolsUpdate,
