@@ -70,8 +70,8 @@ vp run -r build   # 只做构建
 运行应用：
 
 ```bash
-vp run watch-blive#dev      # Electron 桌面应用
-vp run @cieljs/chorus#dev   # 语音聊天参与者
+vp run @cieljs/blive-agent#dev  # Electron 桌面应用
+vp run @cieljs/chorus#dev       # 语音聊天参与者
 ```
 
 ## 文档

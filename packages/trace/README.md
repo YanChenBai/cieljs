@@ -154,7 +154,7 @@ Host members:
 | `usage()`                                  | Current `TraceUsageState` snapshot                                             |
 | `sessions()`                               | Visible `TraceSession[]` with `turn` and `steps` progress                      |
 | `subscribe(listener)`                      | Register a `TraceUpdate` listener; returns an unsubscribe function             |
-| `record(name, output, sessionId?)`         | Append a completed host fact; `sessionId` defaults to `'watch-blive'`          |
+| `record(name, output, sessionId?)`         | Append a completed host fact; `sessionId` defaults to `'blive-agent'`          |
 | `recordMessage(label, content, sessionId)` | Append a completed `message`/`perception` entry                                |
 | `observe(agent, sessionId)`                | Subscribe to a Pi `Agent` and record its events with live tools/model metadata |
 | `agentListener(sessionId, metadata?)`      | Build the recorder without subscribing; the host assigns sequences             |

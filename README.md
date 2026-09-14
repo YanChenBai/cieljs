@@ -70,8 +70,8 @@ vp run -r build   # build only
 To run an application:
 
 ```bash
-vp run watch-blive#dev      # Electron desktop app
-vp run @cieljs/chorus#dev   # voice chat participant
+vp run @cieljs/blive-agent#dev  # Electron desktop app
+vp run @cieljs/chorus#dev       # voice chat participant
 ```
 
 ## Documentation

@@ -203,7 +203,7 @@ export class TraceHost implements AsyncDisposable {
     };
   }
 
-  record(name: string, output: unknown, sessionId = 'watch-blive') {
+  record(name: string, output: unknown, sessionId = 'blive-agent') {
     const entry = this.createEntry(sessionId, 'event', name);
     entry.status = 'completed';
     entry.endedAt = Date.now();

@@ -151,7 +151,7 @@ if (page[0]?.raw) console.log(await client.values.get(page[0].raw));
 | `usage()`                                  | 当前 `TraceUsageState` 快照                                  |
 | `sessions()`                               | 可见的 `TraceSession[]`，含 `turn` 与 `steps` 进度           |
 | `subscribe(listener)`                      | 注册 `TraceUpdate` 监听器，返回取消订阅函数                  |
-| `record(name, output, sessionId?)`         | 追加一条已完成的宿主事实；`sessionId` 默认为 `'watch-blive'` |
+| `record(name, output, sessionId?)`         | 追加一条已完成的宿主事实；`sessionId` 默认为 `'blive-agent'` |
 | `recordMessage(label, content, sessionId)` | 追加一条已完成的 `message`/`perception` 条目                 |
 | `observe(agent, sessionId)`                | 订阅 Pi `Agent`，并用实时的工具/模型元数据记录其事件         |
 | `agentListener(sessionId, metadata?)`      | 只构造记录器、不订阅；序号由宿主分配                         |

@@ -161,7 +161,7 @@ VAD runs by default (`mode: 'transcription'`). TEN-VAD is advanced in 256-sample
 
 Wider segmentation (larger `minSilenceDuration`, larger `maxSpeechDuration`) cuts sentences less often, but it adds latency and may merge different speakers into one segment. Validate against real audio instead of tuning by feel.
 
-Callers override per use case. Omitting `vad` keeps the 0.5 s / 10 s defaults; Watch Blive overrides to `{ minSilenceDuration: 0.2, maxSpeechDuration: 5 }` with `bufferSeconds: 30`, because a live stream has to keep up with the room (see `apps/watch-blive/src/main/application.ts`).
+Callers override per use case. Omitting `vad` keeps the 0.5 s / 10 s defaults; Blive Agent overrides to `{ minSilenceDuration: 0.2, maxSpeechDuration: 5 }` with `bufferSeconds: 30`, because a live stream has to keep up with the room (see `apps/blive-agent/src/main/application.ts`).
 
 Invalid options are rejected when the backend is constructed:
 
@@ -402,7 +402,7 @@ Positionals are one or more 16 kHz WAV files, and the output is the single JSON 
 
 ### Where models live
 
-`modelsPath` belongs to the caller. The package reads the directory it is given and installs only into that path; Watch Blive and Chorus pass `join(dataDir, 'models')` from their own data directory, and voiceprint paths are decided by the same layer. The package's `.gitignore` excludes `/models/` and `voiceprints`, so neither is ever committed. KWS models land in `<modelsPath>/kws/<model>/`, and installing them shells out to the system `tar` with `-xOf` to read fixed archive members into stdout — archive paths and symlinks are never written to the filesystem.
+`modelsPath` belongs to the caller. The package reads the directory it is given and installs only into that path; Blive Agent and Chorus pass `join(dataDir, 'models')` from their own data directory, and voiceprint paths are decided by the same layer. The package's `.gitignore` excludes `/models/` and `voiceprints`, so neither is ever committed. KWS models land in `<modelsPath>/kws/<model>/`, and installing them shells out to the system `tar` with `-xOf` to read fixed archive members into stdout — archive paths and symlinks are never written to the filesystem.
 
 ### Runtime model configuration
 
@@ -484,4 +484,4 @@ vp run build    # vp pack -> dist (index, worker, ciel)
 
 Tests live in `tests/**/*.test.ts` and substitute `sherpa-onnx-node` with module doubles, so they need neither a model download nor real audio hardware. The `test` task declares `CIEL_NODE_EXECUTABLE` as an environment input, and `build` depends on the same task in dependencies. `./worker` must stay a separate ESM entry, because the Electron backend spawns it as a file.
 
-Consumers: [`@cieljs/perception`](../perception/README.md) wraps `ASR` to add vision sampling and agent snapshots, while `apps/watch-blive` and `apps/chorus` own the `modelsPath` and voiceprint layout inside their data directories.
+Consumers: [`@cieljs/perception`](../perception/README.md) wraps `ASR` to add vision sampling and agent snapshots, while `apps/blive-agent` and `apps/chorus` own the `modelsPath` and voiceprint layout inside their data directories.
