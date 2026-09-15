@@ -23,23 +23,23 @@ export interface TraceStepGroup extends TraceEntry {
 export function groupTraceSteps(steps: TraceEntry[]): TraceStepGroup[] {
   const records = new Map<string, TraceStepGroup>();
   for (const step of steps.toSorted((left, right) => left.sequence - right.sequence)) {
-    const scope = JSON.stringify([step.sessionId, step.runId]);
+    const scope = step.runId ? `${step.sessionId}/${step.runId}` : step.sessionId;
     let key = step.id;
     let name = step.name;
     let kind = step.kind;
     const toolResult = step.kind === 'message' && step.label === 'toolResult';
     if ((step.kind === 'tool' || toolResult) && step.toolCallId) {
-      key = scope + ':tool:' + step.toolCallId;
+      key = `${scope}/tool/${step.toolCallId}`;
       name = 'tool_execution';
       kind = 'tool';
     } else if (step.kind === 'message' && step.messageId) {
-      key = scope + ':message:' + step.messageId;
+      key = `${scope}/message/${step.messageId}`;
       name = 'message';
     } else if (/^agent_(start|end)$/.test(step.name) && step.runId) {
-      key = scope + ':agent';
+      key = `${scope}/agent`;
       name = 'agent';
     } else if (/^turn_(start|end)$/.test(step.name) && step.turnId) {
-      key = scope + ':turn:' + step.turnId;
+      key = `${scope}/turn/${step.turnId}`;
       name = 'turn';
     }
     const previous = records.get(key);

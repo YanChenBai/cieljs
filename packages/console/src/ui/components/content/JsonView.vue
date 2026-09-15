@@ -13,8 +13,10 @@ const props = withDefaults(
     value: unknown;
     /** 默认展开层数。调用方传常量，跟着响应式变化会让展开状态每次重渲染都复位。 */
     deep?: number;
+    /** Inspect 面板已有自己的容器，只需要 JSON 树本身。 */
+    plain?: boolean;
   }>(),
-  { deep: 4 },
+  { deep: 4, plain: false },
 );
 
 // jsonSafe 已经剥掉 BigInt 与循环引用；computed 让同一份值保持稳定的引用，
@@ -54,7 +56,7 @@ onBeforeUnmount(() => clearTimeout(resetTimer));
 </script>
 
 <template>
-  <div class="dt-json">
+  <div class="dt-json" :class="{ 'dt-json-plain': plain }">
     <div class="dt-json-toolbar">
       <span class="dt-json-note">JSON · 展开 {{ deep }} 层</span>
       <Button.Root

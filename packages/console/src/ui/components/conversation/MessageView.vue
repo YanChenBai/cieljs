@@ -7,7 +7,12 @@ import { useTraceValue } from '../../composables/use-trace-value.ts';
 import type { MessageRendererProps, MessageRenderers } from '../../message-renderers.ts';
 import { messageRenderer } from '../../message-renderers.ts';
 import type { ToolRenderers } from '../../tool-renderers.ts';
-import { messageText, wholeJson } from '../../utils/content-format.ts';
+import {
+  hasMessageContent,
+  messageFallback,
+  messageText,
+  wholeJson,
+} from '../../utils/content-format.ts';
 import type { ToolCallRecord } from '../../utils/tool-calls.ts';
 import ContentRenderer from '../content/ContentRenderer.vue';
 import StatusIcon from '../content/StatusIcon.vue';
@@ -33,6 +38,10 @@ const clock = computed(() =>
 );
 
 const text = computed(() => messageText(value.value));
+const hasContent = computed(
+  () => props.entry.name !== 'assistant' || hasMessageContent(value.value),
+);
+const fallback = computed(() => messageFallback(value.value));
 const json = computed(() => (text.value === undefined ? undefined : wholeJson(text.value)));
 
 const renderer = computed(() =>
@@ -65,8 +74,19 @@ const rendererProps = computed<MessageRendererProps>(() => ({
       />
     </header>
     <p v-if="error" class="dt-error">{{ error }}</p>
+    <div
+      v-else-if="entry.status === 'running' && !hasContent"
+      class="dt-message-skeleton"
+      role="status"
+      aria-label="正在生成"
+    >
+      <span />
+      <span />
+      <span />
+    </div>
     <p v-else-if="loading && value === undefined" class="dt-message-loading">正在读取内容…</p>
-    <component v-else-if="renderer" :is="renderer" v-bind="rendererProps" />
+    <component v-else-if="renderer && hasContent" :is="renderer" v-bind="rendererProps" />
+    <p v-else-if="!hasContent" class="dt-message-placeholder">{{ fallback }}</p>
     <slot
       v-else
       name="content"

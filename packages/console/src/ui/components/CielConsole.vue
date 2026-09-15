@@ -108,10 +108,16 @@ watch(
         >
           <template #content="scope">
             <slot name="content" v-bind="scope">
-              <!-- 原始事件与工具 Schema 都走 JSON 树；scope.section 只在执行记录里存在，对话侧自然落到默认渲染。 -->
+              <!-- Inspect 的结构化载荷统一走无卡片 JSON 树；对话侧仍使用内容渲染器。 -->
               <JsonView
-                v-if="scope.section === 'raw' || scope.section === 'schema'"
+                v-if="
+                  scope.section === 'input' ||
+                  scope.section === 'output' ||
+                  scope.section === 'raw' ||
+                  scope.section === 'schema'
+                "
                 :value="scope.value"
+                plain
               />
               <ContentRenderer
                 v-else

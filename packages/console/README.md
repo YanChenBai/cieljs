@@ -126,8 +126,8 @@ Both delegate the actual card to `MessageView`.
 when the list scrolls within 80 px of the top, and keeps requesting pages while the list does not
 fill its viewport. The splitter is clamped between 20 % and 75 % and supports arrow keys.
 
-`TraceDetail` shows tool steps as Tool Inspect (overview, args, result, schema, timing, raw event)
-and other steps as Agent Inspect (overview, message, thinking, timing, raw event). When a group
+`TraceDetail` shows tool steps with overview, args, result, schema, timing, and raw event tabs,
+and other steps with overview, message, thinking, timing, and raw event tabs. When a group
 holds more than one raw event, a selector switches between them.
 
 ### Content components

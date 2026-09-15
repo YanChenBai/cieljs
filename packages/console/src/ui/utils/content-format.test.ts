@@ -1,6 +1,14 @@
 import { expect, it } from 'vite-plus/test';
 
-import { jsonMarkdown, jsonText, messageText, readableText, wholeJson } from './content-format.ts';
+import {
+  hasMessageContent,
+  jsonMarkdown,
+  jsonText,
+  messageFallback,
+  messageText,
+  readableText,
+  wholeJson,
+} from './content-format.ts';
 
 it('结构化值统一转成 JSON 代码块', () => {
   expect(jsonMarkdown({ a: [1, null] })).toBe(
@@ -51,6 +59,18 @@ it('消息文本只认字符串与 content 字符串', () => {
   expect(messageText({ content: [{ type: 'text', text: 'x' }] })).toBeUndefined();
   expect(messageText(undefined)).toBeUndefined();
   expect(messageText(42)).toBeUndefined();
+});
+
+it('空流式消息、错误和拒绝使用可读状态而不是消息 JSON', () => {
+  expect(hasMessageContent({ role: 'assistant', content: [] })).toBe(false);
+  expect(hasMessageContent({ content: [{ type: 'text', text: '回答中' }] })).toBe(true);
+  expect(messageFallback({ stopReason: 'aborted', content: [] })).toBe('生成已停止。');
+  expect(messageFallback({ stopReason: 'error', errorMessage: '模型不可用', content: [] })).toBe(
+    '模型不可用',
+  );
+  expect(messageFallback({ content: [{ type: 'refusal', refusal: '无法处理这个请求' }] })).toBe(
+    '无法处理这个请求',
+  );
 });
 
 it('整串 JSON 才给结构化结果', () => {

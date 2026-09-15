@@ -132,6 +132,20 @@ it('历史补页保留分组 ID 并补全开始时间；相同工具 ID 不跨�
   expect(groupTraceSteps([end, { ...end, id: 'other', sessionId: 'other' }])).toHaveLength(2);
 });
 
+it('分组记录 ID 按 Session、Run 和记录类型分段展示', () => {
+  const [agent] = groupTraceSteps([
+    entry(1, {
+      sessionId: 'bilibili:room:1718908:2026-09-15',
+      runId: '2a4132fd-3d8c-4e74-aed8-cc1ca6ac3e68',
+      name: 'agent_start',
+    }),
+  ]);
+
+  expect(agent?.id).toBe(
+    'bilibili:room:1718908:2026-09-15/2a4132fd-3d8c-4e74-aed8-cc1ca6ac3e68/agent',
+  );
+});
+
 it('历史页与推送重叠时去重，并保留较新的修订', () => {
   const newest = entry(2, { revision: 8 });
   expect(mergeTraceEntries([newest, entry(3)], [entry(1), entry(2, { revision: 4 })])).toEqual([

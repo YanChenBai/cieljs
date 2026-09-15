@@ -11,7 +11,6 @@ import ContentRenderer from '../content/ContentRenderer.vue';
 import Disclosure from '../content/Disclosure.vue';
 import JsonView from '../content/JsonView.vue';
 import StatusIcon from '../content/StatusIcon.vue';
-import ToolCallView from '../content/ToolCallView.vue';
 
 const props = defineProps<{
   client: TraceClient;
@@ -26,27 +25,10 @@ type DetailTab = TraceSection | 'overview' | 'content' | 'thinking' | 'timing';
 const tab = shallowRef<DetailTab>('overview');
 const rawId = shallowRef('');
 const isTool = computed(() => props.entry.kind === 'tool');
-watch(
-  () => props.entry.id,
-  () => {
-    rawId.value = '';
-    tab.value = 'overview';
-  },
-);
 const inspected = computed(() => ({
   ...props.entry,
   raw: props.entry.events.find(event => event.id === rawId.value) ?? props.entry.raw,
 }));
-
-// 步骤本身只有事件名与人读标签，工具机器名要从同一份条目索引里取（toolCallId 已保留）。
-const call = computed(() =>
-  props.entry.toolCallId ? props.toolCalls?.get(props.entry.toolCallId) : undefined,
-);
-const renderer = computed(() => {
-  const name = call.value?.call?.name;
-
-  return name ? props.toolRenderers?.[name] : undefined;
-});
 
 const activeSection = computed<TraceSection | undefined>(() => {
   if (['input', 'output', 'raw', 'schema'].includes(tab.value)) {
@@ -72,16 +54,30 @@ const tabs = computed(() => {
     ] satisfies Array<{ value: DetailTab; label: string }>;
   }
 
-  return [
-    { value: 'overview', label: '概览' },
-    { value: 'content', label: '消息' },
-    { value: 'thinking', label: '思考' },
-    { value: 'timing', label: '计时' },
-    { value: 'raw', label: '原始事件' },
-  ] satisfies Array<{ value: DetailTab; label: string }>;
+  const items: Array<{
+    value: DetailTab;
+    label: string;
+  }> = [{ value: 'overview', label: '概览' }];
+
+  if (props.entry.text) items.push({ value: 'content', label: '消息' });
+  if (props.entry.thinking) items.push({ value: 'thinking', label: '思考' });
+
+  items.push({ value: 'timing', label: '计时' }, { value: 'raw', label: '原始事件' });
+
+  return items;
 });
 
 const payloadTabs = computed(() => tabs.value.filter(item => item.value !== 'overview'));
+
+watch(
+  () => props.entry.id,
+  () => {
+    rawId.value = '';
+
+    const tabStillAvailable = tabs.value.some(item => item.value === tab.value);
+    if (!tabStillAvailable) tab.value = 'overview';
+  },
+);
 
 function elapsed() {
   const reference = props.entry.endedAt ?? props.entry.runningUntil ?? props.entry.updatedAt;
@@ -96,7 +92,6 @@ function elapsed() {
         <Button.Root class="dt-button dt-close" aria-label="关闭详情" @click="$emit('close')">
           ×
         </Button.Root>
-        <strong class="dt-inspect-kind">{{ isTool ? 'Tool Inspect' : 'Agent Inspect' }}</strong>
         <Tabs.List class="dt-tabs" aria-label="步骤详情">
           <Tabs.Item v-for="item in tabs" :key="item.value" :value="item.value" class="dt-tab">
             {{ item.label }}
@@ -130,30 +125,14 @@ function elapsed() {
             <dd v-if="entry.toolCallId">{{ entry.toolCallId }}</dd>
             <dt v-if="entry.messageId">Message</dt>
             <dd v-if="entry.messageId">{{ entry.messageId }}</dd>
+            <dt v-if="isTool && entry.description">描述</dt>
+            <dd v-if="isTool && entry.description" class="dt-tool-description">
+              {{ entry.description }}
+            </dd>
           </dl>
         </Disclosure>
-        <ToolCallView
-          v-if="entry.kind === 'tool' && renderer && call?.call"
-          :client="client"
-          :call="call.call"
-          :result="call.result"
-          :renderer="renderer"
-          :status="entry.status"
-        />
-        <Disclosure v-else-if="entry.kind === 'tool'" title="工具">
-          <ContentRenderer
-            :value="{
-              label: entry.label,
-              description: entry.description,
-              toolCallId: entry.toolCallId,
-            }"
-          />
-        </Disclosure>
         <Disclosure v-if="!isTool && entry.model" title="模型">
-          <JsonView :value="entry.model" />
-        </Disclosure>
-        <Disclosure v-if="!isTool && entry.thinking" title="思考摘要" :default-open="false">
-          <ContentRenderer :value="entry.thinking" />
+          <JsonView :value="entry.model" plain />
         </Disclosure>
       </Tabs.Panel>
       <Tabs.Panel
@@ -161,6 +140,7 @@ function elapsed() {
         :key="item.value"
         :value="item.value"
         class="dt-detail-body dt-payload"
+        :class="{ 'dt-json-payload': item.value === 'raw' || item.value === 'schema' }"
       >
         <template v-if="tab === item.value">
           <div v-if="item.value === 'timing'" class="dt-timing">
@@ -228,7 +208,16 @@ function elapsed() {
             :default-renderer="ContentRenderer"
           >
             <!-- 原始事件是排查用的完整载荷，代码块读不出折叠与行号，这里换成 JSON 树。 -->
-            <JsonView v-if="item.value === 'raw' || item.value === 'schema'" :value="value" />
+            <JsonView
+              v-if="
+                item.value === 'input' ||
+                item.value === 'output' ||
+                item.value === 'raw' ||
+                item.value === 'schema'
+              "
+              :value="value"
+              plain
+            />
             <ContentRenderer v-else :value="value" />
           </slot>
         </template>

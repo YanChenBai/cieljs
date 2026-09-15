@@ -10,6 +10,50 @@ export function messageText(value: unknown): string | undefined {
   return undefined;
 }
 
+/** 判断消息是否已经产生可展示正文；元数据字段本身不应回落成 JSON。 */
+export function hasMessageContent(value: unknown): boolean {
+  const text = messageText(value);
+  if (text !== undefined) return Boolean(text.trim());
+  if (!value || typeof value !== 'object' || !('content' in value)) return false;
+
+  const content = value.content;
+  if (!Array.isArray(content)) return false;
+
+  return content.some(block => {
+    if (!block || typeof block !== 'object' || !('type' in block)) return false;
+    if (block.type === 'text') return 'text' in block && Boolean(String(block.text).trim());
+    if (block.type === 'thinking')
+      return 'thinking' in block && Boolean(String(block.thinking).trim());
+    if (block.type === 'image') return 'data' in block && Boolean(block.data);
+    if (block.type === 'toolCall') return true;
+    return false;
+  });
+}
+
+/** 空正文结束时显示可读状态，避免把 Agent 消息元数据直接展示为 JSON。 */
+export function messageFallback(value: unknown): string {
+  if (!value || typeof value !== 'object') return '没有返回内容。';
+
+  if ('errorMessage' in value && typeof value.errorMessage === 'string') {
+    return value.errorMessage.trim() || '生成失败。';
+  }
+
+  if ('content' in value && Array.isArray(value.content)) {
+    const refusal = value.content.find(
+      block => block && typeof block === 'object' && block.type === 'refusal',
+    ) as { refusal?: unknown } | undefined;
+
+    if (typeof refusal?.refusal === 'string' && refusal.refusal.trim()) {
+      return refusal.refusal.trim();
+    }
+  }
+
+  if ('stopReason' in value && value.stopReason === 'aborted') return '生成已停止。';
+  if ('stopReason' in value && value.stopReason === 'error') return '生成失败。';
+
+  return '没有返回内容。';
+}
+
 /** 整串能解析成 JSON 对象/数组时给出解析结果；混合文本、标量和非法 JSON 都返回 undefined。 */
 export function wholeJson(text: string): object | undefined {
   const trimmed = text.trim();

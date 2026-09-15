@@ -218,7 +218,7 @@
   overflow: hidden;
 }
 .dt-network.has-detail {
-  grid-template-columns: minmax(100px, var(--dt-split, 36%)) 4px minmax(0, 1fr);
+  grid-template-columns: minmax(100px, var(--dt-split, 36%)) 1px minmax(0, 1fr);
 }
 .dt-list-panel {
   min-height: 0;
@@ -394,7 +394,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin: 8px 12px;
 }
 .dt-event-selector select {
   min-width: 0;
@@ -430,19 +430,10 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--dt-border);
 }
 .dt-detail-toolbar {
   padding-left: 0;
   gap: 0;
-}
-.dt-inspect-kind {
-  flex-shrink: 0;
-  padding: 0 8px 0 2px;
-  color: var(--dt-muted);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
 }
 .dt-close {
   font-size: 20px;
@@ -452,6 +443,16 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+.dt-json-payload {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+.dt-json-payload > .dt-json {
+  flex: 1;
+  min-height: 0;
 }
 .dt-section {
   border-bottom: 1px solid var(--dt-border);
@@ -495,6 +496,9 @@
   margin: 0;
   user-select: text;
   overflow-wrap: anywhere;
+}
+.dt-tool-description {
+  white-space: pre-wrap;
 }
 /* 面板本身不滚动，滚动与「返回底部」按钮分层放置。 */
 .dt-conversation-panel {
@@ -575,6 +579,40 @@
   margin: 0;
   color: var(--dt-muted);
   font-size: 11px;
+}
+.dt-message-placeholder {
+  margin: 0;
+  color: var(--dt-muted);
+  font-size: 12px;
+}
+.dt-message-skeleton {
+  display: grid;
+  gap: 7px;
+  width: min(520px, 72%);
+  padding-block: 3px;
+}
+.dt-message-skeleton span {
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffffff09 20%, #ffffff18 45%, #ffffff09 70%);
+  background-size: 220% 100%;
+  animation: dt-message-skeleton 1.4s ease-in-out infinite;
+}
+.dt-message-skeleton span:nth-child(2) {
+  width: 86%;
+}
+.dt-message-skeleton span:nth-child(3) {
+  width: 58%;
+}
+@keyframes dt-message-skeleton {
+  to {
+    background-position-x: -220%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dt-message-skeleton span {
+    animation: none;
+  }
 }
 .dt-message .dt-section {
   margin: 8px 0;
@@ -681,9 +719,15 @@
 }
 
 .dt-resizer {
+  position: relative;
   cursor: col-resize;
   touch-action: none;
   background: var(--dt-border);
+}
+.dt-resizer::before {
+  position: absolute;
+  inset: 0 -4px;
+  content: '';
 }
 .dt-resizer:hover,
 .dt-resizer:focus-visible {
@@ -717,6 +761,15 @@
   overflow: auto;
   background: var(--dt-raised);
   user-select: text;
+}
+.dt-json-plain {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.dt-json-plain .dt-json-toolbar {
+  background: var(--dt-background);
 }
 .dt-json-toolbar {
   position: sticky;

@@ -49,8 +49,14 @@ watch(
       <template #content="scope">
         <slot name="content" v-bind="scope">
           <JsonView
-            v-if="scope.section === 'raw' || scope.section === 'schema'"
+            v-if="
+              scope.section === 'input' ||
+              scope.section === 'output' ||
+              scope.section === 'raw' ||
+              scope.section === 'schema'
+            "
             :value="scope.value"
+            plain
           />
           <ContentRenderer
             v-else
