@@ -64,6 +64,7 @@ export interface InvestigateOptions {
   sources?: SessionSources;
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent, context: { tools: AgentTool[]; model: Model<Api> }) => void;
+  onTitleUpdated?: (title: string) => void;
 }
 
 export interface InvestigationResult {

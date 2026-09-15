@@ -1,4 +1,5 @@
 export { sessionTools } from './tools.ts';
+export { createUpdateSessionTitleTool } from './update-title-tool.ts';
 export type {
   CrossSpaceAccess,
   CrossSpaceOptions,

@@ -28,6 +28,8 @@ export const sessions = pgSchema('session').table(
     spaceId: text('space_id').notNull(),
     namespace: text('namespace').notNull(),
 
+    title: text('title'),
+
     nextMessageSeq: bigint('next_message_seq', {
       mode: 'number',
     })

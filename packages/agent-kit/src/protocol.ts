@@ -6,6 +6,10 @@ export interface RuntimeMetadata {
   tools?: Array<Omit<Agent['state']['tools'][number], 'execute'>>;
   model?: Agent['state']['model'];
   parentRunId?: string;
+  session?: {
+    title?: string;
+    sources?: string[];
+  };
 }
 
 /** 会话压缩产生的运行时事件；不属于 Pi Agent 事件，但共用同一条事实流水。 */

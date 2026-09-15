@@ -9,6 +9,7 @@ export type SessionSource = string;
 export interface SessionInfo {
   id: string;
   spaceId: string;
+  title?: string;
   sources: SessionSource[];
   messageCount: number;
   createdAt: Date;
@@ -17,10 +18,12 @@ export interface SessionInfo {
 
 export interface SessionOptions {
   id?: string;
+  title?: string;
   sources?: SessionSource[];
 }
 
 export interface UpdateSessionInput {
+  title?: string;
   sources?: SessionSource[];
 }
 

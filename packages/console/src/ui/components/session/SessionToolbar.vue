@@ -2,20 +2,17 @@
 import type { TraceSession } from '@cieljs/trace/protocol';
 import { Select, Tabs } from '@vuetify/v0/components';
 
-defineProps<{
+import { traceSessionLabel } from '../../utils/session-label.ts';
+
+const props = defineProps<{
   sessions: TraceSession[];
 }>();
 const sessionId = defineModel<string>('sessionId', { required: true });
 
-function sessionLabel(session: TraceSession) {
-  const time = new Date(session.startedAt).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-  return `${time} · ${session.id}`;
+function selectedSessionLabel(value: unknown) {
+  const session = props.sessions.find(item => item.id === value);
+
+  return session ? traceSessionLabel(session) : String(value ?? '');
 }
 </script>
 
@@ -31,7 +28,7 @@ function sessionLabel(session: TraceSession) {
         <Select.Activator class="dt-session-activator" label="切换 Session">
           <Select.Value v-slot="{ selectedValue }">
             <span class="dt-session-value" :title="String(selectedValue)">
-              {{ selectedValue }}
+              {{ selectedSessionLabel(selectedValue) }}
             </span>
           </Select.Value>
           <Select.Placeholder>暂无 Session</Select.Placeholder>
@@ -60,7 +57,7 @@ function sessionLabel(session: TraceSession) {
             class="dt-session-option"
             :title="session.id"
           >
-            <span>{{ sessionLabel(session) }}</span>
+            <span>{{ traceSessionLabel(session) }}</span>
             <small v-if="session.id === sessions.at(-1)?.id">最新</small>
           </Select.Item>
         </Select.Content>

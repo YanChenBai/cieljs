@@ -59,6 +59,8 @@ export interface TraceUsageState {
 
 export interface TraceSession {
   id: string;
+  title?: string;
+  sources?: string[];
   startedAt: number;
   endedAt: number;
   usage: TraceUsageState;

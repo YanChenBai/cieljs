@@ -128,6 +128,7 @@ export class Runtime implements AsyncDisposable {
       question: options.question,
       signal: options.signal,
       onEvent: options.onEvent,
+      onTitleUpdated: options.onTitleUpdated,
     });
 
     this.investigations.add(investigation);

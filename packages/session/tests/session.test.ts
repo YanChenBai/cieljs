@@ -73,6 +73,7 @@ describe('SessionManager', () => {
     const id = crypto.randomUUID();
     const session = await space.session({
       id,
+      title: ' 初始标题 ',
       sources: [' room:42 ', 'ROOM:42', 'project:ciel'],
     });
     await session.appendMessage(user('session api marker'));
@@ -80,14 +81,19 @@ describe('SessionManager', () => {
     expect(await session.getInfo()).toMatchObject({
       id,
       spaceId: 'room:42',
+      title: '初始标题',
       sources: ['room:42', 'project:ciel'],
       messageCount: 1,
     });
     expect((await space.getSession(id))?.id).toBe(id);
     expect((await space.list()).some(item => item.id === id)).toBe(true);
 
-    await session.update({ sources: ['room:43'] });
+    await session.update({ title: '更新标题', sources: ['room:43'] });
     expect((await session.getInfo())?.sources).toEqual(['room:43']);
+    expect((await session.getInfo())?.title).toBe('更新标题');
+
+    const reopened = await space.session({ id, title: '重开标题' });
+    expect((await reopened.getInfo()).title).toBe('重开标题');
   });
 
   test('按 sources 发现 Session，并支持跨 Session 搜索', async () => {
@@ -171,6 +177,7 @@ describe('Session Agent tools', () => {
     });
 
     expect(tools.map(tool => tool.name)).toEqual([
+      'update_current_session_title',
       'search_current_session_messages',
       'read_current_session_messages',
       'find_sessions_by_source',
@@ -221,6 +228,23 @@ describe('Session Agent tools', () => {
     expect(names).not.toContain('list_sessions');
   });
 
+  test('Agent 可以更新并持久化当前 Session 标题', async () => {
+    const current = await space.session();
+    let updatedTitle: string | undefined;
+    const titleTool = sessionTools({
+      session: current,
+      space,
+      onSessionUpdated: session => {
+        updatedTitle = session.title;
+      },
+    }).find(tool => tool.name === 'update_current_session_title')!;
+
+    await titleTool.execute('update-title', { title: '直播复盘' });
+
+    expect(updatedTitle).toBe('直播复盘');
+    expect((await current.getInfo()).title).toBe('直播复盘');
+  });
+
   test('未开启跨空间时仍可发现当前 Space 的其他 Session', async () => {
     const currentSpace = manager.space('room:local-tools');
     const current = await currentSpace.session({ sources: ['当前会话'] });
@@ -230,6 +254,7 @@ describe('Session Agent tools', () => {
     const find = tools.find(tool => tool.name === 'find_sessions_by_source')!;
 
     expect(tools.map(tool => tool.name)).toEqual([
+      'update_current_session_title',
       'search_current_session_messages',
       'read_current_session_messages',
       'find_sessions_by_source',

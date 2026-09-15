@@ -113,6 +113,27 @@ it('按 Session 独立统计用量与当前上下文', () => {
   expect(tally.sessions().map(session => session.id)).toEqual(['first', 'second']);
 });
 
+it('保留 Session 标题与来源，并随累计状态恢复', () => {
+  const tally = new TraceUsageTally();
+  tally.consume({
+    ...record({ type: 'agent_start' }),
+    metadata: {
+      session: {
+        title: '赛后复盘',
+        sources: ['bilibili:room:1718908', 'bilibili:streamer-name:%E4%B8%BB%E6%92%AD'],
+      },
+    },
+  });
+
+  const restored = new TraceUsageTally();
+  restored.restore(tally.state());
+
+  expect(restored.sessions()[0]).toMatchObject({
+    title: '赛后复盘',
+    sources: ['bilibili:room:1718908', 'bilibili:streamer-name:%E4%B8%BB%E6%92%AD'],
+  });
+});
+
 it('只认 message_end，流式增量不会重复计入', () => {
   const tally = new TraceUsageTally();
   const message = assistant({ input: 10, output: 2, cacheRead: 0, cacheWrite: 0, totalTokens: 12 });

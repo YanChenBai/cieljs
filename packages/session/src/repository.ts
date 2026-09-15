@@ -50,6 +50,7 @@ export class SessionRepository {
   async open(selector: SessionSelector, options: SessionOptions): Promise<SessionInfo> {
     const id = options.id ?? crypto.randomUUID();
     const spaceId = selector.spaceId;
+    const title = normalizeTitle(options.title);
 
     if (!id.trim()) {
       throw new SessionValidationError('Session id 不能为空');
@@ -68,6 +69,7 @@ export class SessionRepository {
         id,
         spaceId,
         namespace: selector.namespace!,
+        title,
         sources: providedSources ?? [],
         sourceSearchText: normalizeSearchText((providedSources ?? []).join('\n')),
         sourceTokenText: this.toTokenText((providedSources ?? []).join('\n')),
@@ -81,15 +83,21 @@ export class SessionRepository {
       return materializeSession(created);
     }
 
-    if (providedSources !== undefined) {
+    if (providedSources !== undefined || options.title !== undefined) {
+      const updates = {
+        ...(providedSources === undefined
+          ? {}
+          : {
+              sources: providedSources,
+              sourceSearchText: normalizeSearchText(providedSources.join('\n')),
+              sourceTokenText: this.toTokenText(providedSources.join('\n')),
+            }),
+        ...(options.title === undefined ? {} : { title }),
+        updatedAt: new Date(),
+      };
       const [updated] = await this.db
         .update(sessions)
-        .set({
-          sources: providedSources,
-          sourceSearchText: normalizeSearchText(providedSources.join('\n')),
-          sourceTokenText: this.toTokenText(providedSources.join('\n')),
-          updatedAt: new Date(),
-        })
+        .set(updates)
         .where(sessionCondition({ namespace: selector.namespace, spaceId, sessionId: id }))
         .returning();
 
@@ -131,19 +139,26 @@ export class SessionRepository {
   }
 
   async update(selector: SessionSelector, input: UpdateSessionInput): Promise<SessionInfo> {
-    if (input.sources === undefined) {
+    if (input.sources === undefined && input.title === undefined) {
       throw new SessionValidationError('至少提供一个要更新的字段');
     }
 
-    const sources = normalizeSources(input.sources);
+    const sources = input.sources === undefined ? undefined : normalizeSources(input.sources);
+    const title = normalizeTitle(input.title);
+    const updates = {
+      ...(sources === undefined
+        ? {}
+        : {
+            sources,
+            sourceSearchText: normalizeSearchText(sources.join('\n')),
+            sourceTokenText: this.toTokenText(sources.join('\n')),
+          }),
+      ...(input.title === undefined ? {} : { title }),
+      updatedAt: new Date(),
+    };
     const [row] = await this.db
       .update(sessions)
-      .set({
-        sources,
-        sourceSearchText: normalizeSearchText(sources.join('\n')),
-        sourceTokenText: this.toTokenText(sources.join('\n')),
-        updatedAt: new Date(),
-      })
+      .set(updates)
       .where(sessionCondition(selector))
       .returning();
 
@@ -463,11 +478,21 @@ export function materializeSession(row: SessionRow): SessionInfo {
   return {
     id: row.id,
     spaceId: row.spaceId,
+    title: row.title ?? undefined,
     sources: [...row.sources],
     messageCount: row.nextMessageSeq - 1,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+function normalizeTitle(title: string | undefined) {
+  if (title === undefined) return undefined;
+
+  const value = title.trim();
+  if (!value) throw new SessionValidationError('Session title 不能为空');
+
+  return value;
 }
 
 export function materializeMessage(row: MessageRow): SessionMessage {

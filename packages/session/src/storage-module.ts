@@ -77,5 +77,9 @@ ALTER TABLE "session"."message_links" ADD CONSTRAINT "session_messages_session_i
 CREATE VIEW session.session_messages AS SELECT l.id, l.session_id, l.seq, e.record->'event'->'message' AS message, l.created_at FROM session.message_links l JOIN storage.events e ON e.id = l.event_id;
 `,
     },
+    {
+      id: '0002',
+      sql: `ALTER TABLE "session"."sessions" ADD COLUMN "title" text;`,
+    },
   ],
 };

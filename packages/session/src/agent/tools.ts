@@ -7,6 +7,7 @@ import { resolveToolOptions } from './helpers.ts';
 import { createCurrentReadTool, createScopedReadTool } from './read-tool.ts';
 import { createCurrentSearchTool, createScopedSearchTool } from './search-tool.ts';
 import type { SessionToolsOptions } from './types.ts';
+import { createUpdateSessionTitleTool } from './update-title-tool.ts';
 
 export function sessionTools(options: SessionToolsOptions): AgentTool[] {
   if (options.session.spaceId !== options.space.spaceId) {
@@ -15,6 +16,10 @@ export function sessionTools(options: SessionToolsOptions): AgentTool[] {
 
   const limits = resolveToolOptions(options);
   const tools: AgentTool[] = [
+    createUpdateSessionTitleTool({
+      session: options.session,
+      onUpdated: options.onSessionUpdated,
+    }),
     createCurrentSearchTool({
       name: 'search_current_session_messages',
       label: '搜索当前会话正文',

@@ -10,12 +10,23 @@ type Usage = {
   totalTokens: number;
 };
 
+type SessionUsageState = {
+  title?: string;
+  sources?: string[];
+  startedAt: number;
+  endedAt: number;
+  total: TraceUsage;
+  context: TraceUsage | null;
+};
+
 export interface TraceUsageTallyState {
   total: TraceUsage;
   context: TraceUsage | null;
   contextSessionId: string | null;
   sessions: Array<{
     id: string;
+    title?: string;
+    sources?: string[];
     startedAt: number;
     endedAt: number;
     total: TraceUsage;
@@ -31,13 +42,12 @@ export class TraceUsageTally {
   private readonly total = empty();
   private context: TraceUsage | null = null;
   private contextSessionId: string | null = null;
-  private readonly sessionStates = new Map<
-    string,
-    { startedAt: number; endedAt: number; total: TraceUsage; context: TraceUsage | null }
-  >();
+  private readonly sessionStates = new Map<string, SessionUsageState>();
 
   consume(record: RuntimeRecord) {
     const session = this.touch(record.sessionId, record.timestamp);
+    if (record.metadata.session?.title) session.title = record.metadata.session.title;
+    if (record.metadata.session?.sources) session.sources = [...record.metadata.session.sources];
 
     if (record.event.type === 'session_compaction') {
       // 压缩换了上下文，保留消息里的旧 usage 不再代表当前规模；先用摘要加保留原文的
@@ -60,7 +70,7 @@ export class TraceUsageTally {
     addUsage(session.total, usage);
   }
 
-  touch(sessionId: string, timestamp: number) {
+  touch(sessionId: string, timestamp: number): SessionUsageState {
     const existing = this.sessionStates.get(sessionId);
     if (existing) {
       existing.startedAt = Math.min(existing.startedAt, timestamp);
@@ -87,6 +97,8 @@ export class TraceUsageTally {
     return [...this.sessionStates.entries()]
       .map(([id, session]) => ({
         id,
+        title: session.title,
+        sources: session.sources && [...session.sources],
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         usage: this.snapshot(id),
@@ -103,6 +115,8 @@ export class TraceUsageTally {
       contextSessionId: this.contextSessionId,
       sessions: [...this.sessionStates].map(([id, session]) => ({
         id,
+        title: session.title,
+        sources: session.sources && [...session.sources],
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         total: { ...session.total },
@@ -119,6 +133,8 @@ export class TraceUsageTally {
 
     for (const session of state.sessions) {
       this.sessionStates.set(session.id, {
+        title: session.title,
+        sources: session.sources && [...session.sources],
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         total: { ...session.total },

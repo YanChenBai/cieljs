@@ -1,5 +1,6 @@
 import type { MemoryManager } from '@cieljs/memory';
 import type { SessionManager } from '@cieljs/session';
+import { createUpdateSessionTitleTool } from '@cieljs/session/agent';
 import type { AgentEvent, AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { streamSimple } from '@earendil-works/pi-ai/compat';
@@ -27,6 +28,7 @@ export async function runInvestigation(options: {
   question: string | AgentMessage[];
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent, context: { tools: AgentTool[]; model: Model<Api> }) => void;
+  onTitleUpdated?: (title: string) => void;
 }): Promise<InvestigationResult> {
   options.signal?.throwIfAborted();
 
@@ -38,14 +40,25 @@ export async function runInvestigation(options: {
     sources: initialSources,
   });
   const context = await session.context();
+  let sessionInfo = await session.getInfo();
 
   const { refreshSources, resolveAndRefreshSources } = createSessionSourceSync(
     session,
     initialSources,
     options.resolveSources,
+    updated => {
+      sessionInfo = updated;
+    },
   );
 
   const tools = [
+    createUpdateSessionTitleTool({
+      session,
+      onUpdated: updated => {
+        sessionInfo = updated;
+        if (updated.title) options.onTitleUpdated?.(updated.title);
+      },
+    }),
     ...createInvestigationTools({
       sessionManager: options.sessionManager,
       memoryManager: options.memoryManager,
@@ -80,7 +93,11 @@ export async function runInvestigation(options: {
 
   const messages: AgentMessage[] = [];
   const unsubscribe = agent.subscribe(async event => {
-    await session.record(event, { tools, model: options.model });
+    await session.record(event, {
+      tools,
+      model: options.model,
+      session: { title: sessionInfo.title, sources: sessionInfo.sources },
+    });
     options.onEvent?.(event, { tools, model: options.model });
     if (event.type !== 'message_end') {
       return;

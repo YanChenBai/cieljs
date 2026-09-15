@@ -65,11 +65,15 @@ export async function createRuntimeSessionAgent(options: {
     sources: initialSources,
   });
   const messages = await session.context();
+  let sessionInfo = await session.getInfo();
 
   const { refreshSources, resolveAndRefreshSources } = createSessionSourceSync(
     session,
     initialSources,
     options.resolveSources,
+    updated => {
+      sessionInfo = updated;
+    },
   );
 
   const tools = [
@@ -77,6 +81,9 @@ export async function createRuntimeSessionAgent(options: {
     ...sessionTools({
       session,
       space: sessionSpace,
+      onSessionUpdated: updated => {
+        sessionInfo = updated;
+      },
       crossSpace: options.crossSpace
         ? { manager: options.sessionManager, access: 'related' }
         : undefined,
@@ -155,7 +162,11 @@ export async function createRuntimeSessionAgent(options: {
   });
 
   const unsubscribe = agent.subscribe(async event => {
-    await session.record(event, { tools, model: options.model });
+    await session.record(event, {
+      tools,
+      model: options.model,
+      session: { title: sessionInfo.title, sources: sessionInfo.sources },
+    });
   });
 
   return new SessionAgentHandle(
