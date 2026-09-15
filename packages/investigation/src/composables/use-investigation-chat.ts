@@ -9,7 +9,8 @@ import type {
 export function useInvestigationChat(client: InvestigationClient) {
   const conversations = shallowRef<InvestigationConversation[]>([]);
   const conversation = shallowRef<InvestigationConversation>();
-  const pending = shallowRef<'create' | 'prompt' | 'abort'>();
+  const pending = shallowRef<'create' | 'delete'>();
+  const sessionPending = shallowRef(new Map<string, 'prompt' | 'abort'>());
   const error = shallowRef('');
   const abortedSessions = new Set<string>();
   const updatesController = new AbortController();
@@ -23,6 +24,13 @@ export function useInvestigationChat(client: InvestigationClient) {
         : conversations.value.map(item => (item.sessionId === updated.sessionId ? updated : item));
 
     if (conversation.value?.sessionId === updated.sessionId) conversation.value = updated;
+  }
+
+  function setSessionPending(sessionId: string, status?: 'prompt' | 'abort') {
+    const next = new Map(sessionPending.value);
+    if (status) next.set(sessionId, status);
+    else next.delete(sessionId);
+    sessionPending.value = next;
   }
 
   async function initialize() {
@@ -100,9 +108,35 @@ export function useInvestigationChat(client: InvestigationClient) {
     }
   }
 
+  async function remove(sessionId: string) {
+    if (pending.value || sessionPending.value.has(sessionId)) return;
+
+    const deletedIndex = conversations.value.findIndex(item => item.sessionId === sessionId);
+    if (deletedIndex < 0) return;
+
+    pending.value = 'delete';
+    error.value = '';
+
+    try {
+      await client.delete({ sessionId });
+
+      const remaining = conversations.value.filter(item => item.sessionId !== sessionId);
+      conversations.value = remaining;
+
+      if (conversation.value?.sessionId === sessionId) {
+        conversation.value = remaining.at(Math.min(deletedIndex, remaining.length - 1));
+      }
+    } catch (cause) {
+      error.value = String(cause);
+    } finally {
+      pending.value = undefined;
+    }
+  }
+
   async function prompt(content: string) {
     const sessionId = conversation.value?.sessionId;
-    if (!sessionId || pending.value || !content.trim()) return;
+    if (!sessionId || pending.value || sessionPending.value.has(sessionId) || !content.trim())
+      return;
 
     const question = content.trim();
     if (conversation.value?.title === '新调查') {
@@ -112,7 +146,7 @@ export function useInvestigationChat(client: InvestigationClient) {
       });
     }
 
-    pending.value = 'prompt';
+    setSessionPending(sessionId, 'prompt');
     error.value = '';
 
     try {
@@ -123,29 +157,23 @@ export function useInvestigationChat(client: InvestigationClient) {
       }
     } finally {
       abortedSessions.delete(sessionId);
-
-      if (pending.value === 'prompt') {
-        pending.value = undefined;
-      }
+      setSessionPending(sessionId);
     }
   }
 
   async function abort() {
     const sessionId = conversation.value?.sessionId;
-    if (!sessionId || pending.value !== 'prompt') return;
+    if (!sessionId || sessionPending.value.get(sessionId) !== 'prompt') return;
 
     abortedSessions.add(sessionId);
-    pending.value = 'abort';
+    setSessionPending(sessionId, 'abort');
 
     try {
       await client.abort({ sessionId });
     } catch (cause) {
       abortedSessions.delete(sessionId);
+      setSessionPending(sessionId, 'prompt');
       error.value = String(cause);
-    } finally {
-      if (pending.value === 'abort') {
-        pending.value = undefined;
-      }
     }
   }
 
@@ -155,11 +183,13 @@ export function useInvestigationChat(client: InvestigationClient) {
     conversations: readonly(conversations),
     conversation: readonly(conversation),
     pending: readonly(pending),
+    sessionPending: readonly(sessionPending),
     error,
     initialize,
     create,
     select,
     rename,
+    remove,
     prompt,
     abort,
   };

@@ -21,7 +21,7 @@ There is no transport here and no data layer. The package renders whatever an `I
 
 ## Concepts
 
-The component talks to one contract, `InvestigationClient`, whose six methods are listed under [Client contract](#the-client-contract). The rest of the vocabulary is small. `InvestigationTargetInput` is what the host creates a conversation for: `{ type: 'global' }` or `{ type: 'room', roomId }`. `InvestigationConversation` is the conversation itself, carrying `sessionId`, `target`, `title`, `label`, `createdAt` and an optional `room`. `InvestigationRoom` is `{ roomId, title, streamerName }`, which feeds the "current room" shortcut. `InvestigationUpdate` is the only push defined today: `{ type: 'title_updated', sessionId, title }`.
+The component talks to one contract, `InvestigationClient`, whose seven methods are listed under [Client contract](#the-client-contract). The rest of the vocabulary is small. `InvestigationTargetInput` is what the host creates a conversation for: `{ type: 'global' }` or `{ type: 'room', roomId }`. `InvestigationConversation` is the conversation itself, carrying `sessionId`, `target`, `title`, `label`, `createdAt` and an optional `room`. `InvestigationRoom` is `{ roomId, title, streamerName }`, which feeds the "current room" shortcut. `InvestigationUpdate` is the only push defined today: `{ type: 'title_updated', sessionId, title }`.
 
 The session id is the hinge. It is the `TraceClient` session the agent's answer is read from, so conversations and traces are joined by that single string. `TraceClient` is the oRPC client from `@cieljs/trace/client`, passed straight through to `CielChat`.
 
@@ -53,7 +53,7 @@ defineProps<{ client: InvestigationClient; traceClient: TraceClient }>();
 </template>
 ```
 
-An oRPC router whose procedure names match the contract satisfies `InvestigationClient` as is. That is how the bundled Electron app wires it: its `investigation` router exposes exactly `list`, `create`, `rename`, `updates`, `prompt` and `abort`, so the generated client is passed directly. When the names differ, adapt them explicitly:
+An oRPC router whose procedure names match the contract satisfies `InvestigationClient` as is. That is how the bundled Electron app wires it: its `investigation` router exposes exactly `list`, `create`, `rename`, `delete`, `updates`, `prompt` and `abort`, so the generated client is passed directly. When the names differ, adapt them explicitly:
 
 ```ts
 import type { InvestigationClient } from '@cieljs/investigation';
@@ -68,6 +68,7 @@ const client: InvestigationClient = {
   list: () => rpc.investigation.list(),
   create: input => rpc.investigation.create(input),
   rename: input => rpc.investigation.rename(input),
+  delete: input => rpc.investigation.delete(input),
   updates: (input, options) => rpc.investigation.updates(input, options),
   prompt: input => rpc.investigation.prompt(input),
   abort: input => rpc.investigation.abort(input),
@@ -114,6 +115,7 @@ Internal components, in case you want to reuse a corner of it:
 | `list`    | `() => Promise<InvestigationConversation[]>`                                                             | Conversations to show in the sidebar                   |
 | `create`  | `(input: { target: InvestigationTargetInput }) => Promise<InvestigationConversation>`                    | Create a conversation for a target                     |
 | `rename`  | `(input: { sessionId: string; title: string }) => Promise<InvestigationConversation>`                    | Persist a new title; returns the updated conversation  |
+| `delete`  | `(input: { sessionId: string }) => Promise<void>`                                                        | Permanently remove a conversation session              |
 | `updates` | `(input?: undefined, options?: { signal?: AbortSignal }) => Promise<AsyncIterable<InvestigationUpdate>>` | Long-lived push stream, currently used to sync titles  |
 | `prompt`  | `(input: { sessionId: string; content: string }) => Promise<InvestigationConversation>`                  | Run one question; resolves when the answer is complete |
 | `abort`   | `(input: { sessionId: string }) => Promise<void>`                                                        | Stop the answer that is currently running              |
@@ -133,7 +135,7 @@ The host pushes title changes. Renaming somewhere else, for example an auto-gene
 | Export                      | Kind      | Description                                              |
 | --------------------------- | --------- | -------------------------------------------------------- |
 | `InvestigationChat`         | component | Sidebar, editable title, conversation and composer       |
-| `InvestigationClient`       | type      | The six-method contract described above                  |
+| `InvestigationClient`       | type      | The seven-method contract described above                |
 | `InvestigationConversation` | type      | `{ sessionId, target, title, label, createdAt, room? }`  |
 | `InvestigationRoom`         | type      | `{ roomId, title, streamerName }`                        |
 | `InvestigationTargetInput`  | type      | `{ type: 'global' } \| { type: 'room', roomId: number }` |
@@ -153,12 +155,14 @@ Both composables are internal, but they define the component's behavior.
 | ------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
 | `conversations`     | readonly ref | Every known conversation                                                                             |
 | `conversation`      | readonly ref | The selected one                                                                                     |
-| `pending`           | readonly ref | `'create' \| 'prompt' \| 'abort' \| undefined`                                                       |
+| `pending`           | readonly ref | `'create' \| 'delete' \| undefined`                                                                  |
+| `sessionPending`    | readonly ref | Per-session map of `'prompt' \| 'abort'` states                                                      |
 | `error`             | ref          | Last error message; writable so the host can clear it                                                |
 | `initialize()`      | function     | Connect updates, `list()`, select the newest, or create a global conversation when the list is empty |
 | `create(target)`    | function     | Create and select a conversation                                                                     |
 | `select(sessionId)` | function     | Select a conversation already in the list                                                            |
 | `rename(title)`     | function     | Rename the selected conversation (trimmed, ignored when empty)                                       |
+| `remove(sessionId)` | function     | Delete a conversation and select the next available one                                              |
 | `prompt(content)`   | function     | Send a question (trimmed, ignored when empty or busy)                                                |
 | `abort()`           | function     | Stop the running answer                                                                              |
 
@@ -169,8 +173,8 @@ Both composables are internal, but they define the component's behavior.
 - **The component is stateless about persistence.** Everything it shows comes from `client.list()` and the `updates` stream, and it keeps no local store. A host can restart the window without losing conversations, as long as its own list method can rebuild them.
 - **`initialize()` never leaves you without a conversation.** An empty list from the host creates a global conversation automatically, which is why the workspace shows a placeholder rather than an empty state on first run.
 - **A provisional title is optimistic.** While the selected conversation is still called `新调查`, the first question immediately becomes the local title (whitespace collapsed, 36 characters), before the server responds, so the sidebar is never untitled while the model works. The host replaces it later through `rename` or `title_updated`.
-- **Abort is not an error.** While `pending === 'prompt'`, the composer shows a stop button. Once `abort()` is called, the session id is remembered, so the rejection produced by the cancelled `prompt` promise is swallowed instead of surfacing as an error alert. The flag is cleared either way.
-- **One request at a time.** `initialize`, `create` and `prompt` all bail out when `pending` is set, and the sidebar and composer are disabled accordingly.
+- **Abort is not an error.** While the selected session is marked as `prompt`, the composer shows a stop button. Once `abort()` is called, the session id is remembered, so the rejection produced by the cancelled `prompt` promise is swallowed instead of surfacing as an error alert. The flag is cleared either way.
+- **Answer state belongs to each session.** You can switch sessions, create another investigation, and prompt an idle session while another answer is running. Only a session marked as `abort` has its own composer disabled.
 - **The updates subscription is lifetime-bound.** It is opened once, reused across `initialize()` calls, and aborted by `onScopeDispose`, so it ends with the component scope rather than leaking.
 - **The sidebar width is responsive, not persisted.** It is clamped against the viewport (`viewportWidth - 520`) and reset when the window changes size. The component does not write it to storage.
 - **Collapsed is a model, not internal state.** `v-model:sidebarCollapsed` lets the host drive its own header button, which is how the bundled app toggles the sidebar from outside the component.

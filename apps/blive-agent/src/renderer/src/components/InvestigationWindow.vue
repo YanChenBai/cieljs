@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { InvestigationChat } from '@cieljs/investigation';
+import { InvestigationChat, type InvestigationClient } from '@cieljs/investigation';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { Button } from '@vuetify/v0/components';
 import { onMounted, onUnmounted, shallowRef } from 'vue';
@@ -13,6 +13,17 @@ import '@cieljs/investigation/style.css';
 const currentRoom = shallowRef<RoomInfo>();
 const sidebarCollapsed = shallowRef(false);
 let unsubscribe: (() => void) | undefined;
+
+// oRPC 的路由节点是可调用 Proxy。包成普通对象后，既保留方法契约，也符合 Vue 的对象 prop 校验。
+const investigationClient = {
+  list: () => rpc.investigation.list(),
+  create: input => rpc.investigation.create(input),
+  rename: input => rpc.investigation.rename(input),
+  delete: input => rpc.investigation.delete(input),
+  updates: (input, options) => rpc.investigation.updates(input, options),
+  prompt: input => rpc.investigation.prompt(input),
+  abort: input => rpc.investigation.abort(input),
+} satisfies InvestigationClient;
 
 onMounted(async () => {
   const snapshot = await watchBridge.snapshot();
@@ -50,7 +61,7 @@ onUnmounted(() => unsubscribe?.());
     <main class="min-h-0 flex-1">
       <InvestigationChat
         v-model:sidebar-collapsed="sidebarCollapsed"
-        :client="rpc.investigation"
+        :client="investigationClient"
         :trace-client="rpc.investigationTrace"
         :current-room="currentRoom"
       />

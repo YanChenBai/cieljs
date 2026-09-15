@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { McpTools } from '@cieljs/mcp';
+import type { SessionInfo, SessionManager } from '@cieljs/session';
 import type { Storage } from '@cieljs/storage';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { completeSimple } from '@earendil-works/pi-ai/compat';
@@ -41,11 +42,11 @@ interface InvestigationUpdate {
 
 export function createInvestigationRoutes(options: {
   storage: Storage;
+  sessions: SessionManager;
   resolveModel: () => { model: Model<Api>; apiKey?: string };
   mcp?: McpTools;
   api: BilibiliApi;
   current: () => { room?: RoomInfo; sessionId?: string };
-  history?: () => { id: string; startedAt: number }[];
 }) {
   const conversations = new Map<string, InvestigationConversationState>();
   const active = new Map<string, AbortController>();
@@ -130,6 +131,7 @@ export function createInvestigationRoutes(options: {
       const generatedTitle = await generateTitle(question, signal);
       if (!generatedTitle || conversation.title !== provisionalTitle) return;
 
+      await persistTitle(conversation.sessionId, generatedTitle);
       conversation.title = generatedTitle;
       publishTitle(conversation);
     } catch (error) {
@@ -137,7 +139,9 @@ export function createInvestigationRoutes(options: {
     }
   };
 
-  const restoreConversation = (sessionId: string, createdAt: number) => {
+  const restoreConversation = (session: Pick<SessionInfo, 'id' | 'title' | 'createdAt'>) => {
+    const sessionId = session.id;
+    const createdAt = session.createdAt.getTime();
     if (!sessionId.startsWith('investigation:')) return;
 
     const parts = sessionId.split(':');
@@ -147,7 +151,7 @@ export function createInvestigationRoutes(options: {
         inputTarget: { type: 'global' } as const,
         target: { type: 'global' } as const,
         sources: ['application:blive-agent', 'investigation:global'],
-        title: '全局调查',
+        title: session.title ?? '全局调查',
         label: '全局调查',
         createdAt,
       } satisfies InvestigationConversationState;
@@ -161,17 +165,24 @@ export function createInvestigationRoutes(options: {
       inputTarget: { type: 'room', roomId } as const,
       target: { type: 'space', spaceId: `bilibili:room:${roomId}` } as const,
       sources: ['application:blive-agent', `bilibili:room:${roomId}`],
-      title: `房间 ${roomId} 调查`,
+      title: session.title ?? `房间 ${roomId} 调查`,
       label: `房间 ${roomId}`,
       createdAt,
     } satisfies InvestigationConversationState;
   };
 
+  const persistTitle = async (sessionId: string, title: string) => {
+    const session = await options.sessions.getAnySession(sessionId);
+    if (!session) throw new Error('Investigation Session 不存在');
+
+    await session.update({ title });
+  };
+
   const requireConversation = async (sessionId: string) => {
     let conversation = conversations.get(sessionId);
     if (!conversation) {
-      const history = options.history?.().find(item => item.id === sessionId);
-      conversation = history && restoreConversation(history.id, history.startedAt);
+      const session = await options.sessions.getAnySession(sessionId);
+      conversation = session ? restoreConversation(await session.getInfo()) : undefined;
       if (conversation) conversations.set(sessionId, conversation);
     }
     if (!conversation) throw new Error('Investigation 会话不存在，请新建调查');
@@ -195,11 +206,11 @@ export function createInvestigationRoutes(options: {
     return conversation;
   };
 
-  const list = os.handler(() => {
-    for (const session of options.history?.() ?? []) {
+  const list = os.handler(async () => {
+    for (const session of await options.sessions.list()) {
       if (conversations.has(session.id)) continue;
 
-      const conversation = restoreConversation(session.id, session.startedAt);
+      const conversation = restoreConversation(session);
       if (conversation) conversations.set(session.id, conversation);
     }
 
@@ -244,6 +255,12 @@ export function createInvestigationRoutes(options: {
       };
     }
 
+    const spaceId = conversation.target.type === 'global' ? 'global' : conversation.target.spaceId;
+    await options.sessions.space(spaceId).session({
+      id: sessionId,
+      title: conversation.title,
+      sources: conversation.sources,
+    });
     conversations.set(sessionId, conversation);
 
     return serializeConversation(conversation);
@@ -253,11 +270,24 @@ export function createInvestigationRoutes(options: {
     .input(sessionInputSchema.extend({ title: z.string().trim().min(1).max(80) }))
     .handler(async ({ input }) => {
       const conversation = await requireConversation(input.sessionId);
+      await persistTitle(conversation.sessionId, input.title);
       conversation.title = input.title;
       publishTitle(conversation);
 
       return serializeConversation(conversation);
     });
+
+  const deleteConversation = os.input(sessionInputSchema).handler(async ({ input }) => {
+    if (active.has(input.sessionId)) throw new Error('Investigation 正在回答，请先停止回答');
+
+    const session = await options.sessions.getAnySession(input.sessionId);
+    if (!session || !input.sessionId.startsWith('investigation:')) {
+      throw new Error('Investigation 会话不存在');
+    }
+
+    await session.delete();
+    conversations.delete(input.sessionId);
+  });
 
   const updates = os.handler(async function* ({ signal }) {
     const queue: InvestigationUpdate[] = [];
@@ -302,6 +332,7 @@ export function createInvestigationRoutes(options: {
       let titleUpdate: Promise<void> | undefined;
       if (conversation.title === '新调查') {
         const provisionalTitle = input.content.replace(/\s+/gu, ' ').slice(0, 36);
+        await persistTitle(conversation.sessionId, provisionalTitle);
         conversation.title = provisionalTitle;
         publishTitle(conversation);
         titleUpdate = updateGeneratedTitle(
@@ -322,6 +353,10 @@ export function createInvestigationRoutes(options: {
           crossSpace: true,
           sources: conversation.sources,
           signal: controller.signal,
+          onTitleUpdated: title => {
+            conversation.title = title;
+            publishTitle(conversation);
+          },
         });
         await titleUpdate;
       } finally {
@@ -337,7 +372,7 @@ export function createInvestigationRoutes(options: {
   });
 
   return {
-    router: { list, create, rename, updates, prompt, abort },
+    router: { list, create, rename, delete: deleteConversation, updates, prompt, abort },
     close: async () => {
       lifetime.abort();
       for (const controller of active.values()) controller.abort();

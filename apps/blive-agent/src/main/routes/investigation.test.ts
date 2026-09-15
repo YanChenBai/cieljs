@@ -1,5 +1,7 @@
+import { SessionManager, sessionStorage } from '@cieljs/session';
+import { Storage } from '@cieljs/storage';
 import { createRouterClient } from '@orpc/server';
-import { beforeEach, expect, it, vi } from 'vite-plus/test';
+import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test';
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(async () => {}),
@@ -15,6 +17,9 @@ vi.mock('@earendil-works/pi-ai/compat', () => ({ completeSimple: mocks.completeS
 import type { RoomInfo } from '../../shared/types.ts';
 import { createInvestigationRoutes } from './investigation.ts';
 
+let storage: Storage;
+let sessions: SessionManager;
+
 const room: RoomInfo = {
   roomId: 123,
   streamerUid: 456,
@@ -26,8 +31,10 @@ const room: RoomInfo = {
   live: true,
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  storage = await Storage.open({ dataDir: 'memory://', modules: [sessionStorage] });
+  sessions = await SessionManager.open({ storage, namespace: 'investigation' });
   mocks.defineCiel.mockReturnValue({
     start: mocks.start,
     investigate: mocks.investigate,
@@ -39,9 +46,15 @@ beforeEach(() => {
   });
 });
 
+afterEach(async () => {
+  await sessions.close();
+  await storage.close();
+});
+
 function createRoutes(current: { room?: RoomInfo; sessionId?: string } = {}) {
   return createInvestigationRoutes({
-    storage: {} as never,
+    storage,
+    sessions,
     resolveModel: () => ({ model: { id: 'test' } as never }),
     api: { room: vi.fn(async () => room) } as never,
     current: () => current,
@@ -141,21 +154,24 @@ it('同一调查拒绝并发回答', async () => {
   await first;
 });
 
-it('从 Trace 历史恢复 Investigation 会话并允许继续提问', async () => {
+it('从 Session 恢复 Investigation 标题并允许继续提问', async () => {
+  await sessions.space('global').session({
+    id: 'investigation:global:history',
+    title: '持久化调查标题',
+  });
   const routes = createInvestigationRoutes({
-    storage: {} as never,
+    storage,
+    sessions,
     resolveModel: () => ({ model: { id: 'test' } as never }),
     api: { room: vi.fn(async () => room) } as never,
     current: () => ({}),
-    history: () => [{ id: 'investigation:global:history', startedAt: 10 }],
   });
   const client = createRouterClient(routes.router);
 
   expect(await client.list()).toEqual([
     expect.objectContaining({
       sessionId: 'investigation:global:history',
-      title: '全局调查',
-      createdAt: 10,
+      title: '持久化调查标题',
     }),
   ]);
   await client.prompt({ sessionId: 'investigation:global:history', content: '继续分析' });
@@ -166,4 +182,35 @@ it('从 Trace 历史恢复 Investigation 会话并允许继续提问', async () 
       target: { type: 'global' },
     }),
   );
+});
+
+it('创建、自动标题与手动改名都会写入 Session', async () => {
+  const routes = createRoutes();
+  const client = createRouterClient(routes.router);
+  const conversation = await client.create({ target: { type: 'global' } });
+
+  await expect(
+    (await sessions.getAnySession(conversation.sessionId))?.getInfo(),
+  ).resolves.toMatchObject({ title: '新调查' });
+
+  await client.prompt({ sessionId: conversation.sessionId, content: '比较所有直播间' });
+  await expect(
+    (await sessions.getAnySession(conversation.sessionId))?.getInfo(),
+  ).resolves.toMatchObject({ title: '跨直播间观看比较' });
+
+  await client.rename({ sessionId: conversation.sessionId, title: '手动标题' });
+  await expect(
+    (await sessions.getAnySession(conversation.sessionId))?.getInfo(),
+  ).resolves.toMatchObject({ title: '手动标题' });
+});
+
+it('删除调查会话并从列表与 Session 存储中移除', async () => {
+  const routes = createRoutes();
+  const client = createRouterClient(routes.router);
+  const conversation = await client.create({ target: { type: 'global' } });
+
+  await client.delete({ sessionId: conversation.sessionId });
+
+  await expect(client.list()).resolves.toEqual([]);
+  await expect(sessions.getAnySession(conversation.sessionId)).resolves.toBeNull();
 });

@@ -21,7 +21,7 @@
 
 ## 概念
 
-组件只跟一个契约打交道：`InvestigationClient`，它的六个方法列在[客户端契约](#客户端契约)里。其余词汇不多。`InvestigationTargetInput` 是宿主用来创建会话的目标：`{ type: 'global' }` 或 `{ type: 'room', roomId }`。`InvestigationConversation` 就是会话本身，带 `sessionId`、`target`、`title`、`label`、`createdAt` 以及可选的 `room`。`InvestigationRoom` 是 `{ roomId, title, streamerName }`，用来支撑「当前房间」这个快捷选项。`InvestigationUpdate` 是目前唯一的推送：`{ type: 'title_updated', sessionId, title }`。
+组件只跟一个契约打交道：`InvestigationClient`，它的七个方法列在[客户端契约](#客户端契约)里。其余词汇不多。`InvestigationTargetInput` 是宿主用来创建会话的目标：`{ type: 'global' }` 或 `{ type: 'room', roomId }`。`InvestigationConversation` 就是会话本身，带 `sessionId`、`target`、`title`、`label`、`createdAt` 以及可选的 `room`。`InvestigationRoom` 是 `{ roomId, title, streamerName }`，用来支撑「当前房间」这个快捷选项。`InvestigationUpdate` 是目前唯一的推送：`{ type: 'title_updated', sessionId, title }`。
 
 session id 是这套东西的铰链。它同时也是读取 Agent 回答所用的 `TraceClient` 会话，因此会话与轨迹就靠这一个字符串连起来。`TraceClient` 是 `@cieljs/trace/client` 的 oRPC 客户端，会原样传给 `CielChat`。
 
@@ -53,7 +53,7 @@ defineProps<{ client: InvestigationClient; traceClient: TraceClient }>();
 </template>
 ```
 
-一个过程名与契约一致的 oRPC router 本身就能当 `InvestigationClient` 用。仓库里那个 Electron 应用就是这么接的：它的 `investigation` router 正好暴露 `list`、`create`、`rename`、`updates`、`prompt` 和 `abort`，于是生成的 client 被直接传了进去。名字对不上时，显式适配一层：
+一个过程名与契约一致的 oRPC router 本身就能当 `InvestigationClient` 用。仓库里那个 Electron 应用就是这么接的：它的 `investigation` router 正好暴露 `list`、`create`、`rename`、`delete`、`updates`、`prompt` 和 `abort`，于是生成的 client 被直接传了进去。名字对不上时，显式适配一层：
 
 ```ts
 import type { InvestigationClient } from '@cieljs/investigation';
@@ -68,6 +68,7 @@ const client: InvestigationClient = {
   list: () => rpc.investigation.list(),
   create: input => rpc.investigation.create(input),
   rename: input => rpc.investigation.rename(input),
+  delete: input => rpc.investigation.delete(input),
   updates: (input, options) => rpc.investigation.updates(input, options),
   prompt: input => rpc.investigation.prompt(input),
   abort: input => rpc.investigation.abort(input),
@@ -114,6 +115,7 @@ const client: InvestigationClient = {
 | `list`    | `() => Promise<InvestigationConversation[]>`                                                             | 侧栏要显示的会话               |
 | `create`  | `(input: { target: InvestigationTargetInput }) => Promise<InvestigationConversation>`                    | 为某个目标创建会话             |
 | `rename`  | `(input: { sessionId: string; title: string }) => Promise<InvestigationConversation>`                    | 持久化新标题，返回更新后的会话 |
+| `delete`  | `(input: { sessionId: string }) => Promise<void>`                                                        | 永久删除一个调查会话           |
 | `updates` | `(input?: undefined, options?: { signal?: AbortSignal }) => Promise<AsyncIterable<InvestigationUpdate>>` | 长连接推送流，目前用来同步标题 |
 | `prompt`  | `(input: { sessionId: string; content: string }) => Promise<InvestigationConversation>`                  | 提一个问题，回答完整时 resolve |
 | `abort`   | `(input: { sessionId: string }) => Promise<void>`                                                        | 停止正在进行的那次回答         |
@@ -133,7 +135,7 @@ Agent 必须在 `conversation.sessionId` 下运行，因为回答就是从那里
 | 导出                        | 类型      | 说明                                                     |
 | --------------------------- | --------- | -------------------------------------------------------- |
 | `InvestigationChat`         | component | 侧栏、可编辑标题、对话与输入框                           |
-| `InvestigationClient`       | type      | 上面那个六方法契约                                       |
+| `InvestigationClient`       | type      | 上面那个七方法契约                                       |
 | `InvestigationConversation` | type      | `{ sessionId, target, title, label, createdAt, room? }`  |
 | `InvestigationRoom`         | type      | `{ roomId, title, streamerName }`                        |
 | `InvestigationTargetInput`  | type      | `{ type: 'global' } \| { type: 'room', roomId: number }` |
@@ -153,12 +155,14 @@ Agent 必须在 `conversation.sessionId` 下运行，因为回答就是从那里
 | ------------------- | ------------ | ------------------------------------------------------------------ |
 | `conversations`     | readonly ref | 已知的全部会话                                                     |
 | `conversation`      | readonly ref | 当前选中的会话                                                     |
-| `pending`           | readonly ref | `'create' \| 'prompt' \| 'abort' \| undefined`                     |
+| `pending`           | readonly ref | `'create' \| 'delete' \| undefined`                                |
+| `sessionPending`    | readonly ref | 每个 session 独立的 `'prompt' \| 'abort'` 状态 Map                 |
 | `error`             | ref          | 最近一条错误信息；可写，宿主可以自行清空                           |
 | `initialize()`      | function     | 连接 updates、`list()`、选中最新的一条；列表为空时创建一个全局会话 |
 | `create(target)`    | function     | 创建并选中一个会话                                                 |
 | `select(sessionId)` | function     | 选中列表里已有的会话                                               |
 | `rename(title)`     | function     | 重命名当前会话（会 trim，空则忽略）                                |
+| `remove(sessionId)` | function     | 删除调查会话；删除当前项时选择下一条可用会话                       |
 | `prompt(content)`   | function     | 发送一个问题（会 trim，空或正忙则忽略）                            |
 | `abort()`           | function     | 停止正在进行的回答                                                 |
 
@@ -169,8 +173,8 @@ Agent 必须在 `conversation.sessionId` 下运行，因为回答就是从那里
 - **组件对持久化无状态。** 它显示的一切都来自 `client.list()` 和 `updates` 流，本地不存任何 store。只要宿主的 list 方法能重建会话，重启窗口也不会丢。
 - **`initialize()` 不会让你没有会话可用。** 宿主返回空列表时它会自动创建一个全局会话，所以第一次运行时工作区显示的是占位，而不是空状态。
 - **临时标题是乐观的。** 当选中会话还叫 `新调查` 时，第一个问题会立刻变成本地标题（折叠空白、截到 36 字符），不等服务端回应，这样模型工作时侧栏不会一直无标题。宿主之后通过 `rename` 或 `title_updated` 覆盖它。
-- **中止不算错误。** `pending === 'prompt'` 期间输入框显示停止按钮。调用 `abort()` 之后会记住该 session id，于是那次被取消的 `prompt` promise 产生的 rejection 会被吞掉，而不是弹出错误提示。无论哪条路径，标记都会被清掉。
-- **同一时间只有一个请求。** `initialize`、`create` 和 `prompt` 在 `pending` 有值时都会直接返回，侧栏和输入框也会相应地禁用。
+- **中止不算错误。** 当前 session 处于 `prompt` 状态时输入框显示停止按钮。调用 `abort()` 之后会记住该 session id，于是那次被取消的 `prompt` promise 产生的 rejection 会被吞掉，而不是弹出错误提示。无论哪条路径，标记都会被清掉。
+- **回答状态归属于各自的 session。** 一个 session 回答期间仍可切换、创建新调查，也可以在其他空闲 session 提问；只有处于 `abort` 状态的 session 会禁用自己的输入区。
 - **updates 订阅与组件生命周期绑定。** 它只开一次，跨多次 `initialize()` 复用，并由 `onScopeDispose` 中止，因此随组件作用域结束，不会泄漏。
 - **侧栏宽度是响应式的，不做持久化。** 它按视口夹紧（`viewportWidth - 520`），窗口尺寸变化时重置。组件不会把它写进存储。
 - **折叠是 model，不是内部状态。** `v-model:sidebarCollapsed` 让宿主可以驱动自己的头部按钮，仓库里的应用就是这样从组件外部切换侧栏的。

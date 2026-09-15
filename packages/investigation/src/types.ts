@@ -25,6 +25,7 @@ export interface InvestigationClient {
   list(): Promise<InvestigationConversation[]>;
   create(input: { target: InvestigationTargetInput }): Promise<InvestigationConversation>;
   rename(input: { sessionId: string; title: string }): Promise<InvestigationConversation>;
+  delete(input: { sessionId: string }): Promise<void>;
   updates(
     input?: undefined,
     options?: { signal?: AbortSignal },

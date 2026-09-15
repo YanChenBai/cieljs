@@ -2,7 +2,7 @@
 import { CielChat, vFollowScroll } from '@cieljs/console';
 import type { TraceClient } from '@cieljs/trace';
 import { Button } from '@vuetify/v0/components';
-import { onMounted, shallowRef, useTemplateRef } from 'vue';
+import { computed, onMounted, shallowRef, useTemplateRef } from 'vue';
 
 import { useInvestigationChat } from '../composables/use-investigation-chat.ts';
 import { useInvestigationSidebar } from '../composables/use-investigation-sidebar.ts';
@@ -21,11 +21,13 @@ const {
   conversations,
   conversation,
   pending,
+  sessionPending,
   error,
   initialize,
   create,
   select,
   rename,
+  remove,
   prompt,
   abort,
 } = useInvestigationChat(props.client);
@@ -34,6 +36,18 @@ const { width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyboardResize 
 const scroll = useTemplateRef<HTMLElement>('scroll');
 const editingTitle = shallowRef(false);
 const title = shallowRef('');
+const currentSessionPending = computed(() => {
+  const sessionId = conversation.value?.sessionId;
+  return sessionId ? sessionPending.value.get(sessionId) : undefined;
+});
+const busySessionIds = computed<ReadonlySet<string>>(() => new Set(sessionPending.value.keys()));
+const composerRunning = computed(() => Boolean(currentSessionPending.value));
+const composerDisabled = computed(() => {
+  if (!conversation.value) return true;
+  if (pending.value) return true;
+
+  return currentSessionPending.value === 'abort';
+});
 
 function createConversation(target: InvestigationTargetInput) {
   void create(target);
@@ -77,8 +91,10 @@ onMounted(() => {
       :selected-session-id="conversation?.sessionId"
       :current-room="currentRoom"
       :disabled="Boolean(pending)"
+      :busy-session-ids="busySessionIds"
       @create="createConversation"
       @select="select"
+      @delete="remove"
     />
 
     <div
@@ -140,8 +156,8 @@ onMounted(() => {
         <div v-else class="investigation-empty">正在创建调查会话…</div>
 
         <InvestigationComposer
-          :disabled="!conversation || pending === 'create' || pending === 'abort'"
-          :running="pending === 'prompt'"
+          :disabled="composerDisabled"
+          :running="composerRunning"
           @submit="prompt"
           @abort="abort"
         />

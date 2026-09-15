@@ -2,7 +2,7 @@ import { join } from 'node:path';
 
 import { createMcp } from '@cieljs/mcp';
 import { memoryStorage } from '@cieljs/memory';
-import { sessionStorage } from '@cieljs/session';
+import { SessionManager, sessionStorage } from '@cieljs/session';
 import { Storage } from '@cieljs/storage';
 import { createTraceRouter, TraceHost, traceStorage, type TraceRouter } from '@cieljs/trace/host';
 import { vectorStorage } from '@cieljs/vector';
@@ -68,6 +68,9 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
   });
   // 历史重放留给后台：它随会话数增长，不能排在窗口显示前面。
   const trace = resources.use(await TraceHost.open({ storage, awaitReplay: false }));
+  const investigationSessions = resources.use(
+    await SessionManager.open({ storage, namespace: 'investigation' }),
+  );
   const mcp = resources.use(
     await createMcp({
       cwd: dataDirectory,
@@ -86,11 +89,11 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
 
   const investigation = createInvestigationRoutes({
     storage,
+    sessions: investigationSessions,
     mcp,
     api,
     resolveModel: () => resolveWatchModel(resolveWatchConfig()),
     current: () => ({ room: runtime?.room, sessionId: runtime?.sessionId }),
-    history: () => trace.sessions(),
   });
   resources.defer(() => investigation.close());
 

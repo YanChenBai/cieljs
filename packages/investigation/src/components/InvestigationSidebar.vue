@@ -1,52 +1,101 @@
 <script setup lang="ts">
-import { Button, Popover } from '@vuetify/v0/components';
-import { shallowRef } from 'vue';
+import { Button, Dialog, Popover } from '@vuetify/v0/components';
+import { computed, shallowRef } from 'vue';
 
 import type {
   InvestigationConversation,
   InvestigationRoom,
   InvestigationTargetInput,
 } from '../types.ts';
+import InvestigationSessionGroup from './InvestigationSessionGroup.vue';
 import InvestigationTargetPicker from './InvestigationTargetPicker.vue';
 
-defineProps<{
+const props = defineProps<{
   conversations: readonly InvestigationConversation[];
   selectedSessionId?: string;
   currentRoom?: InvestigationRoom;
   disabled?: boolean;
+  busySessionIds?: ReadonlySet<string>;
 }>();
 
 const emit = defineEmits<{
   create: [target: InvestigationTargetInput];
   select: [sessionId: string];
+  delete: [sessionId: string];
 }>();
 
 const createOpen = shallowRef(false);
+const deleteOpen = shallowRef(false);
+const deletionCandidate = shallowRef<InvestigationConversation>();
+
+const groups = computed(() => {
+  const global: InvestigationConversation[] = [];
+  const rooms = new Map<number, InvestigationConversation[]>();
+
+  for (const conversation of props.conversations.toReversed()) {
+    if (conversation.target.type === 'global') {
+      global.push(conversation);
+      continue;
+    }
+
+    const roomId = conversation.target.roomId;
+    const conversations = rooms.get(roomId) ?? [];
+    conversations.push(conversation);
+    rooms.set(roomId, conversations);
+  }
+
+  const result = global.length ? [{ id: 'global', label: '全局', conversations: global }] : [];
+  for (const [roomId, conversations] of rooms) {
+    const room = conversations.find(item => item.room)?.room;
+    const label = room ? `${room.streamerName} · ${roomId}` : `房间 ${roomId}`;
+    result.push({ id: `room:${roomId}`, label, conversations });
+  }
+
+  return result;
+});
 
 function create(target: InvestigationTargetInput) {
   createOpen.value = false;
   emit('create', target);
 }
 
-function sessionTime(createdAt: number) {
-  return new Date(createdAt).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+function requestDelete(conversation: InvestigationConversation) {
+  deletionCandidate.value = conversation;
+  deleteOpen.value = true;
+}
+
+function confirmDelete() {
+  const sessionId = deletionCandidate.value?.sessionId;
+  if (!sessionId) return;
+
+  deleteOpen.value = false;
+  deletionCandidate.value = undefined;
+  emit('delete', sessionId);
 }
 </script>
 
 <template>
   <aside id="investigation-sidebar" class="investigation-sidebar" aria-label="调查会话">
-    <div class="investigation-sidebar-header">
-      <span>Investigation</span>
+    <div class="investigation-session-list">
+      <p v-if="!conversations.length" class="investigation-session-empty">还没有调查记录</p>
+      <InvestigationSessionGroup
+        v-for="group in groups"
+        :key="group.id"
+        :label="group.label"
+        :conversations="group.conversations"
+        :selected-session-id="selectedSessionId"
+        :disabled="disabled"
+        :busy-session-ids="busySessionIds"
+        @select="emit('select', $event)"
+        @delete="requestDelete"
+      />
+    </div>
+
+    <div class="investigation-create-row">
       <Popover.Root
         v-model="createOpen"
-        position-area="bottom span-right"
-        position-try="most-width bottom"
+        position-area="top span-right"
+        position-try="most-width top"
       >
         <Popover.Activator
           class="investigation-icon-button"
@@ -77,24 +126,19 @@ function sessionTime(createdAt: number) {
       </Popover.Root>
     </div>
 
-    <div class="investigation-session-list">
-      <p v-if="!conversations.length" class="investigation-session-empty">还没有调查记录</p>
-      <Button.Root
-        v-for="item in conversations.toReversed()"
-        :key="item.sessionId"
-        class="investigation-session"
-        :class="{ active: item.sessionId === selectedSessionId }"
-        :disabled="disabled"
-        @click="emit('select', item.sessionId)"
-      >
-        <span class="investigation-session-label">{{ item.title }}</span>
-        <span class="investigation-session-meta">
-          <span>{{ item.target.type === 'global' ? '全局' : `房间 ${item.target.roomId}` }}</span>
-          <time :datetime="new Date(item.createdAt).toISOString()">
-            {{ sessionTime(item.createdAt) }}
-          </time>
-        </span>
-      </Button.Root>
-    </div>
+    <Dialog.Root v-model="deleteOpen">
+      <Dialog.Content class="investigation-delete-dialog">
+        <Dialog.Title class="investigation-delete-title">删除调查</Dialog.Title>
+        <Dialog.Description class="investigation-delete-description">
+          确定删除“{{ deletionCandidate?.title }}”吗？删除后将无法在调查列表中恢复。
+        </Dialog.Description>
+        <div class="investigation-delete-actions">
+          <Dialog.Close class="investigation-dialog-button">取消</Dialog.Close>
+          <Button.Root class="investigation-dialog-button danger" @click="confirmDelete">
+            删除
+          </Button.Root>
+        </div>
+      </Dialog.Content>
+    </Dialog.Root>
   </aside>
 </template>

@@ -57,6 +57,7 @@ function handleKeydown(event: KeyboardEvent) {
       <Button.Root
         v-if="running"
         class="investigation-send investigation-stop"
+        :disabled="disabled"
         aria-label="停止生成"
         title="停止生成"
         @click="emit('abort')"
