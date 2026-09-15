@@ -60,8 +60,8 @@ function selectModel(event: Event) {
           aria-label="当前模型下载进度"
         >
           <div class="mb-2 flex items-center justify-between gap-3">
-            <Progress.Label class="min-w-0 truncate text-[#d6cbd3]" :title="models.progress.file">
-              {{ models.progress.file }}
+            <Progress.Label class="min-w-0 truncate text-[#d6cbd3]">
+              模型文件下载进度
             </Progress.Label>
             <Progress.Value
               v-if="models.progress.totalBytes"
