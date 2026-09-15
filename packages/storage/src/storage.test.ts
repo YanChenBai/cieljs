@@ -109,6 +109,46 @@ test('事件首次写入即持久化生成后的序号', async () => {
   expect(result.rows).toEqual([{ sequence: record.sequence, storedSequence: record.sequence }]);
 });
 
+test('start 与 end 持久化，update 只在当前进程实时分发', async () => {
+  await using storage = await Storage.open({ dataDir: 'memory://' });
+  const start = await storage.journal.record('session', {
+    type: 'tool_execution_start',
+    toolCallId: 'call',
+    toolName: 'search',
+    args: { query: '直播' },
+  });
+  const update = await storage.journal.record('session', {
+    type: 'tool_execution_update',
+    toolCallId: 'call',
+    toolName: 'search',
+    args: { query: '直播' },
+    partialResult: { hits: 1 },
+  });
+  expect((await storage.journal.read()).map(record => record.id)).toEqual([start.id, update.id]);
+  expect(update.transient).toBe(true);
+
+  const end = await storage.journal.record('session', {
+    type: 'tool_execution_end',
+    toolCallId: 'call',
+    toolName: 'search',
+    result: { hits: 2 },
+    isError: false,
+  });
+
+  expect((await storage.journal.read()).map(record => record.id)).toEqual([start.id, end.id]);
+
+  const persisted = await storage.db.execute<{ id: string; type: string }>(sql`
+    SELECT id, record->'event'->>'type' AS type
+    FROM storage.events
+    WHERE session_id = 'session'
+    ORDER BY sequence
+  `);
+  expect(persisted.rows).toEqual([
+    { id: start.id, type: 'tool_execution_start' },
+    { id: end.id, type: 'tool_execution_end' },
+  ]);
+});
+
 test('关闭等待进行中的事件提交并拒绝后续写入', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'ciel-storage-'));
   let markTransactionStarted!: () => void;

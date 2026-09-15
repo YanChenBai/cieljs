@@ -35,6 +35,8 @@ export interface RuntimeRecord {
   toolCallId?: string;
   parentRunId?: string;
   timestamp: number;
+  /** 高频流式更新只参与当前进程分发，不写入事实流水。 */
+  transient?: boolean;
   event: RuntimeEvent;
   metadata: RuntimeMetadata;
 }

@@ -22,6 +22,8 @@ interface Correlation {
 export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
   private readonly states = new Map<string, Correlation>();
   private readonly listeners = new Set<() => void>();
+  private readonly transientRecords = new Map<number, RuntimeRecord>();
+  private readonly transientSequences = new Map<string, number>();
   private readonly seen = new WeakMap<RuntimeEvent, Map<string, Promise<RuntimeRecord>>>();
   private pending = Promise.resolve();
   private failure: unknown;
@@ -98,6 +100,7 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
       toolCallId,
       parentRunId: metadata.parentRunId,
       timestamp: Date.now(),
+      transient: event.type.endsWith('_update') || undefined,
       event: snapshot,
       metadata: {
         ...metadata,
@@ -119,13 +122,16 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
         `);
         record.sequence = Number(result.rows[0]!.sequence);
 
-        await tx.execute(
-          sql`INSERT INTO storage.events (id, sequence, session_id, message_id, record)
-              OVERRIDING SYSTEM VALUE
-              VALUES (${record.id}, ${record.sequence}, ${sessionId}, ${messageId ?? null}, ${JSON.stringify(record)}::jsonb)`,
-        );
+        if (!record.transient) {
+          await tx.execute(
+            sql`INSERT INTO storage.events (id, sequence, session_id, message_id, record)
+                OVERRIDING SYSTEM VALUE
+                VALUES (${record.id}, ${record.sequence}, ${sessionId}, ${messageId ?? null}, ${JSON.stringify(record)}::jsonb)`,
+          );
+        }
         await project?.(tx, record);
       });
+      this.updateTransientRecords(record);
       for (const listener of this.listeners) listener();
       return record;
     });
@@ -148,7 +154,12 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
       .where(gt(runtimeRecords.sequence, after))
       .orderBy(asc(runtimeRecords.sequence))
       .limit(limit);
-    return rows.map(row => row.record);
+    const records = rows.map(row => row.record);
+    for (const record of this.transientRecords.values()) {
+      if (record.sequence > after) records.push(record);
+    }
+
+    return records.toSorted((left, right) => left.sequence - right.sequence).slice(0, limit);
   }
 
   subscribe(listener: () => void) {
@@ -175,5 +186,32 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
     this.closed = true;
     await this.flush();
     this.listeners.clear();
+    this.transientRecords.clear();
+    this.transientSequences.clear();
+  }
+
+  private updateTransientRecords(record: RuntimeRecord) {
+    const key = transientKey(record);
+    if (!key) return;
+
+    const previousSequence = this.transientSequences.get(key);
+    if (previousSequence !== undefined) this.transientRecords.delete(previousSequence);
+
+    if (record.transient) {
+      this.transientSequences.set(key, record.sequence);
+      this.transientRecords.set(record.sequence, record);
+    } else {
+      this.transientSequences.delete(key);
+    }
+  }
+}
+
+function transientKey(record: RuntimeRecord) {
+  if (record.event.type.startsWith('message_') && record.messageId) {
+    return `${record.sessionId}:message:${record.messageId}`;
+  }
+
+  if (record.event.type.startsWith('tool_execution_') && record.toolCallId) {
+    return `${record.sessionId}:tool:${record.toolCallId}`;
   }
 }

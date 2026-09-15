@@ -502,7 +502,7 @@ it('宿主关闭会结束等待中的更新订阅', async () => {
   expect((await pending).done).toBe(true);
 });
 
-it('缺少工具 start 的 update 仍保存原始事件', async () => {
+it('缺少工具 start 的 update 仍实时分发原始事件但不持久化', async () => {
   const host = await openHost();
   cleanup.push(() => host.close());
   host.agentListener('late')({
@@ -516,6 +516,8 @@ it('缺少工具 start 的 update 仍保存原始事件', async () => {
   const events = await host.storage.journal.read();
   expect(events).toHaveLength(1);
   expect(events[0]?.toolCallId).toBe('unknown');
+  expect(events[0]?.transient).toBe(true);
+  expect((await host.storage.db.execute(sql`SELECT id FROM storage.events`)).rows).toHaveLength(0);
 });
 
 it('两个观察器交错执行时保持独立的消息和 run 关联', async () => {

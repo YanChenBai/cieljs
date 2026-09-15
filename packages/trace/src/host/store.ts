@@ -43,6 +43,7 @@ export class TraceStore {
   private static readonly projectionStateId = 'trace:projection-state';
   private pending = Promise.resolve();
   private readonly writes = new Map<string, StoredRecord>();
+  private readonly transientValues = new Map<string, unknown>();
   private error: unknown;
   private constructor(
     private readonly storage: Storage,
@@ -93,10 +94,14 @@ export class TraceStore {
     runId?: string,
     sessionId?: string,
   ) {
+    this.transientValues.delete(id);
     const stored = snapshot(value);
     const bytes = serialize(stored);
 
     this.write(id, category, sequence, bytes, stored, runId, sessionId);
+  }
+  putTransient(id: string, value: unknown) {
+    this.transientValues.set(id, snapshot(value));
   }
   private write(
     id: string,
@@ -110,6 +115,8 @@ export class TraceStore {
     this.writes.set(id, { id, category, sequence, bytes, value, runId, sessionId });
   }
   async get<T>(id: string): Promise<T | undefined> {
+    if (this.transientValues.has(id)) return this.transientValues.get(id) as T;
+
     const pending = this.writes.get(id);
     if (pending && pending.category !== 'message_reference') return pending.value as T;
     if (pending) return this.message<T>(pending.value);

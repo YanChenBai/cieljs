@@ -99,13 +99,31 @@ describe('Trace 按需内容', () => {
     const listener = vi.fn();
     value.subscribe(listener);
     const receive = value.agentListener('room:1');
-    receive({
+    await receive({
       type: 'tool_execution_start',
       toolCallId: 'call:1',
       toolName: 'search',
       args: { query: '主播' },
     });
-    receive({
+    await receive({
+      type: 'tool_execution_update',
+      toolCallId: 'call:1',
+      toolName: 'search',
+      args: { query: '主播' },
+      partialResult: { found: '处理中' },
+    });
+    await value.flushRecords();
+    vi.advanceTimersByTime(60);
+
+    const streaming = listener.mock.calls.at(-1)?.[0] as TraceUpdate;
+    const running = streaming.entries.find(entry => entry.toolCallId === 'call:1');
+    expect(running).toMatchObject({ status: 'running', input: { preview: 'Object' } });
+    expect(await value.store.get(running!.output!.id)).toEqual({ found: '处理中' });
+    expect((await value.store.list<TraceEntry>('step')).map(step => step.name)).toEqual([
+      'tool_execution_start',
+    ]);
+
+    await receive({
       type: 'tool_execution_end',
       toolCallId: 'call:1',
       toolName: 'search',
@@ -114,7 +132,7 @@ describe('Trace 按需内容', () => {
     });
     await value.flushRecords();
     vi.advanceTimersByTime(60);
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(2);
     expect((await entries(value))[0]).toMatchObject({
       kind: 'tool',
       status: 'completed',
