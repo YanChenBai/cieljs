@@ -99,6 +99,10 @@ defineProps<{ client: TraceClient; sessionId: string }>();
 `content` 插槽会转发给当前激活的详情面板，作用域内含 `entry`、`section`、`value` 与
 `defaultRenderer`。
 
+`actions` 插槽落在工具栏里、会话选择器与清空按钮之间，宿主可以把自己的命令放在视图控件旁边。
+控制台不认识这些按钮的语义——文案、禁用态与忙碌态都由宿主自己决定；给它们
+`class="dt-button dt-action"` 就能沿用控制台 28 × 24 的图标按钮几何、hover 与禁用样式。
+
 ### 对话组件
 
 | 组件                        | Props                                                                                                       | 说明                                   |

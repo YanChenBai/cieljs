@@ -30,6 +30,12 @@
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+/* 拖拽区是窗口级矩形，且不看 top layer：浮层哪怕传送到 body，只要矩形压在拖拽区上，点击仍会被
+   当成标题栏拖动。宿主的所有浮层都带上这个类，显式退出拖拽。 */
+.floating-layer {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
 
 /* 共用控件保留语义类，避免每个 SFC 重复一整段交互样式。 */
 .section-heading {

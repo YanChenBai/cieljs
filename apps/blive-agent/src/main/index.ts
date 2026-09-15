@@ -57,7 +57,6 @@ async function createWindow(): Promise<void> {
       event.preventDefault();
       return;
     }
-    mainWindow.webContents.openDevTools();
     webPreferences.nodeIntegration = false;
     webPreferences.contextIsolation = true;
     webPreferences.sandbox = true;

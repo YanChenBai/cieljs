@@ -22,6 +22,7 @@ import { useBliveAgent } from '../composables/use-blive-agent.ts';
 import { useSidebar } from '../composables/use-sidebar.ts';
 import { rpc, watchBridge } from '../rpc.ts';
 import AccountControls from './AccountControls.vue';
+import DevToolsMenu from './DevToolsMenu.vue';
 import EventTimeline from './EventTimeline.vue';
 import FollowRoomDialog from './FollowRoomDialog.vue';
 import LiveRoomWebview from './LiveRoomWebview.vue';
@@ -49,6 +50,7 @@ const {
   start,
   stop,
   compactContext,
+  openDevTools,
   login,
   logout,
   refreshAccount,
@@ -158,17 +160,6 @@ const videoProgressLabel = computed(() => {
       </span>
       <Button.Root
         class="action icon-button"
-        title="压缩上下文"
-        aria-label="压缩上下文"
-        :disabled="!activeSessionId || pending === 'compact'"
-        :aria-busy="pending === 'compact'"
-        @click="compactContext"
-      >
-        <LoaderCircle v-if="pending === 'compact'" class="spinning" :size="16" />
-        <Shrink v-else :size="16" />
-      </Button.Root>
-      <Button.Root
-        class="action icon-button"
         title="打开 Investigation"
         aria-label="打开 Investigation"
         @click="openInvestigation"
@@ -183,6 +174,7 @@ const videoProgressLabel = computed(() => {
       >
         <ExternalLink :size="16" />
       </Button.Root>
+      <DevToolsMenu @select="openDevTools" />
       <Button.Root
         class="action icon-button"
         :aria-expanded="!right.collapsed.value"
@@ -342,7 +334,22 @@ const videoProgressLabel = computed(() => {
             :auto-scroll="active"
             :tool-renderers="toolRenderers"
             :message-renderers="messageRenderers"
-          />
+          >
+            <!-- 压缩入口跟着 Session 与控制台走：没有活动 Session 时压缩一定失败，就地禁用。 -->
+            <template #actions>
+              <Button.Root
+                class="dt-button dt-action"
+                title="压缩上下文"
+                aria-label="压缩上下文"
+                :disabled="!activeSessionId || pending === 'compact'"
+                :aria-busy="pending === 'compact'"
+                @click="compactContext"
+              >
+                <LoaderCircle v-if="pending === 'compact'" class="spinning" :size="15" />
+                <Shrink v-else :size="15" />
+              </Button.Root>
+            </template>
+          </CielConsole>
         </aside>
       </div>
     </main>

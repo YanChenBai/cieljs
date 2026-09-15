@@ -90,3 +90,24 @@ it('openBrowse 打开独立的 B 站浏览窗口，不碰直播 guest', async ()
   expect(windows[0]!.webContents.loadURL).toHaveBeenCalledExactlyOnceWith(BROWSE_HOME);
   expect(requestRoom).not.toHaveBeenCalled();
 });
+
+it('openDevTools 只在白名单目标里选，两个目标各开各的', async () => {
+  const openDevTools = vi.fn();
+  const liveDevTools = vi.fn();
+  const mainWindow = { webContents: { openDevTools } } as unknown as BrowserWindow;
+  const client = createRouterClient(
+    createWindowRoutes(mainWindow, { openDevTools: liveDevTools } as unknown as LivePage, vi.fn()),
+  );
+
+  await client.openDevTools({ target: 'live' });
+  expect(liveDevTools).toHaveBeenCalledOnce();
+  expect(openDevTools).not.toHaveBeenCalled();
+
+  await client.openDevTools({ target: 'renderer' });
+  expect(openDevTools).toHaveBeenCalledExactlyOnceWith({ mode: 'detach' });
+
+  // 白名单之外的目标在进入 handler 之前就被 schema 拒绝。
+  await expect(client.openDevTools({ target: 'browse' } as never)).rejects.toThrow();
+  expect(liveDevTools).toHaveBeenCalledOnce();
+  expect(openDevTools).toHaveBeenCalledOnce();
+});

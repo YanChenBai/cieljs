@@ -70,6 +70,8 @@ watch(
   <section class="ciel-console" aria-label="Ciel Console">
     <Tabs.Root v-model="tab">
       <SessionToolbar v-model:session-id="sessionModel" :sessions="sessions">
+        <!-- 宿主操作排在 Session 右侧、「清空视图」左侧：控制台不认识这些按钮的语义，只给位置。 -->
+        <slot name="actions" />
         <Button.Root
           class="dt-button dt-clear"
           aria-label="清空视图"

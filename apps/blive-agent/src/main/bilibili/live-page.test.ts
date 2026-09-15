@@ -178,3 +178,21 @@ it('关闭页面取消登录等待，避免迟到的登录更新账号', async (
   page.close();
   await rejected;
 });
+
+it('开发者工具只开在已绑定的直播 guest 上', () => {
+  const page = new LivePage();
+  expect(() => page.openDevTools()).toThrow('直播页面尚未绑定');
+
+  const openDevTools = vi.fn();
+  page.attach({
+    isDestroyed: () => false,
+    getURL: () => 'https://live.bilibili.com/123',
+    once: () => undefined,
+    openDevTools,
+  } as unknown as WebContents);
+
+  page.openDevTools();
+
+  // 分离窗口：主窗口停靠式 devtools 会挤压 webview。
+  expect(openDevTools).toHaveBeenCalledExactlyOnceWith({ mode: 'detach' });
+});

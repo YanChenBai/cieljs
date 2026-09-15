@@ -2,6 +2,7 @@ import type { ASRModelId } from '@cieljs/hearing';
 import type { WatchBridgeEvent, WatchSnapshot } from '@shared/ipc.ts';
 import type {
   Account,
+  DevToolsTarget,
   HearingModelStatus,
   LiveArea,
   StartWatchOptions,
@@ -117,6 +118,15 @@ export function useBliveAgent() {
     account.value = await watchBridge.account();
   }
 
+  // 打开开发者工具是调试动作：不进 pending，否则会顺手禁用开始/停止这些按钮。
+  async function openDevTools(target: DevToolsTarget) {
+    try {
+      await watchBridge.openDevTools({ target });
+    } catch (cause) {
+      error.value = describeError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   async function attached() {
     ready.value = true;
     await run('refresh', refreshAccount);
@@ -157,6 +167,7 @@ export function useBliveAgent() {
         const compacted = await watchBridge.compactContext();
         appendEvent(compacted ? '已手动压缩上下文' : '当前没有可压缩的历史');
       }),
+    openDevTools,
     login: () =>
       run('login', async () => {
         account.value = await watchBridge.login();

@@ -51,5 +51,17 @@ export function createWindowRoutes(
     openInvestigation: os.handler(() => {
       openInvestigationWindow();
     }),
+    // DevTools 目标走白名单枚举：渲染进程不能要求打开任意 WebContents 的开发者工具。
+    openDevTools: os
+      .input(z.object({ target: z.enum(['live', 'renderer']) }))
+      .handler(({ input }) => {
+        if (input.target === 'live') {
+          livePage.openDevTools();
+          return;
+        }
+
+        // 主窗口是隐藏标题栏加固定网格布局，停靠式 devtools 会挤掉 webview 的高度。
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+      }),
   };
 }

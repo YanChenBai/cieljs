@@ -431,14 +431,26 @@ type DanmakuToolResult =
   :auto-scroll="active"
   :tool-renderers="toolRenderers"
   :message-renderers="messageRenderers"
-/>
+>
+  <template #actions>
+    <Button.Root
+      class="dt-button dt-action"
+      aria-label="压缩上下文"
+      :disabled="!activeSessionId || pending === 'compact'"
+      @click="compactContext"
+    >
+      <LoaderCircle v-if="pending === 'compact'" class="spinning" :size="15" />
+      <Shrink v-else :size="15" />
+    </Button.Root>
+  </template>
+</CielConsole>
 ```
 
 - 左右侧栏都能折叠、拖动调宽，画面区占剩下的空间。左侧栏放账号控制、运行配置（配置状态与 ASR 模型下载/切换）、观看设置，以及滚动保留最近 60 条的事件时间线。
 - `TraceHost.open({ storage, awaitReplay: false })` 把历史重放留在后台，不排在启动路径上。每个运行时事件都通过 `trace.record(event.type, event)` 记入，并作为 bridge 事件转发给渲染进程。
 - 工具调用有专门的渲染组件，不直接摆原始 JSON：`send_danmaku`、`get_streamer_dynamics`、`get_streamer_videos`。
 - 带 `action` 和 `score` 的 assistant JSON 会渲染成房间决策卡片。
-- 顶栏的压缩按钮调用 `runtime.compactContext()` → `visit.session.compact()`，并如实报告本轮有没有产生新的压缩摘要。
+- 控制台工具栏里的压缩按钮由宿主经 Ciel Console 的 `actions` 插槽挂进去：它调用 `runtime.compactContext()` → `visit.session.compact()`，没有活动会话时就地禁用（此时压缩本来也会被拒绝），并如实报告本轮有没有产生新的压缩摘要。放在控制台里，入口就挨着 Session 与用量读数，同时 `@cieljs/console` 不必知道"压缩"这个概念。
 - `trace` router 排除 id 以 `investigation:` 开头的会话，它们归 `investigationTrace`，所以观看控制台只会显示观看会话。
 
 ## 架构与目录
@@ -538,7 +550,7 @@ vp run @cieljs/blive-agent#build         # 构建 main、preload 与 renderer
 应用的 `package.json` 没有 `scripts` 字段，所有可运行任务都在 [vite.config.ts](vite.config.ts) 里，通过 `vp run @cieljs/blive-agent#<task>` 调用。
 
 > [!TIP]
-> 主进程在直播 guest 附加时会打开 DevTools。调页面行为时很方便，日常使用则偏吵。
+> 开发者工具改成按需打开：顶栏的虫子按钮弹出一个浮层，里面两个目标——直播 `webview` guest 与主窗口渲染进程。guest 是原来最别扭的那个，因为快捷键只会落到当前聚焦窗口自己的 `WebContents` 上。两者都用分离窗口打开，停靠式面板会挤压固定布局；`window.openDevTools` 也只接受这两个白名单目标，渲染进程无法要求打开任意 `WebContents`。
 
 ## 已知限制与未定决策
 

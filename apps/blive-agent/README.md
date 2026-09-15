@@ -431,14 +431,26 @@ The right sidebar is [@cieljs/console](../../packages/console/README.md), wired 
   :auto-scroll="active"
   :tool-renderers="toolRenderers"
   :message-renderers="messageRenderers"
-/>
+>
+  <template #actions>
+    <Button.Root
+      class="dt-button dt-action"
+      aria-label="压缩上下文"
+      :disabled="!activeSessionId || pending === 'compact'"
+      @click="compactContext"
+    >
+      <LoaderCircle v-if="pending === 'compact'" class="spinning" :size="15" />
+      <Shrink v-else :size="15" />
+    </Button.Root>
+  </template>
+</CielConsole>
 ```
 
 - Both sidebars collapse and can be dragged to resize; the viewer takes the remaining space. The left sidebar holds account controls, runtime setup (config status and ASR model install/switch), watch controls and a rolling 60-entry event timeline.
 - `TraceHost.open({ storage, awaitReplay: false })` keeps history replay off the startup path. Every runtime event is recorded with `trace.record(event.type, event)` and forwarded to the renderer as a bridge event.
 - Tool calls get purpose-built renderers instead of raw JSON: `send_danmaku`, `get_streamer_dynamics`, `get_streamer_videos`.
 - Assistant messages whose JSON carries `action` and `score` are rendered as a room decision card.
-- The header's compress button calls `runtime.compactContext()` → `visit.session.compact()`, and reports whether a new summary was actually produced.
+- The console toolbar's compress button comes from the host through Ciel Console's `actions` slot: it calls `runtime.compactContext()` → `visit.session.compact()`, is disabled whenever there is no active session (compaction would be rejected anyway), and reports whether a new summary was actually produced. Keeping it in the console puts the entry point next to the session and the usage readout, and keeps `@cieljs/console` free of any compaction concept.
 - The `trace` router excludes sessions whose id starts with `investigation:`; those belong to `investigationTrace`, so the watch console only ever shows watching sessions.
 
 ## Architecture / Directory layout
@@ -538,7 +550,7 @@ vp run @cieljs/blive-agent#build         # build main, preload and renderer
 The app has no `scripts` field in its `package.json`; every runnable task lives in [vite.config.ts](vite.config.ts) and is invoked through `vp run @cieljs/blive-agent#<task>`.
 
 > [!TIP]
-> The main process opens DevTools whenever a live guest attaches, which is convenient while wiring page behaviour and noisy in normal use.
+> DevTools are on demand: the header's bug button opens a popover with two targets — the live `webview` guest and the main window's renderer process. The guest is the awkward one, because keyboard shortcuts only reach the focused window's own `WebContents`. Both open detached, since a docked DevTools pane would squeeze the fixed layout, and `window.openDevTools` accepts only those two whitelisted targets, so the renderer can never ask for arbitrary `WebContents`.
 
 ## Known limitations & open decisions
 

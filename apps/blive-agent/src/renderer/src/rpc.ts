@@ -27,6 +27,7 @@ export const watchBridge: BliveAgentBridge = {
   start: input => rpc.watch.start(input),
   stop: () => rpc.watch.stop(),
   compactContext: () => rpc.watch.compact(),
+  openDevTools: input => rpc.window.openDevTools(input),
   login: () => rpc.account.login(),
   logout: () => rpc.account.logout(),
   account: () => rpc.account.get(),

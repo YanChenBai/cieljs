@@ -200,6 +200,11 @@ export class LivePage {
     return result;
   }
 
+  /** 直播 guest 自己的开发者工具；主窗口渲染进程的 devtools 不由这里负责。 */
+  openDevTools(): void {
+    this.requireContents().openDevTools({ mode: 'detach' });
+  }
+
   close(): void {
     this.invalidate();
     this.roomId = undefined;

@@ -102,6 +102,12 @@ conversation panel and the status bar.
 The `content` slot is forwarded to whichever detail panel is active, with `entry`, `section`,
 `value` and `defaultRenderer` in scope.
 
+The `actions` slot lands in the toolbar, between the session selector and the clear button, so a host
+can put its own commands next to the view controls. The console never learns what those buttons do —
+their label, disabled state and busy state stay the host's business. Give them
+`class="dt-button dt-action"` to pick up the console's 28 × 24 icon-button geometry, hover and
+disabled styling.
+
 ### Conversation components
 
 | Component                      | Props                                                                                                       | Notes                                                                            |

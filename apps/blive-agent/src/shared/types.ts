@@ -2,6 +2,9 @@ import type { ASRModelId } from '@cieljs/hearing';
 
 export type DanmakuDelivery = 'simulate' | 'live';
 
+/** 可以打开开发者工具的目标；主进程只接受这个白名单里的值。 */
+export type DevToolsTarget = 'live' | 'renderer';
+
 export type RecordingSource = { type: 'url'; url: string } | { type: 'file'; path: string };
 
 export type WatchMode =

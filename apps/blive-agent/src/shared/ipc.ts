@@ -2,6 +2,7 @@ import type { ASRModelId } from '@cieljs/hearing';
 
 import type {
   Account,
+  DevToolsTarget,
   HearingModelStatus,
   LiveArea,
   RoomInfo,
@@ -40,6 +41,8 @@ export interface BliveAgentBridge {
   stop(): Promise<void>;
   /** 手动压缩当前会话上下文；返回是否产生了新的压缩摘要。 */
   compactContext(): Promise<boolean>;
+  /** 打开直播 guest 或主窗口渲染进程的开发者工具。 */
+  openDevTools(input: { target: DevToolsTarget }): Promise<void>;
   login(): Promise<Account>;
   logout(): Promise<void>;
   account(): Promise<Account | undefined>;
