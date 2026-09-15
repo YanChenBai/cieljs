@@ -9,6 +9,7 @@ export default defineConfig({
       },
       test: {
         command: 'vp test --passWithNoTests',
+        dependsOn: [{ task: 'build', from: ['dependencies', 'devDependencies'] }],
         output: [],
         input: [{ auto: true }, '!dist/**', '!**/*.tsbuildinfo'],
       },

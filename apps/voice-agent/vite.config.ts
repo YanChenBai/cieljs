@@ -9,6 +9,7 @@ export default defineConfig({
       },
       test: {
         command: 'vp test',
+        dependsOn: [{ task: 'build', from: ['dependencies', 'devDependencies'] }],
         env: ['XIAOMI_API_KEY'],
         output: [],
         input: [{ auto: true }, '!dist/**', '!**/*.tsbuildinfo'],
@@ -16,9 +17,7 @@ export default defineConfig({
     },
   },
   pack: {
-    dts: {
-      tsgo: true,
-    },
+    dts: {},
     exports: true,
   },
 });
