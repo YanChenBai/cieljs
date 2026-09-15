@@ -68,25 +68,46 @@ Session is not Memory. Memory recall lands in the model context only and is neve
 pnpm add cieljs
 ```
 
-The package has a single export entry (`"."` → `./dist/index.mjs`) and does not re-export its sibling modules, so also install the modules you import directly:
+That one dependency is enough. `cieljs` re-exports every sibling module it builds on, so consumers import from `cieljs/<module>` instead of installing and importing a dozen separate packages:
 
-```bash
-pnpm add @cieljs/storage @cieljs/session @cieljs/memory @cieljs/vector @cieljs/mcp
-```
+| Subpath                 | Module                                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| `cieljs`                | `defineCiel`, `Ciel`, the option/result types and the agent-kit protocol types           |
+| `cieljs/agent-kit`      | [`@cieljs/agent-kit`](../agent-kit/README.md) — `AgentTool`, `defineTool`, `prompt`      |
+| `cieljs/storage`        | [`@cieljs/storage`](../storage/README.md) — `Storage`, `StorageModule`                   |
+| `cieljs/session`        | [`@cieljs/session`](../session/README.md) — `SessionManager`, `sessionStorage`           |
+| `cieljs/memory`         | [`@cieljs/memory`](../memory/README.md) — `MemoryManager`, `memoryStorage`               |
+| `cieljs/vector`         | [`@cieljs/vector`](../vector/README.md) — `VectorService`, `vectorStorage`               |
+| `cieljs/mcp`            | [`@cieljs/mcp`](../mcp/README.md) — `createMcp`, `loadMcpConfig`                         |
+| `cieljs/model-kit`      | [`@cieljs/model-kit`](../model-kit/README.md) — `models`, embedding helpers              |
+| `cieljs/embed`          | [`@cieljs/embed`](../embed/README.md) — `qwen()` and the embedding constants             |
+| `cieljs/hearing`        | [`@cieljs/hearing`](../hearing/README.md) — ASR, KWS and voiceprint surfaces             |
+| `cieljs/perception`     | [`@cieljs/perception`](../perception/README.md) — `createPerception` and its types       |
+| `cieljs/runtime`        | [`@cieljs/runtime`](../runtime/README.md) — `Runtime` and the runtime session types      |
+| `cieljs/trace`          | [`@cieljs/trace`](../trace/README.md) — `TraceHost`, `createTraceRouter`, `traceStorage` |
+| `cieljs/trace/host`     | `@cieljs/trace/host` — host side only                                                    |
+| `cieljs/trace/client`   | `@cieljs/trace/client` — `createTraceClient`                                             |
+| `cieljs/trace/protocol` | `@cieljs/trace/protocol` — the trace event and record types                              |
+| `cieljs/console`        | [`@cieljs/console`](../console/README.md) — trace console UI                             |
+| `cieljs/investigation`  | [`@cieljs/investigation`](../investigation/README.md) — investigation chat UI            |
 
-`@cieljs/agent-kit`, `@cieljs/memory`, `@cieljs/runtime`, `@cieljs/session`, `@cieljs/storage`, `@cieljs/vector` and `@cieljs/mcp` are workspace dependencies of this package; `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` supply `AgentTool`, `Model` and the streaming layer.
+Each subpath re-exports its module verbatim, so it is a straight replacement for the package specifier: `import { Storage } from 'cieljs/storage'` is `import { Storage } from '@cieljs/storage'`.
+
+Subpaths stay separate on purpose — the root entry only pulls in the composition layer, so importing `defineCiel` never loads ASR, vision or vector backends. The sibling packages (`@cieljs/agent-kit`, `@cieljs/console`, `@cieljs/embed`, `@cieljs/hearing`, `@cieljs/investigation`, `@cieljs/mcp`, `@cieljs/memory`, `@cieljs/model-kit`, `@cieljs/perception`, `@cieljs/runtime`, `@cieljs/session`, `@cieljs/storage`, `@cieljs/trace`, `@cieljs/vector`) are workspace dependencies of this package, so installing `cieljs` brings them along.
+
+Install a sibling directly only when you use it on its own, without a Ciel. `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` supply `AgentTool`, `Model` and the streaming layer.
 
 ## Quick start
 
 Everything a Ciel needs, with the host owning Storage, vectors and MCP:
 
 ```ts
-import { createMcp } from '@cieljs/mcp';
-import { memoryStorage } from '@cieljs/memory';
-import { sessionStorage } from '@cieljs/session';
-import { Storage } from '@cieljs/storage';
-import { VectorService, vectorStorage } from '@cieljs/vector';
 import { defineCiel } from 'cieljs';
+import { createMcp } from 'cieljs/mcp';
+import { memoryStorage } from 'cieljs/memory';
+import { sessionStorage } from 'cieljs/session';
+import { Storage } from 'cieljs/storage';
+import { VectorService, vectorStorage } from 'cieljs/vector';
 
 // The host creates one Storage and registers the modules it uses.
 await using storage = await Storage.open({
@@ -492,7 +513,7 @@ await using session = await ciel.session({ spaceId: 'default' });
 
 ## API reference
 
-Public exports of `cieljs`:
+Public exports of the `cieljs` root entry (every other module is reachable through the [subpaths listed under Install](#install)):
 
 | Export                                                             | Kind     | Notes                                                                                                                                                                                           |
 | ------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -587,6 +608,8 @@ export interface Ciel extends AsyncDisposable {
 - Perform asynchronous I/O, so the definition step stays synchronous and inspectable.
 - Expose a `compaction` option; the Runtime's defaults apply, and changing them means instantiating `Runtime` directly.
 - Provide a separate model for investigations.
+
+**Sibling modules are re-exported as subpaths, not flattened into the root.** One dependency (`cieljs`) covers the whole set, but the root entry stays the composition layer only, so a Ciel that never touches ASR, vision or vectors never loads their backends.
 
 **Identity is never inferred.** Session ID, `spaceId` and `sources` all come from the host. Core does not derive a Session ID from `spaceId` or `sources`, and does not pick an existing investigation Session from the question or the target. An explicit `sessionId` is the only way to resume anything.
 

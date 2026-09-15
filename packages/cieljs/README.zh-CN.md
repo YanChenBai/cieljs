@@ -68,25 +68,46 @@ Session 不是 Memory。Memory 的召回结果只进入模型上下文，不会�
 pnpm add cieljs
 ```
 
-该包只有一个导出入口（`"."` → `./dist/index.mjs`），不会转发同级模块，因此还需要安装你直接 import 的模块：
+只装这一个依赖就够了。`cieljs` 会把用到的同级模块统一再导出，消费方 import `cieljs/<模块>`，不必再逐个安装和 import 十几个包：
 
-```bash
-pnpm add @cieljs/storage @cieljs/session @cieljs/memory @cieljs/vector @cieljs/mcp
-```
+| 子路径                  | 模块                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `cieljs`                | `defineCiel`、`Ciel`、配置与结果类型，以及 agent-kit 的协议类型                                |
+| `cieljs/agent-kit`      | [`@cieljs/agent-kit`](../agent-kit/README.zh-CN.md) — `AgentTool`、`defineTool`、`prompt`      |
+| `cieljs/storage`        | [`@cieljs/storage`](../storage/README.zh-CN.md) — `Storage`、`StorageModule`                   |
+| `cieljs/session`        | [`@cieljs/session`](../session/README.zh-CN.md) — `SessionManager`、`sessionStorage`           |
+| `cieljs/memory`         | [`@cieljs/memory`](../memory/README.zh-CN.md) — `MemoryManager`、`memoryStorage`               |
+| `cieljs/vector`         | [`@cieljs/vector`](../vector/README.zh-CN.md) — `VectorService`、`vectorStorage`               |
+| `cieljs/mcp`            | [`@cieljs/mcp`](../mcp/README.zh-CN.md) — `createMcp`、`loadMcpConfig`                         |
+| `cieljs/model-kit`      | [`@cieljs/model-kit`](../model-kit/README.zh-CN.md) — `models`、embedding 辅助                 |
+| `cieljs/embed`          | [`@cieljs/embed`](../embed/README.zh-CN.md) — `qwen()` 与 embedding 常量                       |
+| `cieljs/hearing`        | [`@cieljs/hearing`](../hearing/README.zh-CN.md) — ASR、KWS 与声纹接口                          |
+| `cieljs/perception`     | [`@cieljs/perception`](../perception/README.zh-CN.md) — `createPerception` 及其类型            |
+| `cieljs/runtime`        | [`@cieljs/runtime`](../runtime/README.zh-CN.md) — `Runtime` 与 runtime session 类型            |
+| `cieljs/trace`          | [`@cieljs/trace`](../trace/README.zh-CN.md) — `TraceHost`、`createTraceRouter`、`traceStorage` |
+| `cieljs/trace/host`     | `@cieljs/trace/host` — 仅宿主侧                                                                |
+| `cieljs/trace/client`   | `@cieljs/trace/client` — `createTraceClient`                                                   |
+| `cieljs/trace/protocol` | `@cieljs/trace/protocol` — trace 事件与记录类型                                                |
+| `cieljs/console`        | [`@cieljs/console`](../console/README.zh-CN.md) — Trace 控制台 UI                              |
+| `cieljs/investigation`  | [`@cieljs/investigation`](../investigation/README.zh-CN.md) — Investigation 对话 UI            |
 
-`@cieljs/agent-kit`、`@cieljs/memory`、`@cieljs/runtime`、`@cieljs/session`、`@cieljs/storage`、`@cieljs/vector` 与 `@cieljs/mcp` 是本包的 workspace 依赖；`@earendil-works/pi-agent-core` 与 `@earendil-works/pi-ai` 提供 `AgentTool`、`Model` 与流式调用层。
+每个子路径都是对应模块的逐字再导出，可以直接替换原来的包名：`import { Storage } from 'cieljs/storage'` 等价于 `import { Storage } from '@cieljs/storage'`。
+
+子路径刻意分开：根入口只包含组合层，所以 import `defineCiel` 不会顺带加载 ASR、视觉或向量后端。同级包（`@cieljs/agent-kit`、`@cieljs/console`、`@cieljs/embed`、`@cieljs/hearing`、`@cieljs/investigation`、`@cieljs/mcp`、`@cieljs/memory`、`@cieljs/model-kit`、`@cieljs/perception`、`@cieljs/runtime`、`@cieljs/session`、`@cieljs/storage`、`@cieljs/trace`、`@cieljs/vector`）都是本包的 workspace 依赖，安装 `cieljs` 会一起带上。
+
+只有在不使用 Ciel、单独使用某个同级包时，才需要直接安装它。`@earendil-works/pi-agent-core` 与 `@earendil-works/pi-ai` 提供 `AgentTool`、`Model` 与流式调用层。
 
 ## 快速开始
 
 一个完整的 Ciel：Storage、向量服务与 MCP 都由宿主持有。
 
 ```ts
-import { createMcp } from '@cieljs/mcp';
-import { memoryStorage } from '@cieljs/memory';
-import { sessionStorage } from '@cieljs/session';
-import { Storage } from '@cieljs/storage';
-import { VectorService, vectorStorage } from '@cieljs/vector';
 import { defineCiel } from 'cieljs';
+import { createMcp } from 'cieljs/mcp';
+import { memoryStorage } from 'cieljs/memory';
+import { sessionStorage } from 'cieljs/session';
+import { Storage } from 'cieljs/storage';
+import { VectorService, vectorStorage } from 'cieljs/vector';
 
 // 宿主创建一个 Storage，并注册自己需要的数据模块。
 await using storage = await Storage.open({
@@ -492,7 +513,7 @@ await using session = await ciel.session({ spaceId: 'default' });
 
 ## API 参考
 
-`cieljs` 的公开导出：
+`cieljs` 根入口的公开导出（其余模块通过[安装一节的子路径](#安装)访问）：
 
 | 导出                                                               | 类别 | 说明                                                                                                                                                                                          |
 | ------------------------------------------------------------------ | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -587,6 +608,8 @@ export interface Ciel extends AsyncDisposable {
 - 不执行异步 I/O，因此定义阶段保持同步、可检查。
 - 不暴露 `compaction` 选项；使用 Runtime 的默认值，需要修改时直接实例化 `Runtime`。
 - 不为 Investigation 提供单独的模型。
+
+**同级模块以子路径再导出，而不是全部摊平到根入口。** 一个依赖（`cieljs`）就覆盖整套模块，但根入口仍然只是组合层：不碰 ASR、视觉或向量的 Ciel 不会因此加载这些后端。
 
 **身份从不被推导。** Session ID、`spaceId` 与 `sources` 全部由宿主提供。Core 不会根据 `spaceId` 或 `sources` 推导 Session ID，也不会根据问题或 target 挑选已有的 Investigation Session。显式传入 `sessionId` 是唯一的续接方式。
 
