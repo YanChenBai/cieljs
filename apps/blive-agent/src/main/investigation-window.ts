@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path, { join } from 'node:path';
 
 import { app, BrowserWindow, type WebContents } from 'electron';
 
@@ -20,6 +20,7 @@ export function openInvestigationWindow(): void {
     autoHideMenuBar: true,
     title: 'Ciel · Investigation',
     titleBarStyle: 'hidden',
+    icon: path.resolve(__dirname, '../../resources/icon.png'),
     titleBarOverlay: { color: '#18181b', symbolColor: '#eaddea', height: 35 },
     backgroundColor: '#18181b',
     webPreferences: {

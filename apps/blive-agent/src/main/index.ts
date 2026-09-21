@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import path, { join } from 'node:path';
 
 import { app, BrowserWindow } from 'electron';
 
@@ -22,6 +22,7 @@ async function createWindow(): Promise<void> {
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
+    icon: path.resolve(__dirname, '../../resources/icon.png'),
     title: 'Ciel · Blive Agent',
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#18181b', symbolColor: '#eaddea', height: 35 },

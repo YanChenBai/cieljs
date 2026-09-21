@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { BrowserWindow, type WebContents } from 'electron';
 
 import { isAllowedPageUrl } from './bilibili/page-executor.ts';
@@ -53,6 +55,7 @@ export function openBrowseWindow(url?: string): void {
     title: 'Bilibili',
     autoHideMenuBar: true,
     backgroundColor: '#18181b',
+    icon: path.resolve(__dirname, '../../resources/icon.png'),
     webPreferences: {
       partition: 'persist:blive-agent',
       contextIsolation: true,
