@@ -6,6 +6,7 @@ const vector = customType<{ data: number[]; driverData: string }>({
   toDriver: value => JSON.stringify(value),
   fromDriver: value => JSON.parse(value) as number[],
 });
+
 const schema = pgSchema('vector');
 export const vectorCache = schema.table('cache', {
   key: text('key').primaryKey(),

@@ -34,11 +34,12 @@ export class SessionManager implements AsyncDisposable {
   private constructor(db: Database, options: SessionManagerOptions) {
     this.namespace = options.namespace;
     const tokenize = options.tokenize ?? tokenizeSearchText;
+
     this.embeddingIndex = new VectorIndex(
       db,
       options.vectors,
       {
-        namespace: 'session:' + options.namespace,
+        namespace: `session:${options.namespace}`,
         table: retrievalChunks,
         id: retrievalChunks.id,
         content: retrievalChunks.content,
@@ -50,8 +51,10 @@ export class SessionManager implements AsyncDisposable {
       },
       options.onIndexError,
     );
+
     this.repository = new SessionRepository(db, this.embeddingIndex, options.storage, tokenize);
     this.retrieval = new SessionRetrieval(db, this.embeddingIndex, tokenize);
+
     this.services = {
       namespace: options.namespace,
       storage: options.storage,
@@ -65,7 +68,11 @@ export class SessionManager implements AsyncDisposable {
 
   static async open(options: SessionManagerOptions): Promise<SessionManager> {
     options.storage.require(sessionStorage);
-    if (!options.namespace?.trim()) throw new SessionValidationError('namespace 不能为空');
+
+    if (!options.namespace?.trim()) {
+      throw new SessionValidationError('namespace 不能为空');
+    }
+
     const manager = new SessionManager(options.storage.db, options);
     await manager.embeddingIndex.prepare();
     manager.embeddingIndex.enqueue();
@@ -86,6 +93,7 @@ export class SessionManager implements AsyncDisposable {
   getAnySession(id: string): Promise<Session | null> {
     return this.operate(async () => {
       const info = await this.repository.getInfo({ namespace: this.namespace, sessionId: id });
+
       return info ? new Session(this.services, info.id, info.spaceId) : null;
     });
   }
@@ -150,14 +158,18 @@ export class SessionManager implements AsyncDisposable {
   }
 
   private operate<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.closing) return Promise.reject(new SessionClosedError());
+    if (this.closing) {
+      return Promise.reject(new SessionClosedError());
+    }
 
     const result = Promise.resolve().then(operation);
     this.operations.add(result);
+
     void result.then(
       () => this.operations.delete(result),
       () => this.operations.delete(result),
     );
+
     return result;
   }
 }

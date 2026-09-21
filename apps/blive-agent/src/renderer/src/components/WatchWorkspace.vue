@@ -60,6 +60,7 @@ const {
 
 const { collapsed, width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyboardResize } =
   useSidebar();
+
 const right = useSidebar('right');
 
 const sidebar = ref<HTMLElement>();
@@ -93,14 +94,20 @@ const messageRenderers: MessageRenderers = [
 
 const roomTitle = computed(() => {
   const room = state.value.room;
-  if (!room) return '一起看看，今天有什么有趣的直播';
 
-  return room.streamerName + ' · ' + room.title;
+  if (!room) {
+    return '一起看看，今天有什么有趣的直播';
+  }
+
+  return `${room.streamerName} · ${room.title}`;
 });
 
 async function startRequestedRoom(options: StartWatchOptions) {
   await start(options);
-  if (!error.value) requestedRoomId.value = undefined;
+
+  if (!error.value) {
+    requestedRoomId.value = undefined;
+  }
 }
 
 /** 顶栏按钮：开一个独立的 B 站浏览窗口，不占用正在观看的直播 webview。 */
@@ -113,10 +120,18 @@ function openInvestigation() {
 }
 
 const videoProgressLabel = computed(() => {
-  if (videoProgress.value?.stage === 'analyzing' && state.value.status === 'stopping')
+  if (videoProgress.value?.stage === 'analyzing' && state.value.status === 'stopping') {
     return '正在总结已读取的视频内容…';
-  if (videoProgress.value?.stage === 'recognizing') return '正在完成语音识别…';
-  if (videoProgress.value?.stage === 'analyzing') return '预处理完成，正在分析视频…';
+  }
+
+  if (videoProgress.value?.stage === 'recognizing') {
+    return '正在完成语音识别…';
+  }
+
+  if (videoProgress.value?.stage === 'analyzing') {
+    return '预处理完成，正在分析视频…';
+  }
+
   return '正在提取音频与画面…';
 });
 </script>

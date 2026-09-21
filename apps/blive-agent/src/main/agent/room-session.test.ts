@@ -29,6 +29,7 @@ describe('房间身份', () => {
   it('同日重访恢复同一身份，不同房间使用不同 Space 和 Session', () => {
     const first = createRoomSessionOptions(room, new Date('2026-09-06T01:00:00Z'));
     const revisit = createRoomSessionOptions(room, new Date('2026-09-06T02:00:00Z'));
+
     const other = createRoomSessionOptions(
       { ...room, roomId: 789 },
       new Date('2026-09-06T02:00:00Z'),
@@ -45,6 +46,7 @@ describe('房间身份', () => {
       roomId: 123,
       source: { type: 'url', url: 'https://example.com/video.mp4' },
     });
+
     const specified = createRoomSessionOptions(room, new Date('2026-09-06T16:00:00Z'), {
       type: 'recording',
       roomId: 123,

@@ -26,6 +26,7 @@ it('通过公共 API 下载完整模型并报告进度', async () => {
       }),
     ),
   );
+
   vi.stubGlobal('fetch', fetch);
   const progress = vi.fn();
 
@@ -36,9 +37,11 @@ it('通过公共 API 下载完整模型并报告进度', async () => {
 
   expect(modelsPath).toBe(join(directory, 'models'));
   expect(fetch).toHaveBeenCalledTimes(8);
+
   expect(progress).toHaveBeenCalledWith(
     expect.objectContaining({ receivedBytes: 1, totalBytes: 1 }),
   );
+
   await expect(checkConfiguration({ modelsPath })).resolves.toMatchObject({
     valid: true,
     missingFiles: [],
@@ -50,17 +53,22 @@ it('失败自动重试并保留已完成文件，手动重试只补齐缺失文�
     .fn()
     .mockResolvedValueOnce(new Response(Uint8Array.of(1)))
     .mockImplementation(() => Promise.resolve(new Response('unavailable', { status: 503 })));
+
   vi.stubGlobal('fetch', fetch);
   const progress = vi.fn();
   const modelsPath = join(directory, 'models');
+
   await expect(
     installModels({ modelsPath, retryDelayMs: 0, onProgress: progress }),
   ).rejects.toThrow('第 3/3 次');
+
   expect(fetch).toHaveBeenCalledTimes(4);
   expect((await checkConfiguration({ modelsPath })).missingFiles).toHaveLength(7);
+
   expect(progress).toHaveBeenCalledWith(
     expect.objectContaining({ message: expect.stringContaining('503') }),
   );
+
   fetch.mockImplementation(() => Promise.resolve(new Response(Uint8Array.of(1))));
   fetch.mockClear();
   await installModels({ modelsPath });

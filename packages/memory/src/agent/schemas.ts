@@ -83,6 +83,10 @@ export const sourceSearchSchema = Type.Object({
   limit: Type.Optional(memorySearchLimitSchema),
 });
 
+const nullableTimestampSchema = Type.Union([Type.String(), Type.Null()], {
+  description: '新的过期时刻，使用带时区的 ISO 时间；null 清除过期时间，省略则保留。',
+});
+
 export const updateSchema = Type.Object({
   id: memoryIdSchema,
   expectedRevision: Type.Integer({
@@ -97,11 +101,7 @@ export const updateSchema = Type.Object({
     }),
   ),
   kind: Type.Optional(memoryKindSchema),
-  expiresAt: Type.Optional(
-    Type.Union([Type.String(), Type.Null()], {
-      description: '新的过期时刻，使用带时区的 ISO 时间；null 清除过期时间，省略则保留。',
-    }),
-  ),
+  expiresAt: Type.Optional(nullableTimestampSchema),
 });
 
 export const archiveSchema = Type.Object({

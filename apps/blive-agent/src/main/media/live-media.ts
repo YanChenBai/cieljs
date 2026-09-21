@@ -33,6 +33,7 @@ export class LiveMedia {
 
   get endAt() {
     const imageTime = Math.max(0, this.imageCount - 1) * (60_000 / 9);
+
     return new Date(this.startedAt + Math.max(this.sampleCount / 16, imageTime));
   }
 
@@ -42,6 +43,7 @@ export class LiveMedia {
     }
 
     const executable = this.options.ffmpegPath ?? (process.env.FFMPEG_PATH?.trim() || 'ffmpeg');
+
     const child = spawn(
       executable,
       ffmpegArguments(this.options.roomId, this.options.input, this.options.live),
@@ -59,23 +61,35 @@ export class LiveMedia {
     child.stdout?.on('data', (chunk: Buffer) => this.writeAudio(child, Buffer.from(chunk)));
     // 必须消费 stderr，否则 FFmpeg 错误输出积压会阻塞媒体进程。
     child.stderr?.on('data', (chunk: Buffer) => this.readProgress(String(chunk)));
+
     (child.stdio[3] as Readable | null)?.on('data', (chunk: Buffer) => {
       this.writeImages(child, Buffer.from(chunk));
     });
+
     let processError: Error | undefined;
+
     child.once('error', error => {
       processError = error;
     });
+
     child.once('close', (code, signal) => {
       // 主动关闭会先清空 child；仅自然结束或崩溃需要宿主做状态判断。
-      if (this.child !== child) return;
+      if (this.child !== child) {
+        return;
+      }
+
       this.child = undefined;
       let error = processError;
+
       if (!error && code !== 0) {
         error = new Error(`FFmpeg 异常退出（code=${String(code)}, signal=${String(signal)}）`);
       }
-      if (this.options.onStopped) this.options.onStopped(error);
-      else if (error) this.options.onError?.(error);
+
+      if (this.options.onStopped) {
+        this.options.onStopped(error);
+      } else if (error) {
+        this.options.onError?.(error);
+      }
     });
   }
 
@@ -104,27 +118,38 @@ export class LiveMedia {
 
     this.sampleCount += Math.floor(data.byteLength / 2);
     const audio = child.stdout;
-    if (audio && 'pause' in audio) audio.pause();
+
+    if (audio && 'pause' in audio) {
+      audio.pause();
+    }
+
     // 同一份 PCM 持续送入 ASR 和独立 KWS，不启用 ASR 唤醒门控。
     const write = Promise.allSettled([
       this.options.perception.asr.write({ data, startAt }),
       this.options.kws?.write({ data, startAt }),
     ]).then(results => {
       const failures = results.filter(result => result.status === 'rejected');
-      if (failures.length)
+
+      if (failures.length) {
         throw new AggregateError(
           failures.map(result => result.reason),
           '音频处理失败',
         );
+      }
     });
+
     this.writes.add(write);
+
     void write
       .catch(error =>
         this.options.onError?.(error instanceof Error ? error : new Error(String(error))),
       )
       .finally(() => {
         this.writes.delete(write);
-        if (this.child === child && audio && 'resume' in audio) audio.resume();
+
+        if (this.child === child && audio && 'resume' in audio) {
+          audio.resume();
+        }
       });
   }
 
@@ -140,6 +165,7 @@ export class LiveMedia {
 
       if (start < 0) {
         this.jpegBuffer = Buffer.alloc(0);
+
         return;
       }
 
@@ -147,17 +173,21 @@ export class LiveMedia {
 
       if (end < 0) {
         this.jpegBuffer = this.jpegBuffer.subarray(start);
+
         return;
       }
 
       const image = this.jpegBuffer.subarray(start, end + 2);
 
       this.jpegBuffer = this.jpegBuffer.subarray(end + 2);
+
       // 加速解码时使用媒体时间，不能让所有帧挤在同一个墙上时间窗口。
       const at = this.options.live
         ? new Date()
         : new Date(this.startedAt + this.imageCount * (60_000 / 9));
+
       this.imageCount += 1;
+
       this.trackWrite(
         this.options.perception.image?.write({
           source: `bilibili:room:${this.options.roomId}`,
@@ -183,15 +213,21 @@ export class LiveMedia {
     this.progressBuffer += chunk;
     const lines = this.progressBuffer.split(/\r?\n/u);
     this.progressBuffer = lines.pop() ?? '';
+
     for (const line of lines) {
       const duration = line.match(/Duration: (\d+):(\d+):([\d.]+)/u);
-      if (duration)
+
+      if (duration) {
         this.totalSeconds =
           Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
+      }
+
       if (line.startsWith('out_time_us=')) {
         const seconds = Number(line.slice('out_time_us='.length)) / 1_000_000;
-        if (Number.isFinite(seconds))
+
+        if (Number.isFinite(seconds)) {
           this.options.onProgress?.(Math.max(0, seconds), this.totalSeconds);
+        }
       }
     }
   }

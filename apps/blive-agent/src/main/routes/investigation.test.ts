@@ -35,11 +35,13 @@ beforeEach(async () => {
   vi.clearAllMocks();
   storage = await Storage.open({ dataDir: 'memory://', modules: [sessionStorage] });
   sessions = await SessionManager.open({ storage, namespace: 'investigation' });
+
   mocks.defineCiel.mockReturnValue({
     start: mocks.start,
     investigate: mocks.investigate,
     close: mocks.close,
   });
+
   mocks.completeSimple.mockResolvedValue({
     stopReason: 'stop',
     content: [{ type: 'text', text: '跨直播间观看比较' }],
@@ -86,6 +88,7 @@ it('全局调查只绑定全局目标，并获得显式 Memory 写权限', async
       title: '比较所有直播间',
     },
   });
+
   await expect(iterator.next()).resolves.toEqual({
     done: false,
     value: {
@@ -94,7 +97,9 @@ it('全局调查只绑定全局目标，并获得显式 Memory 写权限', async
       title: '跨直播间观看比较',
     },
   });
+
   expect(updated.title).toBe('跨直播间观看比较');
+
   expect(
     (await client.rename({ sessionId: conversation.sessionId, title: '今日直播总结' })).title,
   ).toBe('今日直播总结');
@@ -108,6 +113,7 @@ it('全局调查只绑定全局目标，并获得显式 Memory 写权限', async
       crossSpace: true,
     }),
   );
+
   await routes.close();
   expect(mocks.close).toHaveBeenCalledOnce();
 });
@@ -134,18 +140,21 @@ it('房间调查绑定目标空间，当前房间同时绑定正在观看的 Ses
 
 it('同一调查拒绝并发回答', async () => {
   let finish: (() => void) | undefined;
+
   mocks.investigate.mockImplementationOnce(
     () =>
       new Promise<void>(resolve => {
         finish = resolve;
       }),
   );
+
   const routes = createRoutes();
   const client = createRouterClient(routes.router);
   const conversation = await client.create({ target: { type: 'global' } });
   const first = client.prompt({ sessionId: conversation.sessionId, content: '第一条' });
 
   await vi.waitFor(() => expect(mocks.investigate).toHaveBeenCalledOnce());
+
   await expect(
     client.prompt({ sessionId: conversation.sessionId, content: '第二条' }),
   ).rejects.toThrow('正在回答');
@@ -159,6 +168,7 @@ it('从 Session 恢复 Investigation 标题并允许继续提问', async () => {
     id: 'investigation:global:history',
     title: '持久化调查标题',
   });
+
   const routes = createInvestigationRoutes({
     storage,
     sessions,
@@ -166,6 +176,7 @@ it('从 Session 恢复 Investigation 标题并允许继续提问', async () => {
     api: { room: vi.fn(async () => room) } as never,
     current: () => ({}),
   });
+
   const client = createRouterClient(routes.router);
 
   expect(await client.list()).toEqual([
@@ -174,6 +185,7 @@ it('从 Session 恢复 Investigation 标题并允许继续提问', async () => {
       title: '持久化调查标题',
     }),
   ]);
+
   await client.prompt({ sessionId: 'investigation:global:history', content: '继续分析' });
 
   expect(mocks.investigate).toHaveBeenCalledWith(
@@ -194,11 +206,13 @@ it('创建、自动标题与手动改名都会写入 Session', async () => {
   ).resolves.toMatchObject({ title: '新调查' });
 
   await client.prompt({ sessionId: conversation.sessionId, content: '比较所有直播间' });
+
   await expect(
     (await sessions.getAnySession(conversation.sessionId))?.getInfo(),
   ).resolves.toMatchObject({ title: '跨直播间观看比较' });
 
   await client.rename({ sessionId: conversation.sessionId, title: '手动标题' });
+
   await expect(
     (await sessions.getAnySession(conversation.sessionId))?.getInfo(),
   ).resolves.toMatchObject({ title: '手动标题' });

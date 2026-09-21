@@ -20,7 +20,9 @@ export async function readRoomLiveStatus(options: LiveStatusQuery): Promise<Live
       const status = await page.liveStatus(signal);
       signal.throwIfAborted();
 
-      if (status === 'live') return 'live';
+      if (status === 'live') {
+        return 'live';
+      }
     } catch {
       signal.throwIfAborted();
       // 播放器未初始化或页面暂不可用时，改用服务端状态判断。

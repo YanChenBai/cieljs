@@ -230,6 +230,7 @@ export class ConversationScheduler {
     this.retryDelayMs = Math.min(this.retryDelayMs * 2, MAX_RETRY_DELAY_MS);
 
     const existing = this.stateValue.status === 'thinking' ? this.stateValue.pending : undefined;
+
     const merged: PendingWindow = existing
       ? {
           startInclusive: run.window.startInclusive,

@@ -23,6 +23,7 @@ export function createInvestigationToolContext(options: InvestigationToolOptions
     memorySpace: options.memoryManager.space(targetSpaceId),
   };
 }
+
 export type InvestigationToolContext = ReturnType<typeof createInvestigationToolContext>;
 
 /** 结果附带宿主空间与来源；历史数据不能覆盖调查的身份边界。 */

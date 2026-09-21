@@ -1,11 +1,8 @@
 import type { WebContents } from 'electron';
 import { Type, type Static } from 'typebox';
 
-import {
-  DanmakuPageResultSchema,
-  LivePageReadinessSchema,
-  OptionalAccountSchema,
-} from '../../shared/schemas.ts';
+import type { DanmakuPageResultSchema } from '../../shared/schemas.ts';
+import { LivePageReadinessSchema, OptionalAccountSchema } from '../../shared/schemas.ts';
 import type { Account } from '../../shared/types.ts';
 import { executePage, isAllowedPageUrl } from './page-executor.ts';
 import {
@@ -55,6 +52,7 @@ export class LivePage {
     const contents = this.requireContents();
 
     this.invalidate();
+
     await executePage(
       contents,
       OPEN_LOGIN_SCRIPT,
@@ -66,7 +64,11 @@ export class LivePage {
   /** 公开动态请求沿用当前页面会话，保留 B 站 Cookie 与浏览器请求环境。 */
   readPublicApi(url: string): Promise<unknown> {
     const target = new URL(url);
-    if (target.origin !== 'https://api.bilibili.com') throw new Error('不支持的公开 API 地址');
+
+    if (target.origin !== 'https://api.bilibili.com') {
+      throw new Error('不支持的公开 API 地址');
+    }
+
     return executePage(
       this.requireContents(),
       `(async () => {
@@ -88,6 +90,7 @@ export class LivePage {
     await contents.session.clearStorageData({
       storages: ['cookies', 'localstorage'],
     });
+
     await contents.loadURL('https://live.bilibili.com/');
   }
 
@@ -116,6 +119,7 @@ export class LivePage {
   async account(signal?: AbortSignal): Promise<Account | undefined> {
     const contents = this.requireContents();
     const generation = this.generation;
+
     const account = await executePage(
       contents,
       READ_ACCOUNT_SCRIPT,
@@ -146,7 +150,10 @@ export class LivePage {
       async () => {
         const ready = await executePage(contents, PREPARE_PLAYER_SCRIPT, Type.Boolean(), options);
 
-        if (ready) return true;
+        if (ready) {
+          return true;
+        }
+
         return undefined;
       },
       { action: options.action, timeoutMs: 15_000, signal: options.signal },
@@ -183,16 +190,22 @@ export class LivePage {
     const generation = this.generation;
     const roomId = this.roomId;
 
-    if (!roomId) throw new Error('当前页面不是目标直播间');
+    if (!roomId) {
+      throw new Error('当前页面不是目标直播间');
+    }
 
     const readiness = await this.readiness();
+
     if (readiness.roomId !== roomId) {
       throw new Error('当前页面不是目标直播间');
     }
 
-    if (generation !== this.generation) throw new Error('检查发送目标期间直播间已切换');
+    if (generation !== this.generation) {
+      throw new Error('检查发送目标期间直播间已切换');
+    }
 
     const result = await sendDanmaku(contents, roomId, content);
+
     if (generation !== this.generation) {
       throw new Error('发送期间直播间已切换，发送结果不再属于当前访问');
     }

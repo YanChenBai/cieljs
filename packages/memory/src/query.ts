@@ -26,6 +26,7 @@ export function selectorCondition(selector: MemorySelector) {
   const layerCondition = selector.layers.length
     ? inArray(memories.layer, selector.layers)
     : sql`false`;
+
   const spaceCondition =
     selector.spaceId === undefined ? undefined : eq(memories.spaceId, selector.spaceId);
 

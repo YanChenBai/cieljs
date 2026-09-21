@@ -63,6 +63,7 @@ export async function checkConfiguration(
 async function exists(file: string): Promise<boolean> {
   try {
     const info = await stat(file);
+
     return info.isFile() && info.size > 0;
   } catch {
     return false;

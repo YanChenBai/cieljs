@@ -79,6 +79,7 @@ export function findCompactionBoundary(
   usageStartIndex = 0,
 ): number {
   const resolved = resolveCompactionOptions(options);
+
   if (shouldSkipCompaction(context, resolved, usageStartIndex)) {
     return 0;
   }

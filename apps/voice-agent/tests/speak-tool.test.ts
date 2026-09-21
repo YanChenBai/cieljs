@@ -82,6 +82,7 @@ describe('speak 工具', () => {
       startedAt: expect.any(String),
       endedAt: expect.any(String),
     });
+
     expect(harness.playMock).toHaveBeenCalledTimes(1);
   });
 

@@ -26,6 +26,7 @@ it('弹幕理由只要求非空，长度不设上限', () => {
       reason: '本轮没有合适的切入点。'.repeat(20),
     }),
   ).toBe(true);
+
   expect(Value.Check(parameters, { action: 'defer', content: '', reason: '' })).toBe(false);
 });
 
@@ -35,6 +36,7 @@ it('弹幕正文仍受 40 字符硬上限约束', () => {
   expect(
     Value.Check(parameters, { action: 'send', content: '好'.repeat(40), reason: '理由' }),
   ).toBe(true);
+
   expect(
     Value.Check(parameters, { action: 'send', content: '好'.repeat(41), reason: '理由' }),
   ).toBe(false);

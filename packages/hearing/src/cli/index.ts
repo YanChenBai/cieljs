@@ -15,24 +15,32 @@ async function main(): Promise<void> {
   }
 
   switch (command) {
-    case 'install-model':
+    case 'install-model': {
       await installModel(args);
-      return;
 
-    case 'voiceprint':
-      await createVoiceprint(args);
       return;
+    }
+
+    case 'voiceprint': {
+      await createVoiceprint(args);
+
+      return;
+    }
 
     case undefined:
     case 'help':
     case '--help':
-    case '-h':
-      printHelp();
-      return;
 
-    default:
+    case '-h': {
+      printHelp();
+
+      return;
+    }
+
+    default: {
       printHelp();
       process.exitCode = 2;
+    }
   }
 }
 

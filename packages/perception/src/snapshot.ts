@@ -68,11 +68,13 @@ class FrozenPerceptionSnapshot implements PerceptionSnapshot {
         type: 'text',
         text: ['# 视觉', context].filter(Boolean).join('\n\n'),
       });
+
       content.push(...images);
     }
 
     if (this.transcripts.length > 0) {
       const transcript = this.transcripts.map(formatTranscript).join('\n');
+
       const context = await this.resolveContext({
         modality: 'hearing',
         transcripts: this.transcripts,

@@ -17,30 +17,51 @@ interface HistoryItem {
 
 const items = computed<HistoryItem[]>(() => {
   const { result } = props;
-  if (!result || typeof result !== 'object' || !('details' in result)) return [];
+
+  if (!result || typeof result !== 'object' || !('details' in result)) {
+    return [];
+  }
 
   const { details } = result as { details?: unknown };
-  if (!details || typeof details !== 'object' || !('items' in details)) return [];
+
+  if (!details || typeof details !== 'object' || !('items' in details)) {
+    return [];
+  }
 
   const { items: list } = details as { items?: unknown };
+
   return Array.isArray(list) ? (list as HistoryItem[]) : [];
 });
 
 const outcome = computed(() => {
-  if (props.loadError) return '结果加载失败';
-  if (props.status === 'running') return '执行中…';
-  if (props.status === 'error') return '执行失败';
-  if (!items.value.length) return '暂无内容';
+  if (props.loadError) {
+    return '结果加载失败';
+  }
+
+  if (props.status === 'running') {
+    return '执行中…';
+  }
+
+  if (props.status === 'error') {
+    return '执行失败';
+  }
+
+  if (!items.value.length) {
+    return '暂无内容';
+  }
 
   return `${items.value.length} 条 · 公开资料`;
 });
 
 /** 列表里的时间只保留到分钟，逐年跨月的绝对时间对读对话没有帮助。 */
 function formatPublishedAt(seconds: number | undefined) {
-  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return '';
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+    return '';
+  }
 
   const date = new Date(seconds * 1_000);
   const pad = (value: number) => value.toString().padStart(2, '0');
+
   return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 </script>

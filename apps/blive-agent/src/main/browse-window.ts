@@ -16,13 +16,17 @@ function navigate(contents: WebContents, url: string) {
 /** 站内链接留在本窗口，站外一律不打开——与直播 guest 的策略一致。 */
 function guardNavigation(window: BrowserWindow) {
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (isAllowedPageUrl(url)) navigate(window.webContents, url);
+    if (isAllowedPageUrl(url)) {
+      navigate(window.webContents, url);
+    }
 
     return { action: 'deny' };
   });
 
   window.webContents.on('will-navigate', (event, url) => {
-    if (!isAllowedPageUrl(url)) event.preventDefault();
+    if (!isAllowedPageUrl(url)) {
+      event.preventDefault();
+    }
   });
 }
 
@@ -37,13 +41,20 @@ function guardNavigation(window: BrowserWindow) {
  */
 export function openBrowseWindow(url?: string): void {
   const target = url ?? BROWSE_HOME;
-  if (!isAllowedPageUrl(target)) throw new Error('只允许打开 Bilibili 页面');
+
+  if (!isAllowedPageUrl(target)) {
+    throw new Error('只允许打开 Bilibili 页面');
+  }
 
   const existing = browseWindow && !browseWindow.isDestroyed() ? browseWindow : undefined;
 
   if (existing) {
-    if (url !== undefined) navigate(existing.webContents, target);
+    if (url !== undefined) {
+      navigate(existing.webContents, target);
+    }
+
     existing.focus();
+
     return;
   }
 
@@ -66,8 +77,11 @@ export function openBrowseWindow(url?: string): void {
   });
 
   browseWindow = window;
+
   window.on('closed', () => {
-    if (browseWindow === window) browseWindow = undefined;
+    if (browseWindow === window) {
+      browseWindow = undefined;
+    }
   });
 
   guardNavigation(window);
@@ -79,5 +93,7 @@ export function closeBrowseWindow(): void {
   const window = browseWindow;
   browseWindow = undefined;
 
-  if (window && !window.isDestroyed()) window.destroy();
+  if (window && !window.isDestroyed()) {
+    window.destroy();
+  }
 }

@@ -38,22 +38,26 @@ it('运行和轮次各自合并开始结束，保留期间消息和不同运行'
     entry(5, { name: 'turn_end', runId: 'run', turnId: 'first', endedAt: 5 }),
     entry(6, { name: 'turn_start', runId: 'second-run', turnId: 'second' }),
   ];
+
   const grouped = groupTraceSteps(steps);
   expect(grouped.map(traceStepLabel)).toEqual(['Agent 运行', '模型轮次', 'Ciel 回复', '模型轮次']);
   expect(grouped[0]).toMatchObject({ status: 'running', endedAt: undefined });
   expect(grouped[1]).toMatchObject({ startedAt: 2, endedAt: 5, status: 'completed' });
+
   expect(grouped[2]).toMatchObject({
     startedAt: 3,
     endedAt: 4,
     status: 'completed',
     turnNumber: 1,
   });
+
   expect(grouped[3]).toMatchObject({ status: 'running', turnNumber: 2 });
 
   const finished = groupTraceSteps([
     ...steps,
     entry(7, { name: 'agent_end', runId: 'run', endedAt: 7 }),
   ]);
+
   expect(finished[0]).toMatchObject({
     id: grouped[0]!.id,
     startedAt: 1,
@@ -65,6 +69,7 @@ it('运行和轮次各自合并开始结束，保留期间消息和不同运行'
 it('同一工具的结果消息不再生成第二条，失败状态和原始事件仍可检查', () => {
   const common = { runId: 'run', toolCallId: 'call' };
   const error = { id: 'failed', path: ['event', 'result'], preview: '错误详情' };
+
   const steps = [
     entry(1, {
       ...common,
@@ -93,8 +98,10 @@ it('同一工具的结果消息不再生成第二条，失败状态和原始事�
       raw: { id: 'result', preview: 'message_end' },
     }),
   ];
+
   const [group] = groupTraceSteps(steps.toReversed());
   expect(groupTraceSteps(steps)).toHaveLength(1);
+
   expect(group).toMatchObject({
     kind: 'tool',
     label: '搜索房间',
@@ -104,6 +111,7 @@ it('同一工具的结果消息不再生成第二条，失败状态和原始事�
     endedAt: 2,
     input: steps[0]!.input,
   });
+
   expect(group!.events.map(event => event.id)).toEqual(['start', 'failed', 'result']);
   expect(traceStepLabel(group!)).toBe('搜索房间');
 });
@@ -116,6 +124,7 @@ it('历史补页保留分组 ID 并补全开始时间；相同工具 ID 不跨�
     toolCallId: 'call',
     endedAt: 3,
   });
+
   const start = entry(1, {
     ...end,
     id: 'start',
@@ -124,6 +133,7 @@ it('历史补页保留分组 ID 并补全开始时间；相同工具 ID 不跨�
     startedAt: 1,
     endedAt: undefined,
   });
+
   const partial = groupTraceSteps([end])[0]!;
   const complete = groupTraceSteps([end, start])[0]!;
   expect(complete.id).toBe(partial.id);
@@ -148,6 +158,7 @@ it('分组记录 ID 按 Session、Run 和记录类型分段展示', () => {
 
 it('历史页与推送重叠时去重，并保留较新的修订', () => {
   const newest = entry(2, { revision: 8 });
+
   expect(mergeTraceEntries([newest, entry(3)], [entry(1), entry(2, { revision: 4 })])).toEqual([
     entry(1),
     newest,
@@ -162,15 +173,18 @@ it('同一次工具调用保留开始时间和输入，不与其他 run 合并',
     toolCallId: 'call',
     input: { id: 'input', preview: '参数' },
   });
+
   const end = entry(2, {
     kind: 'tool',
     runId: 'a',
     toolCallId: 'call',
     output: { id: 'output', preview: '结果' },
   });
+
   const other = entry(3, { kind: 'tool', runId: 'b', toolCallId: 'call' });
   const grouped = groupTraceSteps([start, end, other]);
   expect(grouped).toHaveLength(2);
+
   expect(grouped[0]).toMatchObject({
     startedAt: 1,
     revision: 2,

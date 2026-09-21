@@ -10,17 +10,21 @@ import { createSetupRoutes } from './routes/setup.ts';
 
 it('重建设置路由后恢复已保存模型，后续切换可以覆盖保存', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'watch-hearing-'));
+
   try {
     expect(readHearingModel(directory)).toBe('qwen3-asr-1.7b-int8');
     saveHearingModel(directory, 'sensevoice-small');
     const restored = readHearingModel(directory);
+
     const client = createRouterClient(
       createSetupRoutes(join(directory, 'models'), undefined, restored),
     );
+
     expect(await client.hearingModels()).toMatchObject({
       model: 'sensevoice-small',
       activeModel: 'sensevoice-small',
     });
+
     saveHearingModel(directory, 'qwen3-asr-1.7b-int8');
     expect(readHearingModel(directory)).toBe('qwen3-asr-1.7b-int8');
   } finally {

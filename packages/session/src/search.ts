@@ -64,8 +64,9 @@ export function messageToSearchText(message: AgentMessage): string {
        * 不把 reasoning / thinking
        * 放入搜索索引。
        */
-      case 'thinking':
+      case 'thinking': {
         break;
+      }
     }
   }
 
@@ -121,6 +122,7 @@ export function chunkSearchText(text: string, maxChars = 4_000, overlap = 300): 
   ) {
     throw new TypeError('分块长度必须是正整数，重叠长度必须是小于分块长度的非负整数');
   }
+
   const normalized = normalizeSearchText(text);
 
   if (!normalized) {

@@ -21,11 +21,13 @@ const live = shallowRef(false);
 const open = computed({
   get: () => roomId.value !== undefined,
   set: value => {
-    if (!value) roomId.value = undefined;
+    if (!value) {
+      roomId.value = undefined;
+    }
   },
 });
 
-const isPending = computed(() => !!props.pending);
+const isPending = computed(() => Boolean(props.pending));
 const isStarting = computed(() => props.pending === 'start');
 
 const description = computed(() =>
@@ -45,7 +47,9 @@ watch(roomId, () => {
 });
 
 function start() {
-  if (!roomId.value || !props.ready || isPending.value) return;
+  if (!roomId.value || !props.ready || isPending.value) {
+    return;
+  }
 
   emit('start', {
     mode: {

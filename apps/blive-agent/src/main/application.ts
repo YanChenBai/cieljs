@@ -21,24 +21,29 @@ import { createSetupRoutes } from './routes/setup.ts';
 import { createWindowRoutes } from './routes/window.ts';
 import { createBliveAgent, type BliveAgent } from './runtime.ts';
 
+const positiveIntegerSchema = z.number().int().positive();
+const requiredTextSchema = z.string().trim().min(1);
+const recordingDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
+
+const recordingSourceSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('url'), url: z.url() }),
+  z.object({ type: z.literal('file'), path: requiredTextSchema }),
+]);
+
+const watchModeSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('follow'), roomId: positiveIntegerSchema }),
+  z.object({ type: z.literal('explore'), areaId: positiveIntegerSchema }),
+  z.object({
+    type: z.literal('recording'),
+    prompt: z.string().trim().optional(),
+    roomId: positiveIntegerSchema,
+    source: recordingSourceSchema,
+    date: recordingDateSchema.optional(),
+  }),
+]);
+
 const startSchema = z.object({
-  mode: z.discriminatedUnion('type', [
-    z.object({ type: z.literal('follow'), roomId: z.number().int().positive() }),
-    z.object({ type: z.literal('explore'), areaId: z.number().int().positive() }),
-    z.object({
-      type: z.literal('recording'),
-      prompt: z.string().trim().optional(),
-      roomId: z.number().int().positive(),
-      source: z.discriminatedUnion('type', [
-        z.object({ type: z.literal('url'), url: z.url() }),
-        z.object({ type: z.literal('file'), path: z.string().trim().min(1) }),
-      ]),
-      date: z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/u)
-        .optional(),
-    }),
-  ]),
+  mode: watchModeSchema,
   danmakuDelivery: z.enum(['simulate', 'live']).optional(),
 });
 
@@ -46,31 +51,42 @@ const startSchema = z.object({
 export async function createWatchApplication(mainWindow: BrowserWindow) {
   await using resources = new AsyncDisposableStack();
   const dataDirectory = watchDataDirectory();
+
   const storage = resources.use(
     await Storage.open({
       dataDir: join(dataDirectory, 'storage'),
       modules: [sessionStorage, memoryStorage, vectorStorage, traceStorage],
     }),
   );
+
   // PGlite 没有后台 checkpointer：不推进 checkpoint 的话，进程被强杀后下次启动要重放
   // 上个 checkpoint 之后的全部 WAL，随会话数只增不减。
   let checkpointsStopped = false;
+
   const advanceCheckpoint = () => {
-    if (checkpointsStopped) return;
+    if (checkpointsStopped) {
+      return;
+    }
+
     void storage.checkpoint().catch(error => console.error('推进存储 checkpoint 失败', error));
   };
+
   const checkpointInterval = setInterval(advanceCheckpoint, 5 * 60_000);
   const firstCheckpoint = setTimeout(advanceCheckpoint, 15_000);
+
   resources.defer(() => {
     checkpointsStopped = true;
     clearInterval(checkpointInterval);
     clearTimeout(firstCheckpoint);
   });
+
   // 历史重放留给后台：它随会话数增长，不能排在窗口显示前面。
   const trace = resources.use(await TraceHost.open({ storage, awaitReplay: false }));
+
   const investigationSessions = resources.use(
     await SessionManager.open({ storage, namespace: 'investigation' }),
   );
+
   const mcp = resources.use(
     await createMcp({
       cwd: dataDirectory,
@@ -95,13 +111,21 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
     resolveModel: () => resolveWatchModel(resolveWatchConfig()),
     current: () => ({ room: runtime?.room, sessionId: runtime?.sessionId }),
   });
+
   resources.defer(() => investigation.close());
 
   function requireRuntime() {
-    if (lifetimeController.signal.aborted) throw new Error('Blive Agent 已关闭');
-    if (runtime) return runtime;
+    if (lifetimeController.signal.aborted) {
+      throw new Error('Blive Agent 已关闭');
+    }
+
+    if (runtime) {
+      return runtime;
+    }
+
     const config = resolveWatchConfig();
     const ai = resolveWatchModel(config);
+
     runtime = createBliveAgent({
       mcp,
       model: ai.model,
@@ -124,25 +148,34 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
       },
       ...config.interaction,
     });
+
     unsubscribe = runtime.onEvent(event => {
       trace.record(event.type, event);
+
       const value: WatchBridgeEvent =
         event.type === 'error'
           ? { type: 'error', stage: event.stage, message: event.error.message }
           : event;
-      for (const listener of listeners) listener(value);
+
+      for (const listener of listeners) {
+        listener(value);
+      }
     });
+
     return runtime;
   }
 
   // 显式使用公开 TraceRouter，避免声明推断泄漏构建产物的私有类型。
   const isInvestigationSession = (sessionId: string) => sessionId.startsWith('investigation:');
+
   const traceRouter: TraceRouter = createTraceRouter(trace, {
     session: sessionId => !isInvestigationSession(sessionId),
   });
+
   const investigationTraceRouter: TraceRouter = createTraceRouter(trace, {
     session: isInvestigationSession,
   });
+
   const router = {
     trace: traceRouter,
     investigationTrace: investigationTraceRouter,
@@ -152,6 +185,7 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
       login: os.handler(async ({ signal }) => {
         await runtime?.stop();
         await livePage.login();
+
         return livePage.waitForLogin(signal);
       }),
       logout: os.handler(async () => {
@@ -163,35 +197,49 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
       start: os.input(startSchema).handler(({ input }) => requireRuntime().start(input)),
       stop: os.handler(() => runtime?.stop()),
       compact: os.handler(() => {
-        if (!runtime) throw new Error('Blive Agent 尚未启动');
+        if (!runtime) {
+          throw new Error('Blive Agent 尚未启动');
+        }
+
         return runtime.compactContext();
       }),
       areas: os.handler(() => api.areas()),
       snapshot: os.handler(() => ({ status: runtime?.status ?? 'idle', room: runtime?.room })),
+      // oxlint-disable-next-line eslint/complexity -- 流式路由需要在同一生成器内协调订阅、背压与中止清理。
       events: os.handler(async function* ({ signal }) {
         const queue: WatchBridgeEvent[] = [];
         let wake: (() => void) | undefined;
+
         const receive = (event: WatchBridgeEvent) => {
           queue.push(event);
           wake?.();
         };
+
         const abort = () => wake?.();
         // 先注册再发送快照，避免订阅建立期间漏掉房间事件。
         listeners.add(receive);
         signal?.addEventListener('abort', abort);
         lifetimeController.signal.addEventListener('abort', abort);
+
         try {
           yield { type: 'status', status: runtime?.status ?? 'idle' } satisfies WatchBridgeEvent;
           const room = runtime?.room;
           const sessionId = runtime?.sessionId;
-          if (room && sessionId)
+
+          if (room && sessionId) {
             yield { type: 'room_opened', room, sessionId } satisfies WatchBridgeEvent;
+          }
+
           while (!signal?.aborted && !lifetimeController.signal.aborted) {
             const pending = new Promise<void>(resolve => {
               wake = resolve;
             });
-            if (queue.length) yield queue.shift()!;
-            else await pending;
+
+            if (queue.length) {
+              yield queue.shift()!;
+            } else {
+              await pending;
+            }
           }
         } finally {
           listeners.delete(receive);
@@ -205,19 +253,23 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
       async model => {
         const previous = hearingModel;
         await runtime?.setHearingModel(model);
+
         try {
           saveHearingModel(dataDirectory, model);
         } catch (error) {
           await runtime?.setHearingModel(previous);
           throw error;
         }
+
         hearingModel = model;
       },
       hearingModel,
     ),
     recording: createRecordingRoutes(mainWindow),
     window: createWindowRoutes(mainWindow, livePage, roomId => {
-      for (const listener of listeners) listener({ type: 'room_requested', roomId });
+      for (const listener of listeners) {
+        listener({ type: 'room_requested', roomId });
+      }
     }),
   };
 
@@ -227,8 +279,11 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
     listeners.clear();
     await runtime?.close();
   });
+
   const lifetime = resources.move();
   let closing: Promise<void> | undefined;
+
   return { router, close: () => (closing ??= lifetime.disposeAsync()) };
 }
+
 export type WatchRouter = Awaited<ReturnType<typeof createWatchApplication>>['router'];

@@ -51,6 +51,7 @@ const toolCalls = computed(() => (indexed = indexToolCalls(entries.value, indexe
 const messages = computed(() => conversationEntries(entries.value, toolCalls.value).slice(-50));
 
 const tab = shallowRef('conversation');
+
 const sessionModel = computed({
   get: () => selectedSessionId.value,
   set: value => void selectSession(value),
@@ -60,7 +61,9 @@ const sessionModel = computed({
 watch(
   () => props.sessionId,
   sessionId => {
-    if (sessionId) void selectSession(sessionId);
+    if (sessionId) {
+      void selectSession(sessionId);
+    }
   },
   { immediate: true },
 );

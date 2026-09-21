@@ -23,7 +23,9 @@ export function waitForPage<T>(
     }
 
     function fail(error: unknown) {
-      if (finished) return;
+      if (finished) {
+        return;
+      }
 
       cleanup();
       reject(error);
@@ -36,11 +38,15 @@ export function waitForPage<T>(
     async function poll() {
       try {
         const value = await read();
-        if (finished) return;
+
+        if (finished) {
+          return;
+        }
 
         if (value !== undefined) {
           cleanup();
           resolve(value);
+
           return;
         }
 
@@ -51,8 +57,10 @@ export function waitForPage<T>(
     }
 
     signal?.addEventListener('abort', abort, { once: true });
+
     if (signal?.aborted) {
       abort();
+
       return;
     }
 

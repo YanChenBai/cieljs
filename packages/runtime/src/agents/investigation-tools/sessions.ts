@@ -3,10 +3,15 @@ import { Type } from 'typebox';
 
 import { investigationResult, type InvestigationToolContext } from './context.ts';
 
+const resultLimitSchema = Type.Integer({ minimum: 1, maximum: 20 });
+const contextRadiusSchema = Type.Integer({ minimum: 0, maximum: 20 });
+const sequenceSchema = Type.Integer({ minimum: 0 });
+const pageSizeSchema = Type.Integer({ minimum: 1, maximum: 100 });
+
 export const createSearchSessionsTool = defineTool(
   Type.Object({
     query: Type.String({ minLength: 1 }),
-    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+    limit: Type.Optional(resultLimitSchema),
   }),
   ({ options, sessionSpace, targetSpaceId }: InvestigationToolContext) => ({
     name: 'search_sessions',
@@ -19,9 +24,12 @@ export const createSearchSessionsTool = defineTool(
       const sources = options.resolveSources();
       // 检索范围取自宿主配置，模型只能提供查询词。
       let hits;
-      if (options.target.type === 'global' || options.crossSpace)
+
+      if (options.target.type === 'global' || options.crossSpace) {
         hits = await options.sessionManager.searchAll(query, { limit, signal });
-      else hits = await sessionSpace.search(query, { limit, signal });
+      } else {
+        hits = await sessionSpace.search(query, { limit, signal });
+      }
 
       return investigationResult({ spaceId: targetSpaceId, sources, hits });
     },
@@ -32,8 +40,8 @@ export const createReadSessionTool = defineTool(
   Type.Object({
     sessionId: Type.String({ minLength: 1 }),
     messageId: Type.String({ minLength: 1 }),
-    before: Type.Optional(Type.Integer({ minimum: 0, maximum: 20 })),
-    after: Type.Optional(Type.Integer({ minimum: 0, maximum: 20 })),
+    before: Type.Optional(contextRadiusSchema),
+    after: Type.Optional(contextRadiusSchema),
   }),
   ({ options, sessionSpace, targetSpaceId }: InvestigationToolContext) => ({
     name: 'read_session',
@@ -46,9 +54,12 @@ export const createReadSessionTool = defineTool(
       signal?.throwIfAborted();
       const sources = options.resolveSources();
       let session;
-      if (options.target.type === 'global' || options.crossSpace)
+
+      if (options.target.type === 'global' || options.crossSpace) {
         session = await options.sessionManager.getAnySession(sessionId);
-      else session = await sessionSpace.getSession(sessionId);
+      } else {
+        session = await sessionSpace.getSession(sessionId);
+      }
 
       if (!session) {
         return investigationResult({ spaceId: targetSpaceId, sources, messages: [] });
@@ -64,6 +75,7 @@ export const createReadSessionTool = defineTool(
         Math.max(1, message.seq - before),
         message.seq + after,
       );
+
       signal?.throwIfAborted();
 
       return investigationResult({
@@ -79,8 +91,8 @@ export const createReadSessionTool = defineTool(
 
 export const createReadTargetSessionTool = defineTool(
   Type.Object({
-    afterSeq: Type.Optional(Type.Integer({ minimum: 0 })),
-    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
+    afterSeq: Type.Optional(sequenceSchema),
+    limit: Type.Optional(pageSizeSchema),
   }),
   ({ options }: InvestigationToolContext) => ({
     name: 'read_target_session',

@@ -5,12 +5,14 @@ const mocks = vi.hoisted(() => ({
   install: vi.fn(),
   check: vi.fn(async () => ({ valid: false, missingFiles: ['encoder'], modelsPath: '/models' })),
 }));
+
 vi.mock('@cieljs/hearing', () => ({
   DEFAULT_ASR_MODEL: 'qwen3-asr-1.7b-int8',
   ASR_MODELS: { 'qwen3-asr-1.7b-int8': {}, 'sensevoice-small': {} },
   installModels: mocks.install,
   checkConfiguration: mocks.check,
 }));
+
 vi.mock('../config.ts', () => ({
   watchConfigurationStatus: () => ({ valid: true, path: '/config.json' }),
 }));
@@ -26,10 +28,12 @@ it('已安装模型立即应用，缺失模型下载完成后才替换当前模�
   apply.mockClear();
   await client.selectHearingModel('qwen3-asr-1.7b-int8');
   expect(apply).not.toHaveBeenCalled();
+
   expect(await client.hearingModels()).toMatchObject({
     model: 'qwen3-asr-1.7b-int8',
     activeModel: 'sensevoice-small',
   });
+
   const download = Promise.withResolvers<void>();
   mocks.install.mockReturnValueOnce(download.promise);
   await client.installHearingModels();
@@ -47,12 +51,14 @@ it('后台安装立即返回、并发去重，失败原因可读取且允许重�
   await client.installHearingModels();
   expect(mocks.install).toHaveBeenCalledTimes(1);
   download.reject(new Error('encoder 下载失败：HTTP 503'));
+
   await vi.waitFor(async () => {
     expect(await client.hearingModels()).toMatchObject({
       installing: false,
       error: 'encoder 下载失败：HTTP 503',
     });
   });
+
   mocks.install.mockResolvedValueOnce('/models');
   await client.installHearingModels();
   expect(mocks.install).toHaveBeenCalledTimes(2);

@@ -39,6 +39,7 @@ export class PerceptionImageStream implements ImageStream {
     const source = input.source ?? 'default';
     const state = this.getSource(source);
     const sequence = this.options.nextSequence();
+
     const accepted = {
       data: Buffer.from(input.data),
       at: new Date(input.at),
@@ -90,6 +91,7 @@ export class PerceptionImageStream implements ImageStream {
   ) {
     const sampledAt = input.at.getTime();
     const lastSampleAt = state.lastSampleAt;
+
     const isTooEarly =
       lastSampleAt !== undefined &&
       (sampledAt <= lastSampleAt || sampledAt - lastSampleAt < this.options.sampleIntervalMs);
@@ -108,6 +110,7 @@ export class PerceptionImageStream implements ImageStream {
     const data = await sharp(input.data).jpeg({ quality: 85 }).toBuffer();
 
     difference.commit();
+
     this.options.onFrame({
       source: input.source,
       at: new Date(input.at),

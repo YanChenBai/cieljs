@@ -14,6 +14,7 @@ export function resolveToolOptions(options: {
 }): ResolvedToolOptions {
   const configuredSources = options.sources;
   const sourceProvider = typeof configuredSources === 'function' ? configuredSources : undefined;
+
   const staticSources =
     typeof configuredSources === 'function' ? [] : normalizeSources(configuredSources ?? []);
 
@@ -69,6 +70,7 @@ export function pageMemory(memory: MemoryEntry, offset: number, maxReadChars: nu
 
 export function parseDate(value: string | undefined): Date | undefined;
 export function parseDate(value: string | null | undefined): Date | null | undefined;
+
 export function parseDate(value: string | null | undefined): Date | null | undefined {
   if (value === undefined || value === null) {
     return value;

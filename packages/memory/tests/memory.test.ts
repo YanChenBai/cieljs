@@ -7,6 +7,7 @@ import { MemoryConflictError, MemoryManager, tokenizeSearchText } from '../src/i
 import { memoryStorage } from '../src/storage-module.ts';
 
 const spaceId = 'space:alpha';
+
 const embedBatch = vi.fn(async (texts: string[], options: { purpose: 'document' | 'query' }) =>
   texts.map(text => {
     if (options.purpose === 'query') {
@@ -32,11 +33,13 @@ test('默认 tokenizer 使用中文词边界并忽略标点', () => {
     '向量',
     '检索',
   ]);
+
   expect(tokenizeSearchText('Hello_world version2!')).toEqual(['hello_world', 'version2']);
 });
 
 beforeAll(async () => {
   storage = await Storage.open({ dataDir: 'memory://', modules: [memoryStorage, vectorStorage] });
+
   vectors = new VectorService({
     storage,
     provider: { model: 'test', dimensions: 3, embedBatch },
@@ -45,6 +48,7 @@ beforeAll(async () => {
     granularity: 'chunk',
     inputConfig: 'raw',
   });
+
   manager = await MemoryManager.open({
     storage,
     timeZone: 'Asia/Shanghai',
@@ -67,19 +71,23 @@ describe('分层与 revision', () => {
 
     expect(await space.get(global.id)).toBeNull();
     expect(await manager.global.get(longTerm.id)).toBeNull();
+
     expect((await space.list()).map(memory => memory.id)).toEqual(
       expect.arrayContaining([longTerm.id, daily.id]),
     );
+
     expect(await manager.getAny(global.id)).toMatchObject({ layer: 'global.long_term' });
   });
 
   test('更新创建完整快照并保留旧来源', async () => {
     const space = manager.space(spaceId);
+
     const original = await space.longTerm.remember({
       content: '旧内容',
       kind: 'fact',
       sources: [' 主播Ａ ', '主播A', 'bilibili:room:1'],
     });
+
     const updated = await space.update(original.id, {
       expectedRevision: 1,
       content: '新内容',
@@ -87,12 +95,15 @@ describe('分层与 revision', () => {
 
     expect(updated).toMatchObject({ revision: 2, content: '新内容' });
     expect(updated.sources).toEqual(['主播A', 'bilibili:room:1']);
+
     expect(await space.getRevision(original.id, 1)).toMatchObject({
       revision: 1,
       content: '旧内容',
       sources: ['主播A', 'bilibili:room:1'],
     });
+
     expect((await space.history(original.id)).map(revision => revision.revision)).toEqual([2, 1]);
+
     await expect(
       space.update(original.id, { expectedRevision: 1, content: '冲突更新' }),
     ).rejects.toBeInstanceOf(MemoryConflictError);
@@ -105,9 +116,11 @@ describe('分层与 revision', () => {
     await space.forget(memory.id, { expectedRevision: 1 });
 
     expect(await space.get(memory.id)).toBeNull();
+
     expect(await space.get(memory.id, { includeArchived: true })).toMatchObject({
       status: 'archived',
     });
+
     expect(await space.getRevision(memory.id, 1)).toMatchObject({ content: '需要遗忘' });
   });
 });
@@ -121,6 +134,7 @@ describe('内容和来源搜索', () => {
 
     for (const mode of ['full_text', 'trigram', 'vector', 'hybrid'] as const) {
       expect(await space.search('pineapple', { mode })).toEqual([]);
+
       expect(await space.search('pineapple', { mode, includeArchived: true })).toMatchObject([
         { memory: { id: memory.id, status: 'archived' } },
       ]);
@@ -128,9 +142,11 @@ describe('内容和来源搜索', () => {
 
     await manager.rebuildIndexes();
     await manager.flushIndexes();
+
     expect(
       await space.search('pineapple', { mode: 'vector', includeArchived: true }),
     ).toMatchObject([{ memory: { id: memory.id } }]);
+
     expect(
       await manager.space('other-archive-space').search('pineapple', { includeArchived: true }),
     ).toEqual([]);
@@ -140,17 +156,22 @@ describe('内容和来源搜索', () => {
     const space = manager.space('chinese-source');
     const sources = ['今天在直播间讨论中文分词和向量检索的实现方案'];
     const memory = await space.longTerm.remember({ content: '来源分词', sources });
+
     expect(await space.searchBySource('中文 向量', { mode: 'text' })).toMatchObject([
       { memoryId: memory.id, matchedSources: sources },
     ]);
+
     await space.update(memory.id, {
       expectedRevision: 1,
       sources: ['今天研究数据库事务和持久化的具体方案'],
     });
+
     expect(await space.searchBySource('中文 向量', { mode: 'text' })).toEqual([]);
+
     expect(
       await space.searchBySource('中文 向量', { mode: 'text', includeHistory: true }),
     ).toMatchObject([{ memoryId: memory.id, revision: 1, matchedSources: sources }]);
+
     expect(await space.searchBySource('数据库 持久化', { mode: 'text' })).toMatchObject([
       { memoryId: memory.id, revision: 2 },
     ]);
@@ -171,6 +192,7 @@ describe('内容和来源搜索', () => {
       content: '第一个房间的记忆',
       sources: ['bilibili:room:100', '小明', '今晚挑战新游戏'],
     });
+
     await manager.space('room:2').daily.remember({
       content: '第二个房间的记忆',
       sources: ['小明的联动直播'],
@@ -180,24 +202,29 @@ describe('内容和来源搜索', () => {
     expect(exact[0]).toMatchObject({ memoryId: first.id, spaceId: 'room:1', revision: 1 });
 
     const spaces = await manager.findSpacesBySource('小明', { mode: 'text' });
+
     expect(spaces.map(space => space.spaceId)).toEqual(
       expect.arrayContaining(['room:1', 'room:2']),
     );
+
     expect(spaces.find(space => space.spaceId === 'room:1')?.memories[0]?.id).toBe(first.id);
   });
 
   test('来源历史只在显式开启时参与搜索', async () => {
     const space = manager.space('source-history');
+
     const original = await space.longTerm.remember({
       content: '来源历史',
       sources: ['old:title'],
     });
+
     await space.update(original.id, {
       expectedRevision: 1,
       sources: ['new:title'],
     });
 
     expect(await space.searchBySource('old:title', { mode: 'exact' })).toEqual([]);
+
     expect(
       await space.searchBySource('old:title', { mode: 'exact', includeHistory: true }),
     ).toMatchObject([{ memoryId: original.id, revision: 1 }]);
@@ -215,6 +242,7 @@ describe('Agent 接入', () => {
     const localResult = await localTools
       .find(tool => tool.name === 'archive_current_space_memory')!
       .execute('archive-local', { id: local.id, expectedRevision: local.revision });
+
     const globalResult = await globalTools
       .find(tool => tool.name === 'archive_global_memory')!
       .execute('archive-global', { id: global.id, expectedRevision: global.revision });
@@ -228,9 +256,11 @@ describe('Agent 接入', () => {
 
   test('replace 允许宿主清空来源，append 空来源仍继承旧值', async () => {
     const space = manager.space('empty-sources');
+
     for (const sourcesMode of ['replace', 'append'] as const) {
       const memory = await space.longTerm.remember({ content: 'original', sources: ['old'] });
       const tools = memoryTools({ space, sourcesMode, sources: async () => [] });
+
       const result = await tools
         .find(tool => tool.name === 'update_current_space_memory')!
         .execute('update', {
@@ -238,6 +268,7 @@ describe('Agent 接入', () => {
           expectedRevision: 1,
           content: 'updated',
         });
+
       expect(result.details).toMatchObject({
         memory: { sources: sourcesMode === 'replace' ? [] : ['old'] },
       });
@@ -249,6 +280,7 @@ describe('Agent 接入', () => {
     const space = manager.space('bounded-search');
     await space.longTerm.remember({ content });
     await manager.global.remember({ content });
+
     const tools = [
       ...memoryTools({ space, maxReadChars: 20, crossSpace: { manager, access: 'all' } }),
       ...globalMemoryTools({ memory: manager.global, maxReadChars: 20 }),
@@ -267,25 +299,28 @@ describe('Agent 接入', () => {
           mode: 'full_text',
           spaceId: space.spaceId,
         });
-      expect(result.details).toMatchObject({
-        hits: expect.arrayContaining([
-          expect.objectContaining({
-            memory: expect.objectContaining({ content: content.slice(0, 20), truncated: true }),
-          }),
-        ]),
-      });
+
+      const memory = expect.objectContaining({ content: content.slice(0, 20), truncated: true });
+      const hit = expect.objectContaining({ memory });
+
+      expect(result.details).toMatchObject({ hits: expect.arrayContaining([hit]) });
+
       const details = result.details as {
         hits: Array<{ memory: { content: string }; excerpt: string }>;
       };
+
       for (const hit of details.hits) {
         expect(hit.memory.content.length).toBeLessThanOrEqual(20);
         expect(hit.excerpt.length).toBeLessThanOrEqual(20);
       }
     }
+
     const memory = (await space.list())[0]!;
+
     const result = await tools
       .find(tool => tool.name === 'read_current_space_memory')!
       .execute('read', { id: memory.id, offset: 20 });
+
     expect(result.details).toMatchObject({
       memory: { content: content.slice(20, 40) },
       nextOffset: 40,
@@ -295,6 +330,7 @@ describe('Agent 接入', () => {
   test('当前空间工具不接收 spaceId，sources 由宿主注入', async () => {
     const space = manager.space('agent-space');
     const tools = memoryTools({ space, sources: ['session:1'] });
+
     expect(tools.map(tool => tool.name)).toEqual([
       'search_current_space_memory',
       'search_current_space_memory_by_source',
@@ -307,6 +343,7 @@ describe('Agent 接入', () => {
 
     const remember = tools.find(tool => tool.name === 'remember_current_space_long_term_memory')!;
     const result = await remember.execute('remember-1', { content: '工具写入' });
+
     expect(result.details).toMatchObject({
       memory: { spaceId: 'agent-space', sources: ['session:1'] },
     });
@@ -314,12 +351,15 @@ describe('Agent 接入', () => {
 
   test('更新工具保留旧来源并追加本次宿主来源', async () => {
     const space = manager.space('agent-update');
+
     const original = await space.longTerm.remember({
       content: '更新前',
       sources: ['session:old'],
     });
+
     const tools = memoryTools({ space, sources: ['session:new'] });
     const update = tools.find(tool => tool.name === 'update_current_space_memory')!;
+
     const result = await update.execute('update-1', {
       id: original.id,
       expectedRevision: 1,
@@ -336,10 +376,12 @@ describe('Agent 接入', () => {
       content: '相关空间正文',
       sources: ['anchor:related'],
     });
+
     const tools = memoryTools({
       space: manager.space('related-current'),
       crossSpace: { manager, access: 'related' },
     });
+
     const read = tools.find(tool => tool.name === 'read_discovered_space_memory')!;
 
     await expect(
@@ -348,6 +390,7 @@ describe('Agent 接入', () => {
 
     const find = tools.find(tool => tool.name === 'find_memory_spaces_by_source')!;
     await find.execute('find', { query: 'anchor:related', mode: 'exact' });
+
     expect(
       (await read.execute('read-after-find', { spaceId: 'related-target', id: target.id })).details,
     ).toMatchObject({ memory: { id: target.id } });
@@ -371,9 +414,11 @@ describe('Agent 接入', () => {
     await space.daily.remember({ content: '今日上下文' });
 
     const context = await loadMemoryContext({ manager, space });
+
     expect(context.globalLongTerm.memories.some(memory => memory.content === '全局上下文')).toBe(
       true,
     );
+
     expect(context.spaceLongTerm.memories).toMatchObject([{ content: '空间长期上下文' }]);
     expect(context.daily.memories).toMatchObject([{ content: '今日上下文' }]);
   });
@@ -387,23 +432,28 @@ test('本地数据库可重复打开并保留 revision', async () => {
   try {
     persistentStorage = await Storage.open({ dataDir, modules: [memoryStorage] });
     persistent = await MemoryManager.open({ storage: persistentStorage });
+
     const original = await persistent.space('persistent').longTerm.remember({
       content: '持久化旧版本',
       sources: ['persistence:test'],
     });
+
     await persistent.space('persistent').update(original.id, {
       expectedRevision: 1,
       content: '持久化新版本',
     });
+
     await persistent.close();
     await persistentStorage.close();
 
     persistentStorage = await Storage.open({ dataDir, modules: [memoryStorage] });
     persistent = await MemoryManager.open({ storage: persistentStorage });
+
     expect(await persistent.space('persistent').get(original.id)).toMatchObject({
       content: '持久化新版本',
       revision: 2,
     });
+
     expect(await persistent.space('persistent').getRevision(original.id, 1)).toMatchObject({
       content: '持久化旧版本',
     });
@@ -413,6 +463,7 @@ test('本地数据库可重复打开并保留 revision', async () => {
     await rm(dataDir, { recursive: true, force: true });
   }
 }, 30000);
+
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

@@ -14,9 +14,11 @@ export function resolveWakeOptions(options: WatchWakeOptions): Required<WatchWak
     maxWaitMs: options.maxWaitMs ?? 4000,
     cooldownMs: options.cooldownMs ?? 15000,
   };
+
   if (!resolved.keywords.length || resolved.keywords.some(word => !word.trim())) {
     throw new Error('唤醒词不能为空');
   }
+
   if (
     ![resolved.minWaitMs, resolved.maxWaitMs, resolved.cooldownMs].every(
       value => Number.isFinite(value) && value >= 0,
@@ -25,6 +27,7 @@ export function resolveWakeOptions(options: WatchWakeOptions): Required<WatchWak
   ) {
     throw new Error('唤醒等待时间必须非负，且 maxWaitMs 不能小于 minWaitMs');
   }
+
   return resolved;
 }
 

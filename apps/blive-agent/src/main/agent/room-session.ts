@@ -11,6 +11,7 @@ const watchDate = new Intl.DateTimeFormat('en-CA', {
 export function createRoomSessionOptions(room: RoomInfo, enteredAt: Date, mode?: WatchMode) {
   const spaceId = `bilibili:room:${room.roomId}`;
   const date = mode?.type === 'recording' && mode.date ? mode.date : watchDate.format(enteredAt);
+
   const sessionId =
     mode?.type === 'recording' ? `${spaceId}:recording:${date}` : `${spaceId}:${date}`;
 

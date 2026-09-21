@@ -38,9 +38,11 @@ const clock = computed(() =>
 );
 
 const text = computed(() => messageText(value.value));
+
 const hasContent = computed(
   () => props.entry.name !== 'assistant' || hasMessageContent(value.value),
 );
+
 const fallback = computed(() => messageFallback(value.value));
 const json = computed(() => (text.value === undefined ? undefined : wholeJson(text.value)));
 

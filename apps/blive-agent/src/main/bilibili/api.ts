@@ -44,6 +44,7 @@ export class BilibiliApi {
         },
       ];
     });
+
     return this.areaGroups;
   }
 
@@ -53,6 +54,7 @@ export class BilibiliApi {
     const room = await this.request<RoomPayload>(
       `https://api.live.bilibili.com/room/v1/Room/get_info?id=${roomId}`,
     );
+
     const streamerUid = room.uid ?? 0;
     const status = streamerUid > 0 ? await this.streamerStatus(streamerUid) : undefined;
 
@@ -100,6 +102,7 @@ export class BilibiliApi {
       platform: 'web',
       sort_type: 'online',
     });
+
     const data = await this.request<{ list?: readonly CandidatePayload[] }>(
       `https://api.live.bilibili.com/room/v3/area/getRoomList?${query}`,
     );
@@ -121,6 +124,7 @@ export class BilibiliApi {
     });
   }
 
+  // oxlint-disable-next-line eslint/complexity -- 逐级校验第三方接口的可选响应字段，分支对应独立协议错误。
   async playUrl(roomId: number): Promise<string> {
     assertPositiveInteger(roomId, 'roomId');
 
@@ -133,6 +137,7 @@ export class BilibiliApi {
       platform: 'web',
       ptype: '8',
     });
+
     const data = await this.request<PlayInfoPayload>(
       `https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?${query}`,
     );
@@ -144,9 +149,12 @@ export class BilibiliApi {
     const stream = data.playurl_info?.playurl?.stream?.find(
       candidate => candidate.protocol_name === 'http_stream',
     );
+
     const format = stream?.format?.find(candidate => candidate.format_name === 'flv');
+
     const codec =
       format?.codec?.find(candidate => candidate.codec_name === 'avc') ?? format?.codec?.[0];
+
     const url = codec?.url_info?.[0];
 
     if (!codec?.base_url || !url?.host) {
@@ -170,11 +178,13 @@ export class BilibiliApi {
       platform: 'web',
       features: 'itemOpusStyle',
     });
+
     const result = await this.request<DynamicFeedPayload>(
       `https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space?${query}`,
       `https://space.bilibili.com/${streamerUid}/dynamic`,
       readInPage,
     );
+
     return (result.items ?? [])
       .flatMap(parseHistoryItem)
       .toSorted((left, right) => Number(right.pinned) - Number(left.pinned))
@@ -187,17 +197,20 @@ export class BilibiliApi {
     limit = 8,
   ): Promise<StreamerHistoryItem[]> {
     assertPositiveInteger(streamerUid, 'streamerUid');
+
     const archiveQuery = new URLSearchParams({
       mid: String(streamerUid),
       pn: '1',
       ps: String(limit),
       order: 'pubdate',
     });
+
     const result = await this.request<ArchiveListPayload>(
       `https://api.bilibili.com/x/space/arc/search?${archiveQuery}`,
       `https://space.bilibili.com/${streamerUid}/video`,
       readInPage,
     );
+
     return (result.list?.vlist ?? []).flatMap(parseArchiveItem).slice(0, limit);
   }
 
@@ -216,10 +229,14 @@ export class BilibiliApi {
   ): Promise<T> {
     if (readInPage) {
       const body = (await readInPage(url)) as ApiResponse<T>;
-      if (body.code !== 0 || body.data === undefined)
+
+      if (body.code !== 0 || body.data === undefined) {
         throw new Error(`Bilibili API ${body.code}: ${body.message}`);
+      }
+
       return body.data;
     }
+
     const response = await this.fetch(url, {
       headers: {
         Accept: 'application/json, text/plain, */*',
@@ -326,6 +343,7 @@ function validId(value: number | undefined): value is number {
   return Number.isSafeInteger(value) && (value ?? 0) > 0;
 }
 
+// oxlint-disable-next-line eslint/complexity -- 动态类型由 Bilibili 协议决定，集中转换可保持字段映射完整。
 function parseHistoryItem(item: DynamicItemPayload): StreamerHistoryItem[] {
   const archive = item.modules?.module_dynamic?.major?.archive;
   const description = item.modules?.module_dynamic?.desc?.text?.trim();

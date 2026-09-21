@@ -32,11 +32,13 @@ export function createRoomContext(input: {
   history: readonly SentDanmaku[];
 }): string {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - input.startedAt) / 1_000));
+
   const danmakuHistory = input.history.length
     ? input.history
         .map(item => `- ${new Date(item.sentAt).toISOString()} ${item.content}`)
         .join('\n')
     : '（尚未真实发送弹幕）';
+
   const recordingSource =
     input.mode.type === 'recording'
       ? `\n- 录播来源：${input.mode.source.type === 'url' ? input.mode.source.url : input.mode.source.path}`
@@ -67,8 +69,14 @@ export function createExplorationQuestion(
   ];
 
   // 数据段落随现场变化，没有就整段不出现；冷却规则和不要重进的约束在系统提示词里。
-  if (context.previous) blocks.push(formatPrevious(context.previous));
-  if (context.cooled.length > 0) blocks.push(formatCooled(context.cooled, context));
+  if (context.previous) {
+    blocks.push(formatPrevious(context.previous));
+  }
+
+  if (context.cooled.length > 0) {
+    blocks.push(formatCooled(context.cooled, context));
+  }
+
   blocks.push(`候选：\n${JSON.stringify(candidates)}`);
 
   return blocks.join('\n\n');
@@ -87,6 +95,7 @@ function formatPrevious(previous: PreviousVisit): string {
 
 function formatCooled(cooled: readonly RoomDeparture[], context: ExplorationContext): string {
   const now = Date.now();
+
   const lines = cooled.map(item => {
     const elapsedMs = Math.max(0, now - item.leftAt);
     const leftMinutes = Math.max(1, Math.ceil((context.cooldownMs - elapsedMs) / 60_000));

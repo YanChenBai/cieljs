@@ -58,6 +58,7 @@ export function createInvestigationRoutes(options: {
   const requireCiel = () => {
     starting ??= (async () => {
       const ai = options.resolveModel();
+
       const instance = defineCiel({
         model: ai.model,
         apiKey: ai.apiKey,
@@ -68,6 +69,7 @@ export function createInvestigationRoutes(options: {
           tools: [...(options.mcp?.tools ?? [])],
         },
       });
+
       await instance.start();
       ciel = instance;
 
@@ -93,11 +95,14 @@ export function createInvestigationRoutes(options: {
       title: conversation.title,
     } satisfies InvestigationUpdate;
 
-    for (const listener of updateListeners) listener(update);
+    for (const listener of updateListeners) {
+      listener(update);
+    }
   };
 
   const generateTitle = async (question: string, signal: AbortSignal) => {
     const ai = options.resolveModel();
+
     const response = await completeSimple(
       ai.model,
       {
@@ -129,22 +134,31 @@ export function createInvestigationRoutes(options: {
   ) => {
     try {
       const generatedTitle = await generateTitle(question, signal);
-      if (!generatedTitle || conversation.title !== provisionalTitle) return;
+
+      if (!generatedTitle || conversation.title !== provisionalTitle) {
+        return;
+      }
 
       await persistTitle(conversation.sessionId, generatedTitle);
       conversation.title = generatedTitle;
       publishTitle(conversation);
     } catch (error) {
-      if (!signal.aborted) console.warn('生成 Investigation 标题失败', error);
+      if (!signal.aborted) {
+        console.warn('生成 Investigation 标题失败', error);
+      }
     }
   };
 
   const restoreConversation = (session: Pick<SessionInfo, 'id' | 'title' | 'createdAt'>) => {
     const sessionId = session.id;
     const createdAt = session.createdAt.getTime();
-    if (!sessionId.startsWith('investigation:')) return;
+
+    if (!sessionId.startsWith('investigation:')) {
+      return;
+    }
 
     const parts = sessionId.split(':');
+
     if (parts[1] === 'global') {
       return {
         sessionId,
@@ -158,7 +172,10 @@ export function createInvestigationRoutes(options: {
     }
 
     const roomId = Number(parts[2]);
-    if (parts[1] !== 'room' || !Number.isSafeInteger(roomId) || roomId <= 0) return;
+
+    if (parts[1] !== 'room' || !Number.isSafeInteger(roomId) || roomId <= 0) {
+      return;
+    }
 
     return {
       sessionId,
@@ -173,23 +190,37 @@ export function createInvestigationRoutes(options: {
 
   const persistTitle = async (sessionId: string, title: string) => {
     const session = await options.sessions.getAnySession(sessionId);
-    if (!session) throw new Error('Investigation Session 不存在');
+
+    if (!session) {
+      throw new Error('Investigation Session 不存在');
+    }
 
     await session.update({ title });
   };
 
   const requireConversation = async (sessionId: string) => {
     let conversation = conversations.get(sessionId);
+
     if (!conversation) {
       const session = await options.sessions.getAnySession(sessionId);
       conversation = session ? restoreConversation(await session.getInfo()) : undefined;
-      if (conversation) conversations.set(sessionId, conversation);
+
+      if (conversation) {
+        conversations.set(sessionId, conversation);
+      }
     }
-    if (!conversation) throw new Error('Investigation 会话不存在，请新建调查');
-    if (conversation.inputTarget.type === 'global' || conversation.room) return conversation;
+
+    if (!conversation) {
+      throw new Error('Investigation 会话不存在，请新建调查');
+    }
+
+    if (conversation.inputTarget.type === 'global' || conversation.room) {
+      return conversation;
+    }
 
     const room = await options.api.room(conversation.inputTarget.roomId);
     const current = options.current();
+
     conversation = {
       ...conversation,
       target: {
@@ -201,6 +232,7 @@ export function createInvestigationRoutes(options: {
       label: `${room.streamerName} · ${room.title}`,
       room,
     };
+
     conversations.set(sessionId, conversation);
 
     return conversation;
@@ -208,10 +240,15 @@ export function createInvestigationRoutes(options: {
 
   const list = os.handler(async () => {
     for (const session of await options.sessions.list()) {
-      if (conversations.has(session.id)) continue;
+      if (conversations.has(session.id)) {
+        continue;
+      }
 
       const conversation = restoreConversation(session);
-      if (conversation) conversations.set(session.id, conversation);
+
+      if (conversation) {
+        conversations.set(session.id, conversation);
+      }
     }
 
     return [...conversations.values()]
@@ -239,6 +276,7 @@ export function createInvestigationRoutes(options: {
       const room = await options.api.room(input.target.roomId);
       const current = options.current();
       const targetSessionId = current.room?.roomId === room.roomId ? current.sessionId : undefined;
+
       conversation = {
         sessionId,
         inputTarget: input.target,
@@ -256,11 +294,13 @@ export function createInvestigationRoutes(options: {
     }
 
     const spaceId = conversation.target.type === 'global' ? 'global' : conversation.target.spaceId;
+
     await options.sessions.space(spaceId).session({
       id: sessionId,
       title: conversation.title,
       sources: conversation.sources,
     });
+
     conversations.set(sessionId, conversation);
 
     return serializeConversation(conversation);
@@ -278,9 +318,12 @@ export function createInvestigationRoutes(options: {
     });
 
   const deleteConversation = os.input(sessionInputSchema).handler(async ({ input }) => {
-    if (active.has(input.sessionId)) throw new Error('Investigation 正在回答，请先停止回答');
+    if (active.has(input.sessionId)) {
+      throw new Error('Investigation 正在回答，请先停止回答');
+    }
 
     const session = await options.sessions.getAnySession(input.sessionId);
+
     if (!session || !input.sessionId.startsWith('investigation:')) {
       throw new Error('Investigation 会话不存在');
     }
@@ -292,10 +335,12 @@ export function createInvestigationRoutes(options: {
   const updates = os.handler(async function* ({ signal }) {
     const queue: InvestigationUpdate[] = [];
     let wake: (() => void) | undefined;
+
     const receive = (update: InvestigationUpdate) => {
       queue.push(update);
       wake?.();
     };
+
     const abort = () => wake?.();
 
     updateListeners.add(receive);
@@ -308,8 +353,11 @@ export function createInvestigationRoutes(options: {
           wake = resolve;
         });
 
-        if (queue.length) yield queue.shift()!;
-        else await pending;
+        if (queue.length) {
+          yield queue.shift()!;
+        } else {
+          await pending;
+        }
       }
     } finally {
       updateListeners.delete(receive);
@@ -322,7 +370,10 @@ export function createInvestigationRoutes(options: {
     .input(sessionInputSchema.extend({ content: z.string().trim().min(1).max(32_000) }))
     .handler(async ({ input, signal }) => {
       const conversation = await requireConversation(input.sessionId);
-      if (active.has(input.sessionId)) throw new Error('Investigation 正在回答上一条消息');
+
+      if (active.has(input.sessionId)) {
+        throw new Error('Investigation 正在回答上一条消息');
+      }
 
       const controller = new AbortController();
       const abort = () => controller.abort();
@@ -330,11 +381,13 @@ export function createInvestigationRoutes(options: {
       active.set(input.sessionId, controller);
 
       let titleUpdate: Promise<void> | undefined;
+
       if (conversation.title === '新调查') {
         const provisionalTitle = input.content.replace(/\s+/gu, ' ').slice(0, 36);
         await persistTitle(conversation.sessionId, provisionalTitle);
         conversation.title = provisionalTitle;
         publishTitle(conversation);
+
         titleUpdate = updateGeneratedTitle(
           conversation,
           input.content,
@@ -345,6 +398,7 @@ export function createInvestigationRoutes(options: {
 
       try {
         const runtime = await requireCiel();
+
         await runtime.investigate({
           sessionId: conversation.sessionId,
           target: conversation.target,
@@ -358,6 +412,7 @@ export function createInvestigationRoutes(options: {
             publishTitle(conversation);
           },
         });
+
         await titleUpdate;
       } finally {
         signal?.removeEventListener('abort', abort);
@@ -375,7 +430,11 @@ export function createInvestigationRoutes(options: {
     router: { list, create, rename, delete: deleteConversation, updates, prompt, abort },
     close: async () => {
       lifetime.abort();
-      for (const controller of active.values()) controller.abort();
+
+      for (const controller of active.values()) {
+        controller.abort();
+      }
+
       active.clear();
       updateListeners.clear();
       conversations.clear();

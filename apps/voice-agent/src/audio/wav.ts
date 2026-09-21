@@ -113,16 +113,25 @@ function readSample(data: Buffer, offset: number, wav: ParsedWav): number {
   }
 
   switch (wav.bitsPerSample) {
-    case 8:
+    case 8: {
       return (data.readUInt8(offset) - 128) * 256;
-    case 16:
+    }
+
+    case 16: {
       return data.readInt16LE(offset);
-    case 24:
+    }
+
+    case 24: {
       return readInt24LE(data, offset);
-    case 32:
+    }
+
+    case 32: {
       return data.readInt32LE(offset);
-    default:
+    }
+
+    default: {
       throw new Error(`不支持的 WAV 位深：${wav.bitsPerSample}`);
+    }
   }
 }
 
@@ -133,8 +142,13 @@ function readInt24LE(data: Buffer, offset: number): number {
 }
 
 function clampToInt16(value: number): number {
-  if (value > 32_767) return 32_767;
-  if (value < -32_768) return -32_768;
+  if (value > 32_767) {
+    return 32_767;
+  }
+
+  if (value < -32_768) {
+    return -32_768;
+  }
 
   return Math.trunc(value);
 }

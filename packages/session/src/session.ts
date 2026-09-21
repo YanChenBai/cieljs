@@ -71,6 +71,7 @@ export class Session {
       );
 
       this.services.embeddingIndex.enqueue();
+
       return record;
     });
   }
@@ -120,9 +121,11 @@ export class Session {
   context(): Promise<AgentMessage[]> {
     return this.services.operate(async () => {
       const compaction = await this.services.repository.getLatestCompaction(this.selector);
+
       const rows = await this.services.repository.getMessages(this.selector, {
         afterSeq: compaction?.throughSeq ?? 0,
       });
+
       const messages = rows.map(row => row.message);
 
       return compaction
@@ -135,6 +138,7 @@ export class Session {
   getActiveMessageRows() {
     return this.services.operate(async () => {
       const compaction = await this.services.repository.getLatestCompaction(this.selector);
+
       return this.services.repository.getMessages(this.selector, {
         afterSeq: compaction?.throughSeq ?? 0,
       });
@@ -165,22 +169,29 @@ export class Session {
 
   private async compactInternal(options: CompactionOptions) {
     const previous = this.services.compactions.get(this.id) ?? Promise.resolve();
+
+    // oxlint-disable-next-line eslint/complexity -- 压缩操作在单一串行事务中处理阈值、边界、摘要与事实记录。
     const operation = previous.then(async () => {
       options.signal?.throwIfAborted();
       const latest = await this.services.repository.getLatestCompaction(this.selector);
+
       const rows = await this.services.repository.getMessages(this.selector, {
         afterSeq: latest?.throughSeq ?? 0,
       });
+
       const usageStartIndex = latest
         ? rows.findIndex(row => row.createdAt.getTime() > latest.createdAt.getTime())
         : 0;
+
       const boundary = findCompactionBoundary(
         { summary: latest?.summary ?? null, messages: rows.map(row => row.message) },
         options,
         usageStartIndex < 0 ? rows.length : usageStartIndex,
       );
 
-      if (!boundary) return null;
+      if (!boundary) {
+        return null;
+      }
 
       const summary = await options.summarize({
         sessionId: this.id,
@@ -188,6 +199,7 @@ export class Session {
         messages: rows.slice(0, boundary).map(row => row.message),
         signal: options.signal,
       });
+
       options.signal?.throwIfAborted();
 
       const compaction = await this.services.repository.appendCompaction(this.selector, {
@@ -199,6 +211,7 @@ export class Session {
       // 压缩后的当前上下文 = 摘要 + 保留的原文。保留消息里的旧 usage 反映的是压缩前的
       // 大上下文，这里按纯文本估算，等下一次真实请求再覆盖。
       const retained = rows.slice(boundary);
+
       const contextTokens = estimateContextTokens(
         { summary: compaction.summary, messages: retained.map(row => row.message) },
         retained.length,
@@ -215,17 +228,20 @@ export class Session {
 
       return compaction;
     });
+
     const settled = operation.then(
       () => {},
       () => {},
     );
+
     this.services.compactions.set(this.id, settled);
 
     try {
       return await operation;
     } finally {
-      if (this.services.compactions.get(this.id) === settled)
+      if (this.services.compactions.get(this.id) === settled) {
         this.services.compactions.delete(this.id);
+      }
     }
   }
 }

@@ -45,6 +45,7 @@ const groups = computed(() => {
   }
 
   const result = global.length ? [{ id: 'global', label: '全局', conversations: global }] : [];
+
   for (const [roomId, conversations] of rooms) {
     const room = conversations.find(item => item.room)?.room;
     const label = room ? `${room.streamerName} · ${roomId}` : `房间 ${roomId}`;
@@ -66,7 +67,10 @@ function requestDelete(conversation: InvestigationConversation) {
 
 function confirmDelete() {
   const sessionId = deletionCandidate.value?.sessionId;
-  if (!sessionId) return;
+
+  if (!sessionId) {
+    return;
+  }
 
   deleteOpen.value = false;
   deletionCandidate.value = undefined;

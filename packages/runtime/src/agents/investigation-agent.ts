@@ -35,10 +35,12 @@ export async function runInvestigation(options: {
   const targetSpaceId = options.target.type === 'space' ? options.target.spaceId : 'global';
   const investigationSpace = options.investigationManager.space(targetSpaceId);
   const initialSources = options.resolveSources();
+
   const session = await investigationSpace.session({
     id: options.sessionId,
     sources: initialSources,
   });
+
   const context = await session.context();
   let sessionInfo = await session.getInfo();
 
@@ -56,7 +58,10 @@ export async function runInvestigation(options: {
       session,
       onUpdated: updated => {
         sessionInfo = updated;
-        if (updated.title) options.onTitleUpdated?.(updated.title);
+
+        if (updated.title) {
+          options.onTitleUpdated?.(updated.title);
+        }
       },
     }),
     ...createInvestigationTools({
@@ -70,6 +75,7 @@ export async function runInvestigation(options: {
     }),
     ...options.tools,
   ];
+
   assertUniqueTools(tools);
 
   const agent = new ManagedAgent({
@@ -92,19 +98,23 @@ export async function runInvestigation(options: {
   });
 
   const messages: AgentMessage[] = [];
+
   const unsubscribe = agent.subscribe(async event => {
     await session.record(event, {
       tools,
       model: options.model,
       session: { title: sessionInfo.title, sources: sessionInfo.sources },
     });
+
     options.onEvent?.(event, { tools, model: options.model });
+
     if (event.type !== 'message_end') {
       return;
     }
 
     messages.push(event.message);
   });
+
   const abort = () => agent.abort();
   options.signal?.addEventListener('abort', abort, { once: true });
 

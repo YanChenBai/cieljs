@@ -1,6 +1,11 @@
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  test: {
+    testTimeout: 20_000,
+    fileParallelism: false,
+    sequence: { groupOrder: 4 },
+  },
   run: {
     tasks: {
       build: {

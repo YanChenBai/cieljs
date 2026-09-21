@@ -18,6 +18,7 @@ const props = defineProps<{
   toolCalls?: ReadonlyMap<string, ToolCallRecord>;
   toolRenderers?: ToolRenderers;
 }>();
+
 defineEmits<{ close: [] }>();
 
 type DetailTab = TraceSection | 'overview' | 'content' | 'thinking' | 'timing';
@@ -25,6 +26,7 @@ type DetailTab = TraceSection | 'overview' | 'content' | 'thinking' | 'timing';
 const tab = shallowRef<DetailTab>('overview');
 const rawId = shallowRef('');
 const isTool = computed(() => props.entry.kind === 'tool');
+
 const inspected = computed(() => ({
   ...props.entry,
   raw: props.entry.events.find(event => event.id === rawId.value) ?? props.entry.raw,
@@ -34,8 +36,12 @@ const activeSection = computed<TraceSection | undefined>(() => {
   if (['input', 'output', 'raw', 'schema'].includes(tab.value)) {
     return tab.value as TraceSection;
   }
-  if (tab.value === 'overview' && props.entry.error) return 'error';
+
+  if (tab.value === 'overview' && props.entry.error) {
+    return 'error';
+  }
 });
+
 const { value, error, loading } = useTraceValue(
   () => props.client,
   () => inspected.value,
@@ -59,8 +65,13 @@ const tabs = computed(() => {
     label: string;
   }> = [{ value: 'overview', label: '概览' }];
 
-  if (props.entry.text) items.push({ value: 'content', label: '消息' });
-  if (props.entry.thinking) items.push({ value: 'thinking', label: '思考' });
+  if (props.entry.text) {
+    items.push({ value: 'content', label: '消息' });
+  }
+
+  if (props.entry.thinking) {
+    items.push({ value: 'thinking', label: '思考' });
+  }
 
   items.push({ value: 'timing', label: '计时' }, { value: 'raw', label: '原始事件' });
 
@@ -75,12 +86,16 @@ watch(
     rawId.value = '';
 
     const tabStillAvailable = tabs.value.some(item => item.value === tab.value);
-    if (!tabStillAvailable) tab.value = 'overview';
+
+    if (!tabStillAvailable) {
+      tab.value = 'overview';
+    }
   },
 );
 
 function elapsed() {
   const reference = props.entry.endedAt ?? props.entry.runningUntil ?? props.entry.updatedAt;
+
   return Math.max(0, reference - props.entry.startedAt);
 }
 </script>

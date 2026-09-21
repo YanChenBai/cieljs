@@ -39,13 +39,13 @@ it('jsonText 同样兜住 BigInt 与循环引用', () => {
 
 it('jsonMarkdown 只是把 jsonText 包进代码块', () => {
   const value = { messages: [{ text: '第一行\n第二行' }] };
-  expect(jsonMarkdown(value)).toBe('```json\n' + jsonText(value) + '\n```');
+  expect(jsonMarkdown(value)).toBe(`\`\`\`json\n${jsonText(value)}\n\`\`\``);
 });
 
 it('多行工具 JSON 保留转义并展示为 JSON 代码块', () => {
   const value = { messages: [{ content: '第一行\n第二行', path: 'C:\\Videos\\视频.mp4' }] };
   const json = JSON.stringify(value, null, 2);
-  expect(readableText(json)).toBe('\n```json\n' + json + '\n```\n');
+  expect(readableText(json)).toBe(`\n\`\`\`json\n${json}\n\`\`\`\n`);
 });
 
 it('已有代码块和普通 Markdown 不重复包裹', () => {
@@ -65,9 +65,11 @@ it('空流式消息、错误和拒绝使用可读状态而不是消息 JSON', ()
   expect(hasMessageContent({ role: 'assistant', content: [] })).toBe(false);
   expect(hasMessageContent({ content: [{ type: 'text', text: '回答中' }] })).toBe(true);
   expect(messageFallback({ stopReason: 'aborted', content: [] })).toBe('生成已停止。');
+
   expect(messageFallback({ stopReason: 'error', errorMessage: '模型不可用', content: [] })).toBe(
     '模型不可用',
   );
+
   expect(messageFallback({ content: [{ type: 'refusal', refusal: '无法处理这个请求' }] })).toBe(
     '无法处理这个请求',
   );

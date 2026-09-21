@@ -18,23 +18,33 @@ export function useInvestigationChat(client: InvestigationClient) {
 
   function saveConversation(updated: InvestigationConversation) {
     const index = conversations.value.findIndex(item => item.sessionId === updated.sessionId);
+
     conversations.value =
       index < 0
         ? [...conversations.value, updated]
         : conversations.value.map(item => (item.sessionId === updated.sessionId ? updated : item));
 
-    if (conversation.value?.sessionId === updated.sessionId) conversation.value = updated;
+    if (conversation.value?.sessionId === updated.sessionId) {
+      conversation.value = updated;
+    }
   }
 
   function setSessionPending(sessionId: string, status?: 'prompt' | 'abort') {
     const next = new Map(sessionPending.value);
-    if (status) next.set(sessionId, status);
-    else next.delete(sessionId);
+
+    if (status) {
+      next.set(sessionId, status);
+    } else {
+      next.delete(sessionId);
+    }
+
     sessionPending.value = next;
   }
 
   async function initialize() {
-    if (pending.value) return;
+    if (pending.value) {
+      return;
+    }
 
     pending.value = 'create';
     error.value = '';
@@ -56,7 +66,10 @@ export function useInvestigationChat(client: InvestigationClient) {
   }
 
   function connectUpdates() {
-    if (updatesConnected) return;
+    if (updatesConnected) {
+      return;
+    }
+
     updatesConnected = true;
 
     void (async () => {
@@ -64,19 +77,28 @@ export function useInvestigationChat(client: InvestigationClient) {
         const updates = await client.updates(undefined, { signal: updatesController.signal });
 
         for await (const update of updates) {
-          if (updatesController.signal.aborted) return;
+          if (updatesController.signal.aborted) {
+            return;
+          }
 
           const current = conversations.value.find(item => item.sessionId === update.sessionId);
-          if (current) saveConversation({ ...current, title: update.title });
+
+          if (current) {
+            saveConversation({ ...current, title: update.title });
+          }
         }
       } catch (cause) {
-        if (!updatesController.signal.aborted) error.value = String(cause);
+        if (!updatesController.signal.aborted) {
+          error.value = String(cause);
+        }
       }
     })();
   }
 
   async function create(target: InvestigationTargetInput) {
-    if (pending.value) return;
+    if (pending.value) {
+      return;
+    }
 
     pending.value = 'create';
     error.value = '';
@@ -93,13 +115,19 @@ export function useInvestigationChat(client: InvestigationClient) {
 
   function select(sessionId: string) {
     const selected = conversations.value.find(item => item.sessionId === sessionId);
-    if (selected) conversation.value = selected;
+
+    if (selected) {
+      conversation.value = selected;
+    }
   }
 
   async function rename(title: string) {
     const sessionId = conversation.value?.sessionId;
     const value = title.trim();
-    if (!sessionId || !value) return;
+
+    if (!sessionId || !value) {
+      return;
+    }
 
     try {
       saveConversation(await client.rename({ sessionId, title: value }));
@@ -109,10 +137,15 @@ export function useInvestigationChat(client: InvestigationClient) {
   }
 
   async function remove(sessionId: string) {
-    if (pending.value || sessionPending.value.has(sessionId)) return;
+    if (pending.value || sessionPending.value.has(sessionId)) {
+      return;
+    }
 
     const deletedIndex = conversations.value.findIndex(item => item.sessionId === sessionId);
-    if (deletedIndex < 0) return;
+
+    if (deletedIndex < 0) {
+      return;
+    }
 
     pending.value = 'delete';
     error.value = '';
@@ -135,10 +168,13 @@ export function useInvestigationChat(client: InvestigationClient) {
 
   async function prompt(content: string) {
     const sessionId = conversation.value?.sessionId;
-    if (!sessionId || pending.value || sessionPending.value.has(sessionId) || !content.trim())
+
+    if (!sessionId || pending.value || sessionPending.value.has(sessionId) || !content.trim()) {
       return;
+    }
 
     const question = content.trim();
+
     if (conversation.value?.title === '新调查') {
       saveConversation({
         ...conversation.value,
@@ -163,7 +199,10 @@ export function useInvestigationChat(client: InvestigationClient) {
 
   async function abort() {
     const sessionId = conversation.value?.sessionId;
-    if (!sessionId || sessionPending.value.get(sessionId) !== 'prompt') return;
+
+    if (!sessionId || sessionPending.value.get(sessionId) !== 'prompt') {
+      return;
+    }
 
     abortedSessions.add(sessionId);
     setSessionPending(sessionId, 'abort');

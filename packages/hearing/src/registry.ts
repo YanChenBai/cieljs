@@ -11,8 +11,9 @@ export const ASR_MODELS = {
   'qwen3-asr-1.7b-int8': {
     events: false,
     async prepare(options: InstallModelsOptions) {
-      for (const file of ASR_MODELS['qwen3-asr-1.7b-int8'].files(options.modelsPath))
+      for (const file of ASR_MODELS['qwen3-asr-1.7b-int8'].files(options.modelsPath)) {
         await installFile(file.url, file.target, options);
+      }
     },
     files: (modelsPath: string) =>
       [
@@ -34,8 +35,9 @@ export const ASR_MODELS = {
   'sensevoice-small': {
     events: true,
     async prepare(options: InstallModelsOptions) {
-      for (const file of ASR_MODELS['sensevoice-small'].files(options.modelsPath))
+      for (const file of ASR_MODELS['sensevoice-small'].files(options.modelsPath)) {
         await installFile(file.url, file.target, options);
+      }
     },
     files: (modelsPath: string) =>
       ['model.int8.onnx', 'tokens.txt'].map(file => ({
@@ -56,17 +58,26 @@ export function modelFiles(options: {
   mode?: 'transcription' | 'events';
 }) {
   const model = ASR_MODELS[options.model ?? DEFAULT_ASR_MODEL];
-  if (!model) throw new Error(`Unsupported ASR model: ${options.model}`);
+
+  if (!model) {
+    throw new Error(`Unsupported ASR model: ${options.model}`);
+  }
+
   const files = model.files(options.modelsPath);
-  if (options.mode !== 'events')
+
+  if (options.mode !== 'events') {
     files.push({
       url: `${release}/asr-models/ten-vad.int8.onnx`,
       target: resolveVadPath(options.modelsPath),
     });
-  if (options.speaker !== false)
+  }
+
+  if (options.speaker !== false) {
     files.push({
       url: `${release}/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx`,
       target: resolveSpeakerPath(options.modelsPath),
     });
+  }
+
   return files;
 }

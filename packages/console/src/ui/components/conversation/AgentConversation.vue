@@ -33,7 +33,10 @@ const conversation = useTemplateRef<HTMLElement>('conversation');
 
 function jumpToBottom() {
   const element = conversation.value;
-  if (!element) return;
+
+  if (!element) {
+    return;
+  }
 
   element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
 }
@@ -41,27 +44,42 @@ function jumpToBottom() {
 /** 面板重新显示时保持用户主动滚离底部的状态，只校正仍在跟随的视图。 */
 function stickToBottom() {
   const element = conversation.value;
-  if (!element || element.hasAttribute('data-detached')) return;
+
+  if (!element || element.hasAttribute('data-detached')) {
+    return;
+  }
 
   let remaining = 6;
+
   const step = () => {
     const target = conversation.value;
-    if (!target) return;
+
+    if (!target) {
+      return;
+    }
 
     target.scrollTop = target.scrollHeight;
-    if (--remaining > 0) requestAnimationFrame(step);
+
+    if (--remaining > 0) {
+      requestAnimationFrame(step);
+    }
   };
+
   step();
 }
 
 onMounted(() => {
-  if (props.active) stickToBottom();
+  if (props.active) {
+    stickToBottom();
+  }
 });
 
 watch(
   () => props.active,
   active => {
-    if (active) stickToBottom();
+    if (active) {
+      stickToBottom();
+    }
   },
 );
 </script>

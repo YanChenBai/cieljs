@@ -47,6 +47,7 @@ export class SessionRepository {
     private readonly tokenize: (text: string) => string[],
   ) {}
 
+  // oxlint-disable-next-line eslint/complexity -- 创建、冲突更新与回读共同实现 open 的幂等契约。
   async open(selector: SessionSelector, options: SessionOptions): Promise<SessionInfo> {
     const id = options.id ?? crypto.randomUUID();
     const spaceId = selector.spaceId;
@@ -62,7 +63,9 @@ export class SessionRepository {
 
     const providedSources =
       options.sources === undefined ? undefined : normalizeSources(options.sources);
+
     const createdAt = new Date();
+
     const [created] = await this.db
       .insert(sessions)
       .values({
@@ -95,6 +98,7 @@ export class SessionRepository {
         ...(options.title === undefined ? {} : { title }),
         updatedAt: new Date(),
       };
+
       const [updated] = await this.db
         .update(sessions)
         .set(updates)
@@ -127,6 +131,7 @@ export class SessionRepository {
   ): Promise<SessionInfo[]> {
     const limit = integerOption(options.limit ?? 50, 'limit');
     const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
+
     const rows = await this.db
       .select()
       .from(sessions)
@@ -145,6 +150,7 @@ export class SessionRepository {
 
     const sources = input.sources === undefined ? undefined : normalizeSources(input.sources);
     const title = normalizeTitle(input.title);
+
     const updates = {
       ...(sources === undefined
         ? {}
@@ -156,6 +162,7 @@ export class SessionRepository {
       ...(input.title === undefined ? {} : { title }),
       updatedAt: new Date(),
     };
+
     const [row] = await this.db
       .update(sessions)
       .set(updates)
@@ -190,7 +197,9 @@ export class SessionRepository {
       {},
       (tx, event) => this.projectMessage(tx, selector, event),
     );
+
     this.embeddingIndex.enqueue();
+
     return (await this.getMessage(selector, record.messageId!))!;
   }
 
@@ -199,16 +208,24 @@ export class SessionRepository {
     selector: SessionSelector,
     record: RuntimeRecord,
   ): Promise<void> {
-    if (record.event.type !== 'message_end') return;
+    if (record.event.type !== 'message_end') {
+      return;
+    }
+
     const messageId = record.messageId!;
     const message = record.event.message;
     const projectedChunks = chunkSearchText(messageToSearchText(message));
     const updatedAt = new Date(record.timestamp);
+
     const existing = await transaction
       .select({ id: sessionMessageLinks.id })
       .from(sessionMessageLinks)
       .where(eq(sessionMessageLinks.id, messageId));
-    if (existing.length) return;
+
+    if (existing.length) {
+      return;
+    }
+
     const [counter] = await transaction
       .update(sessions)
       .set({ nextMessageSeq: sql`${sessions.nextMessageSeq} + 1`, updatedAt })
@@ -220,6 +237,7 @@ export class SessionRepository {
     }
 
     const seq = counter.nextMessageSeq - 1;
+
     const [messageRow] = await transaction
       .insert(sessionMessageLinks)
       .values({
@@ -385,15 +403,15 @@ export class SessionRepository {
   }
 
   async getLatestCompaction(selector: SessionSelector): Promise<SessionCompaction | null> {
+    const sessionIds = this.db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(sessionCondition(selector));
+
     const [row] = await this.db
       .select()
       .from(sessionCompactions)
-      .where(
-        inArray(
-          sessionCompactions.sessionId,
-          this.db.select({ id: sessions.id }).from(sessions).where(sessionCondition(selector)),
-        ),
-      )
+      .where(inArray(sessionCompactions.sessionId, sessionIds))
       .orderBy(desc(sessionCompactions.throughSeq))
       .limit(1);
 
@@ -419,6 +437,7 @@ export class SessionRepository {
         .select()
         .from(sessions)
         .where(sessionCondition(selector));
+
       for (const row of sourceRows) {
         await transaction
           .update(sessions)
@@ -487,10 +506,15 @@ export function materializeSession(row: SessionRow): SessionInfo {
 }
 
 function normalizeTitle(title: string | undefined) {
-  if (title === undefined) return undefined;
+  if (title === undefined) {
+    return undefined;
+  }
 
   const value = title.trim();
-  if (!value) throw new SessionValidationError('Session title 不能为空');
+
+  if (!value) {
+    throw new SessionValidationError('Session title 不能为空');
+  }
 
   return value;
 }

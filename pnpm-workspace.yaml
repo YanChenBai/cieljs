@@ -58,6 +58,7 @@ catalog:
   markstream-vue: ^2.0.11
   veldorajs: ^0.0.1
   pinyin-pro: ^3.29.4
+  '@stylistic/eslint-plugin': ^5.10.0
 
 catalogs:
   pi:

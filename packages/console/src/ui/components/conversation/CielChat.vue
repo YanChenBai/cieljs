@@ -33,7 +33,9 @@ const messages = computed(() => conversationEntries(entries.value, toolCalls.val
 watch(
   () => props.sessionId,
   sessionId => {
-    if (sessionId) void selectSession(sessionId);
+    if (sessionId) {
+      void selectSession(sessionId);
+    }
   },
   { immediate: true },
 );

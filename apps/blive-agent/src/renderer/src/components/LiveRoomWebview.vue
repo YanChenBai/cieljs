@@ -13,8 +13,11 @@ let attachedId: number | undefined;
 
 async function attach() {
   const id = guest.value!.getWebContentsId();
+
   // dom-ready 每次导航都会触发；同一个 guest 只交接一次，避免清空当前房间状态。
-  if (id === attachedId) return;
+  if (id === attachedId) {
+    return;
+  }
 
   try {
     await watchBridge.attachLiveWebContents({ id });

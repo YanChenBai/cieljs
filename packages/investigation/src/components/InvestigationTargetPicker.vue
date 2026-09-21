@@ -14,13 +14,17 @@ const emit = defineEmits<{
 }>();
 
 const roomId = shallowRef('');
+
 const validRoomId = computed(() => {
   const value = Number(roomId.value);
+
   return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 });
 
 function createRoom() {
-  if (!validRoomId.value) return;
+  if (!validRoomId.value) {
+    return;
+  }
 
   emit('create', { type: 'room', roomId: validRoomId.value });
 }

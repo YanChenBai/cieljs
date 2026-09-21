@@ -8,15 +8,18 @@ import { afterEach, expect, test } from 'vite-plus/test';
 import { ProcessASR } from '../src/process-asr.ts';
 
 const directories: string[] = [];
+
 afterEach(async () => {
-  for (const directory of directories.splice(0))
+  for (const directory of directories.splice(0)) {
     await rm(directory, { recursive: true, force: true });
+  }
 });
 
 async function worker(source: string) {
   const directory = await mkdtemp(join(tmpdir(), 'hearing-worker-'));
   directories.push(directory);
   const file = join(directory, 'worker.mjs');
+
   await writeFile(
     file,
     `import { createInterface } from 'node:readline';
@@ -26,6 +29,7 @@ const command = JSON.parse(line);
 ${source}
 }`,
   );
+
   return pathToFileURL(file);
 }
 
@@ -40,11 +44,13 @@ if (command.type === 'init') {
 }
 send({ type: 'ack', id: command.id });
 if (command.type === 'close') break;`);
+
   const asr = new ProcessASR(
     { modelsPath: '/models', vad: { minSilenceDuration: 0.8, maxSpeechDuration: 15 } },
     'asr',
     url,
   );
+
   try {
     await asr.flush();
   } finally {
@@ -61,6 +67,7 @@ if (command.type === 'flush') {
 }
 send({ type: 'ack', id: command.id });
 if (command.type === 'close') break;`);
+
   const asr = new ProcessASR({ modelsPath: '/models' }, 'asr', url);
   const results: unknown[] = [];
   const wakes: unknown[] = [];
@@ -68,9 +75,11 @@ if (command.type === 'close') break;`);
   asr.on('wake', event => wakes.push(event));
   await asr.write({ data: Buffer.alloc(20), startAt: new Date(0) });
   await asr.flush();
+
   expect(results).toMatchObject([
     { content: '', events: [{ type: 'applause' }], startAt: new Date(0) },
   ]);
+
   expect(wakes).toEqual([{ keyword: '夏尔', at: new Date(50) }]);
   const closing = asr.close();
   expect(asr.close()).toBe(closing);

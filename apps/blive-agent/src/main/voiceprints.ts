@@ -7,10 +7,14 @@ import type { SpeakerProfile } from '@cieljs/hearing';
 export function loadVoiceprints(dataDir: string): SpeakerProfile[] {
   const directory = join(dataDir, 'voiceprints');
   let entries;
+
   try {
     entries = readdirSync(directory, { withFileTypes: true });
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return [];
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return [];
+    }
+
     throw error;
   }
 

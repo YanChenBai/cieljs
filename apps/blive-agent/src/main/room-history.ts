@@ -65,9 +65,11 @@ export function excludeRevisits(
 } {
   const { currentRoomId, cooling } = options;
   const departed = new Map(cooling.map(item => [item.roomId, item]));
+
   const cooled = candidates
     .flatMap(item => departed.get(item.roomId) ?? [])
     .sort((a, b) => a.leftAt - b.leftAt);
+
   const available = candidates.filter(
     item => item.roomId !== currentRoomId && !departed.has(item.roomId),
   );

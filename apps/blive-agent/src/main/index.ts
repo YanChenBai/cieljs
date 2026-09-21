@@ -42,6 +42,7 @@ async function createWindow(): Promise<void> {
   // 让下面的 loadURL 立刻开始加载渲染进程，两边并行。
   const ipc = registerBliveAgentIpc(mainWindow);
   let closingApplication: Promise<void> | undefined;
+
   const closeApplication = () => {
     // 初始化失败时 registerBliveAgentIpc 已回收已创建的资源，不应阻止应用退出。
     closingApplication ??= ipc.then(
@@ -51,13 +52,16 @@ async function createWindow(): Promise<void> {
 
     return closingApplication;
   };
+
   const unregisterApplication = shutdown.register(closeApplication);
 
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     if (!isAllowedPageUrl(params.src)) {
       event.preventDefault();
+
       return;
     }
+
     webPreferences.nodeIntegration = false;
     webPreferences.contextIsolation = true;
     webPreferences.sandbox = true;
@@ -66,6 +70,7 @@ async function createWindow(): Promise<void> {
 
   mainWindow.webContents.on('did-attach-webview', (_event, contents) => {
     contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
     contents.on('will-navigate', (event, url) => {
       if (!isAllowedPageUrl(url)) {
         event.preventDefault();
@@ -74,7 +79,9 @@ async function createWindow(): Promise<void> {
   });
 
   mainWindow.on('close', event => {
-    if (shutdown.isComplete) return;
+    if (shutdown.isComplete) {
+      return;
+    }
 
     event.preventDefault();
 
@@ -91,7 +98,10 @@ async function createWindow(): Promise<void> {
 
   mainWindow.on('closed', () => {
     unregisterApplication();
-    if (activeMainWindow === mainWindow) activeMainWindow = undefined;
+
+    if (activeMainWindow === mainWindow) {
+      activeMainWindow = undefined;
+    }
   });
 
   mainWindow.on('ready-to-show', () => {
@@ -125,8 +135,9 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     // macOS 关闭窗口后保留进程，点击 Dock 图标时重新创建窗口。
-    if (!activeMainWindow || activeMainWindow.isDestroyed())
+    if (!activeMainWindow || activeMainWindow.isDestroyed()) {
       void createWindow().catch(console.error);
+    }
   });
 });
 
@@ -138,13 +149,20 @@ app.on('window-all-closed', () => {
 });
 
 let quitRequested = false;
+
 app.on('before-quit', event => {
-  if (shutdown.isComplete) return;
+  if (shutdown.isComplete) {
+    return;
+  }
 
   event.preventDefault();
-  if (quitRequested) return;
+
+  if (quitRequested) {
+    return;
+  }
 
   quitRequested = true;
+
   void shutdown
     .close()
     .then(() => app.quit())

@@ -5,6 +5,7 @@ import { createPerceptionSnapshot } from '../src/snapshot.ts';
 
 test('纯声音事件进入听觉提示，并与外部结果对象隔离', async () => {
   const events = [{ type: 'applause' }];
+
   const snapshot = createPerceptionSnapshot({
     startAt: new Date(0),
     endAt: new Date(1),
@@ -13,9 +14,11 @@ test('纯声音事件进入听觉提示，并与外部结果对象隔离', async
     context: ({ modality }) => (modality === 'hearing' ? '听觉提示' : undefined),
     maxFrames: 9,
   });
+
   events[0]!.type = 'bgm';
   expect(snapshot.transcripts[0]?.events).toEqual([{ type: 'applause' }]);
   const messages = await snapshot.compose();
+
   expect(messages).toMatchObject([
     {
       content: [{ type: 'text', text: expect.stringContaining('声音事件: applause') }],
@@ -34,6 +37,7 @@ test('compose combines visual blocks before the hearing transcript', async () =>
   })
     .png()
     .toBuffer();
+
   const snapshot = createPerceptionSnapshot({
     startAt: new Date('2026-09-05T11:59:00.000Z'),
     endAt: new Date('2026-09-05T12:00:10.000Z'),
@@ -60,6 +64,7 @@ test('compose combines visual blocks before the hearing transcript', async () =>
   const messages = await snapshot.compose();
 
   expect(messages).toHaveLength(1);
+
   expect(messages[0]).toMatchObject({
     role: 'user',
     timestamp: new Date('2026-09-05T12:00:10.000Z').getTime(),

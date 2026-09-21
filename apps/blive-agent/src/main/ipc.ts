@@ -24,9 +24,11 @@ export async function registerBliveAgentIpc(mainWindow: BrowserWindow) {
 
   const attach = (port: MessagePortMain) => {
     ports.add(port);
+
     port.on('close', () => {
       ports.delete(port);
     });
+
     handler!.upgrade(port);
     port.start();
   };
@@ -36,34 +38,53 @@ export async function registerBliveAgentIpc(mainWindow: BrowserWindow) {
       void handler?.close(port);
       port.close();
     }
+
     ports.clear();
-    for (const port of waiting.splice(0)) port.close();
+
+    for (const port of waiting.splice(0)) {
+      port.close();
+    }
   };
 
   // 仅主窗口的主 frame 可建立连接，直播 guest 不能访问控制路由。
   const connect = (event: IpcMainEvent) => {
     const isMainWindow = !mainWindow.isDestroyed() && event.sender === mainWindow.webContents;
     const isInvestigationWindow = isInvestigationWindowContents(event.sender);
+
     const trusted =
       (isMainWindow || isInvestigationWindow) &&
       event.senderFrame === event.sender.mainFrame &&
       event.senderFrame.url === event.sender.getURL();
+
     if (!trusted || event.ports.length !== 1) {
-      for (const port of event.ports) port.close();
+      for (const port of event.ports) {
+        port.close();
+      }
+
       return;
     }
+
     const port = event.ports[0]!;
-    if (handler) attach(port);
-    else waiting.push(port);
+
+    if (handler) {
+      attach(port);
+    } else {
+      waiting.push(port);
+    }
   };
+
   const navigation = (_event: unknown, _url: string, _inPlace: boolean, isMainFrame: boolean) => {
-    if (isMainFrame) release();
+    if (isMainFrame) {
+      release();
+    }
   };
+
   const detach = () => {
     ipcMain.removeListener(WATCH_RPC_CHANNEL, connect);
     mainWindow.webContents.removeListener('did-start-navigation', navigation);
     release();
   };
+
   // 先同步登记监听：调用方随后 loadURL，渲染进程的连接也不会丢。
   ipcMain.on(WATCH_RPC_CHANNEL, connect);
   mainWindow.webContents.on('did-start-navigation', navigation);
@@ -73,9 +94,13 @@ export async function registerBliveAgentIpc(mainWindow: BrowserWindow) {
     const application = await createWatchApplication(mainWindow);
     resources.defer(() => application.close());
     handler = new RPCHandler(application.router);
-    for (const port of waiting.splice(0)) attach(port);
+
+    for (const port of waiting.splice(0)) {
+      attach(port);
+    }
 
     const lifetime = resources.move();
+
     return async () => {
       detach();
       await lifetime.disposeAsync();

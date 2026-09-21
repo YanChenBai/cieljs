@@ -21,12 +21,14 @@ const props = defineProps<{
   toolCalls?: ReadonlyMap<string, ToolCallRecord>;
   toolRenderers?: ToolRenderers;
 }>();
+
 const emit = defineEmits<{ older: [] }>();
 const query = defineModel<string>('query', { required: true });
 
 const selectedId = shallowRef('');
 const grouped = computed(() => groupTraceSteps(props.steps));
 const selected = computed(() => grouped.value.find(entry => entry.id === selectedId.value));
+
 const filtered = computed(() =>
   grouped.value.filter(entry =>
     `${entry.label ?? ''} ${entry.name} ${entry.id} ${entry.sessionId} ${entry.toolCallId ?? ''}`
@@ -40,6 +42,7 @@ const listPanel = shallowRef<HTMLElement>();
 
 function loadOlder(event: Event) {
   const element = event.currentTarget as HTMLElement;
+
   if (props.hasOlder && !props.loadingOlder && element.scrollTop < 80) {
     emit('older');
   }
@@ -47,7 +50,10 @@ function loadOlder(event: Event) {
 
 function jumpToLatest() {
   const element = listPanel.value;
-  if (!element) return;
+
+  if (!element) {
+    return;
+  }
 
   element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
 }
@@ -56,9 +62,13 @@ function resize(event: PointerEvent) {
   const handle = event.currentTarget as HTMLElement;
   handle.setPointerCapture(event.pointerId);
 }
+
 function moveSplit(event: PointerEvent) {
   const handle = event.currentTarget as HTMLElement;
-  if (!handle.hasPointerCapture(event.pointerId)) return;
+
+  if (!handle.hasPointerCapture(event.pointerId)) {
+    return;
+  }
 
   const bounds = handle.parentElement!.getBoundingClientRect();
   split.value = Math.max(20, Math.min(75, ((event.clientX - bounds.left) / bounds.width) * 100));
@@ -71,16 +81,28 @@ async function fillViewport() {
   await nextTick();
 
   const element = listPanel.value;
-  if (!element || element.clientHeight === 0) return;
-  if (query.value || !props.hasOlder || props.loadingOlder) return;
-  if (element.scrollHeight > element.clientHeight) return;
+
+  if (!element || element.clientHeight === 0) {
+    return;
+  }
+
+  if (query.value || !props.hasOlder || props.loadingOlder) {
+    return;
+  }
+
+  if (element.scrollHeight > element.clientHeight) {
+    return;
+  }
 
   emit('older');
 }
 
 onMounted(() => {
   const element = listPanel.value;
-  if (!element) return;
+
+  if (!element) {
+    return;
+  }
 
   // 切到轨迹页或面板被拉高都会改变尺寸，这时同样要把列表补齐到铺满。
   resizeObserver = new ResizeObserver(() => void fillViewport());

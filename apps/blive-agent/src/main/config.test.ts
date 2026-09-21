@@ -36,16 +36,19 @@ describe('Blive Agent 配置', () => {
   it('默认开启夏尔唤醒，支持覆盖等待参数和显式关闭', async () => {
     const ai = { provider: 'xiaomi', model: 'mimo-v2.5', apiKey: 'secret' };
     await writeFile(watchConfigFile(), JSON.stringify({ ai }));
+
     expect(resolveWatchConfig().wake).toEqual({
       keywords: ['夏尔'],
       minWaitMs: 1500,
       maxWaitMs: 4000,
       cooldownMs: 15000,
     });
+
     await writeFile(
       watchConfigFile(),
       JSON.stringify({ ai, wake: { keywords: ['你好夏尔'], minWaitMs: 2000 } }),
     );
+
     expect(resolveWatchConfig().wake).toMatchObject({ keywords: ['你好夏尔'], minWaitMs: 2000 });
     await writeFile(watchConfigFile(), JSON.stringify({ ai, wake: false }));
     expect(resolveWatchConfig().wake).toBe(false);
@@ -76,11 +79,14 @@ describe('Blive Agent 配置', () => {
         wake,
       }),
     );
+
     expect(() => resolveWatchConfig()).toThrow('wake');
   });
+
   it('覆盖本次模型地址并保留注册模型及其他能力', async () => {
     const registered = { id: 'mimo-v2.5', baseUrl: 'https://original.example/v1', reasoning: true };
     getModel.mockReturnValueOnce(registered);
+
     await writeFile(
       watchConfigFile(),
       JSON.stringify({
@@ -92,6 +98,7 @@ describe('Blive Agent 配置', () => {
         },
       }),
     );
+
     const result = resolveWatchModel(resolveWatchConfig());
     expect(result.model).toEqual({ ...registered, baseUrl: 'http://localhost:8000/v1' });
     expect(result.model).not.toBe(registered);
@@ -106,6 +113,7 @@ describe('Blive Agent 配置', () => {
         ai: { provider: 'xiaomi', model: 'mimo-v2.5', apiKey: 'secret', baseUrl },
       }),
     );
+
     expect(watchConfigurationStatus()).toMatchObject({
       valid: false,
       message: expect.stringContaining('ai.baseUrl'),

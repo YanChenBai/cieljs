@@ -53,6 +53,7 @@ export class ThoughtScheduler {
     // 迟到或同一毫秒的触发不能倒退已消费的快照边界。
     if (at.getTime() <= this.capturedThrough) {
       this.schedule();
+
       return;
     }
 
@@ -70,22 +71,29 @@ export class ThoughtScheduler {
     event: WakeEvent,
     options: Required<Pick<WatchWakeOptions, 'minWaitMs' | 'maxWaitMs'>>,
   ): boolean {
-    if (this.closed || this.finishing || this.wakeWindow) return false;
+    if (this.closed || this.finishing || this.wakeWindow) {
+      return false;
+    }
+
     const now = Date.now();
+
     this.wakeWindow = {
       signal: event,
       minAt: now + options.minWaitMs,
       maxAt: now + options.maxWaitMs,
       speechEnded: false,
     };
+
     this.pending ??= {
       startAt: new Date(this.capturedThrough + 1),
       endAt: new Date(Math.max(now, this.capturedThrough + 1)),
       triggerCount: 0,
     };
+
     this.pending.triggerCount += 1;
     this.clearTimer();
     this.schedule();
+
     return true;
   }
 
@@ -108,17 +116,23 @@ export class ThoughtScheduler {
   /** 录播结束后把尚未消费的感知附在总结请求前，避免关闭时丢掉尾段。 */
   async finish(summary: string, mediaEndAt?: Date, signal?: AbortSignal): Promise<void> {
     this.finishing = true;
+
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
+
     await this.active;
     const startAt = this.pending?.startAt ?? new Date(this.capturedThrough + 1);
     await this.close();
     const endAt = new Date(Math.max(mediaEndAt?.getTime() ?? Date.now(), startAt.getTime()));
     const snapshot = await this.options.perception.snapshot({ startAt, endAt });
     const messages = await snapshot.compose();
-    if (signal?.aborted) return;
+
+    if (signal?.aborted) {
+      return;
+    }
+
     await this.options.agent.prompt([
       ...messages,
       this.options.context(),
@@ -133,11 +147,16 @@ export class ThoughtScheduler {
 
     const wake = this.wakeWindow;
     let dueAt = this.lastRunAt + this.options.minimumIntervalMs;
-    if (wake) dueAt = wake.speechEnded ? wake.minAt : wake.maxAt;
+
+    if (wake) {
+      dueAt = wake.speechEnded ? wake.minAt : wake.maxAt;
+    }
+
     const delay = Math.max(0, dueAt - Date.now());
 
     if (delay === 0) {
       this.startRun();
+
       return;
     }
 
@@ -155,28 +174,35 @@ export class ThoughtScheduler {
     }
 
     this.pending = undefined;
+
     if (this.wakeWindow) {
       window.wake = this.wakeWindow.signal;
+
       // 等待后再截取尾段，不能把快照停留在关键词起点。
       window.endAt = new Date(
         Math.max(Date.now(), window.endAt.getTime(), window.startAt.getTime()),
       );
+
       this.capturedThrough = Math.max(this.capturedThrough, window.endAt.getTime());
       this.wakeWindow = undefined;
     }
+
     this.lastRunAt = Date.now();
     this.options.beforeRun?.();
     this.options.onRunStarted?.(window.triggerCount);
+
     this.active = this.run(window).finally(() => {
       this.active = undefined;
       this.schedule();
     });
   }
 
+  // oxlint-disable-next-line eslint/complexity -- 调度状态机在一个临界区内处理过期、取消和重排。
   private async run(window: PendingWindow): Promise<void> {
     const startedAt = Date.now();
     const timeoutMs = this.options.thinkTimeoutMs;
     let timedOut = false;
+
     const timer = timeoutMs
       ? setTimeout(() => {
           timedOut = true;
@@ -189,6 +215,7 @@ export class ThoughtScheduler {
         startAt: window.startAt,
         endAt: window.endAt,
       });
+
       const messages = await snapshot.compose();
 
       if (this.closed) {
@@ -199,6 +226,7 @@ export class ThoughtScheduler {
 
       if (timedOut && !this.closed) {
         this.options.onError?.(timeoutError(timeoutMs!));
+
         return;
       }
 
@@ -206,6 +234,7 @@ export class ThoughtScheduler {
       this.options.onRunFinished?.(Date.now() - startedAt);
     } catch (error) {
       const failure = toError(error);
+
       const aborted =
         failure.name === 'AbortError' || /Request (?:was )?aborted/iu.test(failure.message);
 
@@ -215,12 +244,14 @@ export class ThoughtScheduler {
 
       if (timedOut) {
         this.options.onError?.(timeoutError(timeoutMs!, failure));
+
         return;
       }
 
       if (failure.message.includes('content_filter')) {
         this.cancel();
       }
+
       this.options.onError?.(failure);
     } finally {
       if (timer !== undefined) {

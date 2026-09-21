@@ -674,5 +674,6 @@ declare module 'sherpa-onnx-node' {
     readWave: typeof readWave;
     writeWave: typeof writeWave;
   };
+
   export default sherpaOnnx;
 }

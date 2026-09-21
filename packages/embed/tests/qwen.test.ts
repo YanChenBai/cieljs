@@ -61,9 +61,11 @@ describe('qwen', () => {
     );
 
     const [url, options] = fetchModelFile.mock.calls[0]!;
+
     expect(url).toBe(
       'https://modelscope.cn/models/onnx-community/Qwen3-Embedding-0.6B-ONNX/resolve/master/onnx/model_quantized.onnx',
     );
+
     expect(options.headers.get('authorization')).toBeNull();
     expect(options.headers.get('user-agent')).toBe('test');
     expect(headers.get('authorization')).toBe('Bearer test');
@@ -83,6 +85,7 @@ describe('qwen', () => {
     const embedding = qwen({ cacheDir: '.cache', dimensions: 2 });
 
     await expect(embedding.embed('首次加载', { purpose: 'query' })).rejects.toThrow('fetch failed');
+
     await Promise.all([
       embedding.embed('重试', { purpose: 'query' }),
       embedding.embed('并发重试', { purpose: 'query' }),

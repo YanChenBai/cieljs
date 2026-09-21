@@ -63,6 +63,7 @@ describe('XiaomiTextToSpeech', () => {
 
     expect(body.model).toBe('mimo-v2.5-tts');
     expect(body.audio).toEqual({ format: 'wav', voice: '冰糖' });
+
     expect(body.messages).toEqual([
       { role: 'user', content: '轻松一点' },
       { role: 'assistant', content: '你好' },
@@ -91,6 +92,7 @@ describe('XiaomiTextToSpeech', () => {
       status: 200,
       json: async () => ({ choices: [] }),
     }));
+
     vi.stubGlobal('fetch', fetchMock);
 
     const tts = createXiaomiTextToSpeech({ apiKey: 'secret-key' });
@@ -108,6 +110,7 @@ describe('XiaomiTextToSpeech', () => {
         choices: [{ message: { audio: { data: Buffer.from('not a wav').toString('base64') } } }],
       }),
     }));
+
     vi.stubGlobal('fetch', fetchMock);
 
     const tts = createXiaomiTextToSpeech({ apiKey: 'secret-key' });
@@ -126,6 +129,7 @@ describe('XiaomiTextToSpeech', () => {
           });
         }),
     );
+
     vi.stubGlobal('fetch', fetchMock);
 
     const tts = createXiaomiTextToSpeech({ apiKey: 'secret-key' });
@@ -149,6 +153,7 @@ describe('XiaomiTextToSpeech', () => {
       status: 401,
       json: async () => ({}),
     }));
+
     vi.stubGlobal('fetch', fetchMock);
 
     const tts = createXiaomiTextToSpeech({ apiKey: 'super-secret-key' });

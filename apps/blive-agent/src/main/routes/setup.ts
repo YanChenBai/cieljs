@@ -47,26 +47,38 @@ export function createSetupRoutes(
     selectHearingModel: os
       .input(z.enum(['qwen3-asr-1.7b-int8', 'sensevoice-small']))
       .handler(async ({ input }) => {
-        if (installation || switching) throw new Error('请等待当前模型准备完成');
+        if (installation || switching) {
+          throw new Error('请等待当前模型准备完成');
+        }
+
         switching = true;
+
         try {
           model = input;
           error = undefined;
           progress = undefined;
-          if ((await checkConfiguration({ modelsPath, model })).valid) await activate();
+
+          if ((await checkConfiguration({ modelsPath, model })).valid) {
+            await activate();
+          }
         } catch (cause) {
           error = cause instanceof Error ? cause.message : String(cause);
           throw cause;
         } finally {
           switching = false;
         }
+
         return status();
       }),
     installHearingModels: os.handler(() => {
-      if (switching) throw new Error('请等待当前模型切换完成');
+      if (switching) {
+        throw new Error('请等待当前模型切换完成');
+      }
+
       if (!installation) {
         error = undefined;
         progress = undefined;
+
         installation = installModels({
           modelsPath,
           model,

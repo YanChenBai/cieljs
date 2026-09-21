@@ -71,6 +71,7 @@ export const createScopedSearchTool = defineTool(
     description: options.description,
     execute: async (params, { signal }) => {
       options.authorize(params.sessionId);
+
       const hits = await options.search(params.sessionId, params.query, {
         limit: params.limit ?? options.defaultLimit,
         signal,

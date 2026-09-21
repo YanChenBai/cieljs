@@ -4,11 +4,12 @@ import { Type } from 'typebox';
 import { investigationResult, type InvestigationToolContext } from './context.ts';
 
 const memoryLayer = Type.Union([Type.Literal('global'), Type.Literal('space')]);
+const resultLimitSchema = Type.Integer({ minimum: 1, maximum: 20 });
 
 export const createSearchMemoryTool = defineTool(
   Type.Object({
     query: Type.String({ minLength: 1 }),
-    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+    limit: Type.Optional(resultLimitSchema),
   }),
   ({ options, memorySpace, targetSpaceId }: InvestigationToolContext) => ({
     name: 'search_memory',
@@ -59,6 +60,7 @@ export const createReadMemoryTool = defineTool(
         const store = layer === 'global' ? options.memoryManager.global : memorySpace;
         memory = await store.get(id);
       }
+
       signal?.throwIfAborted();
 
       return investigationResult({ spaceId: targetSpaceId, sources, memory });

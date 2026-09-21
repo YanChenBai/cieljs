@@ -22,9 +22,11 @@ export class CielResources implements AsyncDisposable {
         vectors: options.vectors,
       }),
     );
+
     const investigationManager = disposables.use(
       await SessionManager.open({ storage: options.storage, namespace: 'investigation' }),
     );
+
     const memoryManager = disposables.use(
       await MemoryManager.open({
         ...options.memory,

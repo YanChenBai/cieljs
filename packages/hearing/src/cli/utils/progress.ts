@@ -7,10 +7,10 @@ export function progress(current: number, total: number, width = 30): void {
   const percentText = `${percent}%`.padStart(4);
 
   process.stdout.write(
-    '\r' +
-      styleText('cyan', '━'.repeat(filled)) +
-      styleText('gray', '━'.repeat(width - filled)) +
-      ` ${percentText}`,
+    `\r${styleText('cyan', '━'.repeat(filled))}${styleText(
+      'gray',
+      '━'.repeat(width - filled),
+    )} ${percentText}`,
   );
 
   if (current >= total) {

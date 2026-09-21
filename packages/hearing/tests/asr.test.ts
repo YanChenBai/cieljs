@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
+import type { ASRResult } from '../src/types.ts';
+
 const vadConstructor = vi.hoisted(() => vi.fn());
 
 const recognizerResult = vi.hoisted(() => ({
@@ -97,8 +99,10 @@ vi.mock('sherpa-onnx-node', () => {
 
     getResult(stream: FakeStream): object {
       recognizerResult.calls += 1;
+
       const retryingLongSegment =
         recognizerResult.splitRetry && stream.sampleCount === recognizerResult.vadSamples;
+
       return {
         text: retryingLongSegment
           ? `language Chinese<asr_text>${'这啊，'.repeat(80)}`
@@ -149,7 +153,7 @@ const modelsPath = 'models';
 describe('ASR', () => {
   it('切换模型完成旧尾段并保留结果监听和新音频时间', async () => {
     const asr = new ASR({ modelsPath, speaker: false });
-    const results: import('../src/types.ts').ASRResult[] = [];
+    const results: ASRResult[] = [];
     asr.on('result', result => results.push(result));
     await asr.write({ data: Buffer.alloc(32_000), startAt: new Date(0) });
     await asr.setModel('sensevoice-small');
@@ -158,14 +162,17 @@ describe('ASR', () => {
     recognizerResult.text = '<|zh|><|Speech|>新模型';
     await asr.write({ data: Buffer.alloc(32_000), startAt: new Date(5_000) });
     await asr.flush();
+
     expect(results[1]).toMatchObject({
       content: '新模型',
       startAt: new Date(5_100),
       model: 'sensevoice-small',
       events: [{ type: 'speech' }],
     });
+
     await asr.close();
   });
+
   beforeEach(() => {
     recognizerResult.calls = 0;
     recognizerResult.degenerateTokenCount = 256;
@@ -181,50 +188,60 @@ describe('ASR', () => {
       speaker: false,
       vad: { minSilenceDuration: 0.8, maxSpeechDuration: 15 },
     });
+
     expect(vadConstructor).toHaveBeenLastCalledWith(
       expect.objectContaining({
         tenVad: expect.objectContaining({ minSilenceDuration: 0.8, maxSpeechDuration: 15 }),
       }),
       30,
     );
+
     await asr.close();
     const defaults = new ASR({ modelsPath, speaker: false });
+
     expect(vadConstructor).toHaveBeenLastCalledWith(
       expect.objectContaining({
         tenVad: expect.objectContaining({ minSilenceDuration: 0.5, maxSpeechDuration: 10 }),
       }),
       30,
     );
+
     await defaults.close();
   });
 
   it('拒绝无效或超过缓存容量的分段窗口', () => {
     expect(() => new ASR({ modelsPath, vad: { minSilenceDuration: 0 } })).toThrow('positive');
+
     expect(() => new ASR({ modelsPath, vad: { maxSpeechDuration: Number.NaN } })).toThrow(
       'positive',
     );
+
     expect(() => new ASR({ modelsPath, vad: { maxSpeechDuration: 30 } })).toThrow('audio buffer');
   });
 
   it('emits timestamped final results with a stable speaker', () => {
     const asr = new ASR({ modelsPath });
-    const results: import('../src/types.ts').ASRResult[] = [];
+    const results: ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
     const startAt = new Date('2026-08-09T00:00:00.000Z');
+
     asr.write({
       data: Buffer.alloc(1_024),
       startAt,
     });
+
     asr.flush();
 
     expect(results).toHaveLength(1);
+
     expect(results[0]).toMatchObject({
       content: '你好',
       speaker: 'speaker_0',
       startAt: new Date('2026-08-09T00:00:00.100Z'),
       endAt: new Date('2026-08-09T00:00:01.100Z'),
     });
+
     expect(results[0]!.confidence).toBeUndefined();
     expect(results[0]!.tokens).toBeUndefined();
   });
@@ -246,7 +263,7 @@ describe('ASR', () => {
     recognizerResult.text = 'language Chinese<asr_text>未完成';
     recognizerResult.tokens = Array.from({ length: 256 }, () => 'token');
     const asr = new ASR({ modelsPath });
-    const results: import('../src/types.ts').ASRResult[] = [];
+    const results: ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
     asr.write({ data: Buffer.alloc(1_024), startAt: new Date(0) });
@@ -259,7 +276,7 @@ describe('ASR', () => {
     recognizerResult.text = `language Chinese<asr_text>啊，这个点都是广东人。${'这啊，'.repeat(80)}`;
     recognizerResult.tokens = [];
     const asr = new ASR({ modelsPath });
-    const results: import('../src/types.ts').ASRResult[] = [];
+    const results: ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
     asr.write({ data: Buffer.alloc(1_024), startAt: new Date(0) });
@@ -273,7 +290,7 @@ describe('ASR', () => {
     recognizerResult.text = 'language Chinese<asr_text>恢复';
     recognizerResult.vadSamples = 160_000;
     const asr = new ASR({ modelsPath });
-    const results: import('../src/types.ts').ASRResult[] = [];
+    const results: ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
     asr.write({ data: Buffer.alloc(1_024), startAt: new Date(0) });
@@ -289,7 +306,7 @@ describe('ASR', () => {
     recognizerResult.text = 'language Chinese<asr_text>恢复';
     recognizerResult.vadSamples = 160_000;
     const asr = new ASR({ modelsPath });
-    const results: import('../src/types.ts').ASRResult[] = [];
+    const results: ASRResult[] = [];
     asr.on('result', result => results.push(result));
 
     asr.write({ data: Buffer.alloc(1_024), startAt: new Date(0) });
@@ -302,6 +319,7 @@ describe('ASR', () => {
 
 it('SenseVoice 事件窗口不依赖 VAD，空文本事件保留且 flush 不重复输出', async () => {
   recognizerResult.text = '';
+
   const asr = new ASR({
     modelsPath,
     model: 'sensevoice-small',
@@ -309,12 +327,14 @@ it('SenseVoice 事件窗口不依赖 VAD，空文本事件保留且 flush 不重
     speaker: false,
     eventWindowSeconds: 1,
   });
-  const results: import('../src/types.ts').ASRResult[] = [];
+
+  const results: ASRResult[] = [];
   asr.on('result', result => results.push(result));
   asr.write({ data: Buffer.alloc(48_000), startAt: new Date(0) });
   asr.flush();
   asr.flush();
   expect(results).toHaveLength(2);
+
   expect(results[0]).toMatchObject({
     content: '',
     language: 'zh',
@@ -323,6 +343,7 @@ it('SenseVoice 事件窗口不依赖 VAD，空文本事件保留且 flush 不重
     startAt: new Date(0),
     endAt: new Date(1000),
   });
+
   expect(results[1]?.endAt).toEqual(new Date(1500));
   await asr.close();
 });

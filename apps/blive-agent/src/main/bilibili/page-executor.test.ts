@@ -7,21 +7,19 @@ import { executePage, isAllowedPageUrl } from './page-executor.ts';
 describe('executePage', () => {
   it('包装异步 IIFE 并校验结果', async () => {
     const executeJavaScript = vi.fn().mockResolvedValue({ title: '直播' });
+
     const contents = {
       executeJavaScript,
       getURL: () => 'https://live.bilibili.com/1',
       isDestroyed: () => false,
     } as unknown as WebContents;
 
+    const resultSchema = Type.Object({ title: Type.String() });
+
     await expect(
-      executePage(
-        contents,
-        '({ title: document.title })',
-        Type.Object({
-          title: Type.String(),
-        }),
-      ),
+      executePage(contents, '({ title: document.title })', resultSchema),
     ).resolves.toEqual({ title: '直播' });
+
     expect(executeJavaScript).toHaveBeenCalledWith(
       '(async () => await (({ title: document.title })))()',
     );

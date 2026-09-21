@@ -5,6 +5,7 @@ import { shallowRef } from 'vue';
 const props = withDefaults(defineProps<{ title: string; defaultOpen?: boolean }>(), {
   defaultOpen: true,
 });
+
 const open = shallowRef(props.defaultOpen);
 </script>
 

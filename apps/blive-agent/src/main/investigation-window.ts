@@ -8,6 +8,7 @@ export function openInvestigationWindow(): void {
   if (investigationWindow && !investigationWindow.isDestroyed()) {
     investigationWindow.show();
     investigationWindow.focus();
+
     return;
   }
 
@@ -32,9 +33,13 @@ export function openInvestigationWindow(): void {
   });
 
   investigationWindow = window;
+
   window.on('closed', () => {
-    if (investigationWindow === window) investigationWindow = undefined;
+    if (investigationWindow === window) {
+      investigationWindow = undefined;
+    }
   });
+
   window.on('ready-to-show', () => window.show());
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 

@@ -14,13 +14,15 @@ import {
   type ArchiveToolOptions,
 } from './tool-context.ts';
 
+const optionalTimestampSchema = Type.Optional(Type.String());
+
 export const rememberCurrentSpaceDailyMemoryTool = defineTool(
   Type.Object({
     content: Type.String({ minLength: 1, maxLength: 16000 }),
     kind: Type.Optional(memoryKindSchema),
     date: Type.Optional(memoryDateSchema),
-    occurredAt: Type.Optional(Type.String()),
-    expiresAt: Type.Optional(Type.String()),
+    occurredAt: optionalTimestampSchema,
+    expiresAt: optionalTimestampSchema,
   }),
   ({ space, resolved }: SpaceToolOptions) => ({
     name: 'remember_current_space_daily_memory',
@@ -29,6 +31,7 @@ export const rememberCurrentSpaceDailyMemoryTool = defineTool(
       '在当前空间新增一条按日期归属的事件或短期状态记忆。date 省略时按 occurredAt 和宿主时区计算，occurredAt 省略时使用当前时间。每日记忆不会自动过期，需要时显式设置 expiresAt。来源由宿主注入；先检索避免重复，不把推测当作事实。',
     execute: async (params, context) => {
       const sources = await resolved.resolveSources(sourceContext(context, 'remember'));
+
       const memory = await space.daily.remember({
         content: params.content,
         kind: params.kind,
@@ -47,8 +50,8 @@ export const rememberLongTermMemoryTool = defineTool(
   Type.Object({
     content: Type.String({ minLength: 1, maxLength: 16000 }),
     kind: Type.Optional(memoryKindSchema),
-    occurredAt: Type.Optional(Type.String()),
-    expiresAt: Type.Optional(Type.String()),
+    occurredAt: optionalTimestampSchema,
+    expiresAt: optionalTimestampSchema,
   }),
   ({ name, label, memory, resolved }: LongTermRememberToolOptions) => ({
     name,
@@ -56,6 +59,7 @@ export const rememberLongTermMemoryTool = defineTool(
     description: `${label}：新增一条稳定事实、偏好或长期有效的总结，范围固定为工具名称指定的层级。来源由宿主注入；先检索避免重复，修改已有事实应使用相同范围的 update 工具。不要保存未经确认的推测。`,
     execute: async (params, context) => {
       const sources = await resolved.resolveSources(sourceContext(context, 'remember'));
+
       const entry = await memory.remember({
         content: params.content,
         kind: params.kind,
@@ -84,6 +88,7 @@ export const updateMemoryTool = defineTool(
       }
 
       const injectedSources = await resolved.resolveSources(sourceContext(context, 'update'));
+
       const update: UpdateMemoryInput = {
         expectedRevision: params.expectedRevision,
         content: params.content,

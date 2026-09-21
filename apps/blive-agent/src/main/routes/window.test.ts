@@ -37,6 +37,7 @@ it('直播间新窗口转成确认请求，外部链接不触发单推', async (
   const host = {};
   const setWindowOpenHandler = vi.fn();
   const loadURL = vi.fn().mockResolvedValue(undefined);
+
   fromId.mockReturnValue({
     isDestroyed: () => false,
     hostWebContents: host,
@@ -44,7 +45,9 @@ it('直播间新窗口转成确认请求，外部链接不触发单推', async (
     setWindowOpenHandler,
     loadURL,
   });
+
   const requestRoom = vi.fn();
+
   const client = createRouterClient(
     createWindowRoutes(
       { webContents: host } as BrowserWindow,
@@ -52,11 +55,13 @@ it('直播间新窗口转成确认请求，外部链接不触发单推', async (
       requestRoom,
     ),
   );
+
   await client.attach({ id: 1 });
   const open = setWindowOpenHandler.mock.calls[0]![0];
   expect(open({ url: 'https://live.bilibili.com/123?from=home' })).toEqual({ action: 'deny' });
   expect(requestRoom).toHaveBeenCalledExactlyOnceWith(123);
   expect(loadURL).not.toHaveBeenCalled();
+
   for (const url of [
     'https://live.bilibili.com/all',
     'https://live.bilibili.com/p/eden/area-tags?parentAreaId=9&areaId=0',
@@ -65,10 +70,13 @@ it('直播间新窗口转成确认请求，外部链接不触发单推', async (
     expect(open({ url })).toEqual({ action: 'deny' });
     expect(loadURL).toHaveBeenLastCalledWith(url);
   }
+
   loadURL.mockClear();
+
   for (const url of ['https://example.com/123', 'javascript:alert(1)']) {
     expect(open({ url })).toEqual({ action: 'deny' });
   }
+
   expect(requestRoom).toHaveBeenCalledOnce();
   expect(loadURL).not.toHaveBeenCalled();
 });
@@ -76,6 +84,7 @@ it('直播间新窗口转成确认请求，外部链接不触发单推', async (
 it('openBrowse 打开独立的 B 站浏览窗口，不碰直播 guest', async () => {
   const host = {};
   const requestRoom = vi.fn();
+
   const client = createRouterClient(
     createWindowRoutes(
       { webContents: host } as BrowserWindow,
@@ -95,6 +104,7 @@ it('openDevTools 只在白名单目标里选，两个目标各开各的', async 
   const openDevTools = vi.fn();
   const liveDevTools = vi.fn();
   const mainWindow = { webContents: { openDevTools } } as unknown as BrowserWindow;
+
   const client = createRouterClient(
     createWindowRoutes(mainWindow, { openDevTools: liveDevTools } as unknown as LivePage, vi.fn()),
   );

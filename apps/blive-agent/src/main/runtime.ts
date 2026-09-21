@@ -23,7 +23,7 @@ import { createRoomSessionOptions } from './agent/room-session.ts';
 import { createStreamerTools } from './agent/streamer-tools.ts';
 import { createDanmakuTool, DanmakuRunGate } from './agent/tools.ts';
 import { BilibiliApi } from './bilibili/api.ts';
-import { LivePage } from './bilibili/live-page.ts';
+import type { LivePage } from './bilibili/live-page.ts';
 import { LiveStatusMonitor } from './bilibili/live-status-monitor.ts';
 import { readRoomLiveStatus } from './bilibili/live-status.ts';
 import { LiveMedia } from './media/live-media.ts';
@@ -99,7 +99,10 @@ class BliveAgentRuntime implements BliveAgent {
   private readonly roomHistory = new RoomHistory();
 
   constructor(private readonly options: BliveAgentOptions) {
-    if (options.wake) resolveWakeOptions(options.wake);
+    if (options.wake) {
+      resolveWakeOptions(options.wake);
+    }
+
     this.api = options.api ?? new BilibiliApi();
   }
 
@@ -110,6 +113,7 @@ class BliveAgentRuntime implements BliveAgent {
   setHearingModel(model: ASRModelId): Promise<void> {
     return this.enqueue(async () => {
       await this.visit?.setHearingModel(model);
+
       this.options.perception = {
         ...this.options.perception,
         asr: { ...this.options.perception?.asr, model },
@@ -136,16 +140,23 @@ class BliveAgentRuntime implements BliveAgent {
   }
 
   async compactContext(): Promise<boolean> {
-    if (this.closePromise) throw new Error('Blive Agent 已关闭');
+    if (this.closePromise) {
+      throw new Error('Blive Agent 已关闭');
+    }
 
     const visit = this.visit;
-    if (!visit) throw new Error('当前没有正在观看的直播间');
+
+    if (!visit) {
+      throw new Error('当前没有正在观看的直播间');
+    }
 
     return visit.session.compact();
   }
 
   async login(): Promise<Account> {
-    if (this.closePromise) throw new Error('Blive Agent 已关闭');
+    if (this.closePromise) {
+      throw new Error('Blive Agent 已关闭');
+    }
 
     await this.stop();
     const controller = new AbortController();
@@ -159,12 +170,16 @@ class BliveAgentRuntime implements BliveAgent {
       const account = await this.options.livePage.waitForLogin(controller.signal);
       controller.signal.throwIfAborted();
       this.accountValue = account;
+
       return account;
     } finally {
       // 超时和取消也必须离开 awaiting-login；关闭后的状态不能被迟到结果覆盖。
       if (this.loginController === controller) {
         this.loginController = undefined;
-        if (this.currentStatus === 'awaiting-login') this.setStatus('idle');
+
+        if (this.currentStatus === 'awaiting-login') {
+          this.setStatus('idle');
+        }
       }
     }
   }
@@ -200,6 +215,7 @@ class BliveAgentRuntime implements BliveAgent {
       ...options,
       danmakuDelivery: options.danmakuDelivery ?? 'simulate',
     };
+
     this.setStatus('starting');
 
     try {
@@ -239,9 +255,12 @@ class BliveAgentRuntime implements BliveAgent {
   }
 
   stop(): Promise<void> {
-    if (this.videoStop) return this.videoStop;
+    if (this.videoStop) {
+      return this.videoStop;
+    }
 
     const visit = this.visit;
+
     if (
       visit &&
       this.startOptions?.mode.type === 'recording' &&
@@ -249,16 +268,20 @@ class BliveAgentRuntime implements BliveAgent {
     ) {
       const signal = this.runController?.signal;
       this.setStatus('stopping');
+
       // 用户停止视频保留已读取内容；先完成部分总结，再释放 Session。
       this.videoStop = this.enqueue(async () => {
         try {
-          if (this.visit === visit) await visit.finishRecording(signal, true);
+          if (this.visit === visit) {
+            await visit.finishRecording(signal, true);
+          }
         } finally {
           await this.stopRuntime();
         }
       }).finally(() => {
         this.videoStop = undefined;
       });
+
       return this.videoStop;
     }
 
@@ -272,6 +295,7 @@ class BliveAgentRuntime implements BliveAgent {
   // 启动、切房和停止共用一条队列，资源关闭后才允许下一次打开。
   private enqueue(action: () => Promise<void>): Promise<void> {
     const operation = this.operation.then(action);
+
     this.operation = operation.then(
       () => undefined,
       () => undefined,
@@ -325,12 +349,19 @@ class BliveAgentRuntime implements BliveAgent {
    */
   private async explore(areaId: number, signal: AbortSignal, from?: RoomVisit): Promise<void> {
     signal.throwIfAborted();
+
     // 触发选房后已经离开该房间（下播、手动停止或另一次切换），放弃这次结果。
-    if (from && this.visit !== from) return;
+    if (from && this.visit !== from) {
+      return;
+    }
+
     const ciel = this.requireCiel();
 
     // 已有房间时保持 watching：选房期间原房间继续观看，权限和评分规则都不中断。
-    if (!this.visit) this.setStatus('exploring');
+    if (!this.visit) {
+      this.setStatus('exploring');
+    }
+
     this.emit({ type: 'exploration_started', areaId });
 
     const room = await selectExplorationRoom({
@@ -362,6 +393,7 @@ class BliveAgentRuntime implements BliveAgent {
 
   private createPerception(retentionMs = this.options.perception?.retentionMs ?? 60_000) {
     const options = this.options.perception;
+
     return createPerception({
       vision: { sampleIntervalMs: 6_666, differenceThreshold: 0.03, maxFrames: 9 },
       context: createPerceptionContext,
@@ -375,8 +407,10 @@ class BliveAgentRuntime implements BliveAgent {
     });
   }
 
+  // oxlint-disable-next-line eslint/complexity -- 房间资源按创建顺序初始化，并在失败路径中对称释放。
   private async openRoom(room: RoomInfo, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
+
     if (!room.live) {
       throw new Error(`直播间 ${room.roomId} 当前未开播`);
     }
@@ -396,21 +430,27 @@ class BliveAgentRuntime implements BliveAgent {
       await this.waitUntilReady(room.roomId, generation, signal);
 
       const startedAt = Date.now();
+
       session = await this.requireCiel().session(
         createRoomSessionOptions(room, new Date(startedAt)),
       );
+
       this.applyThinkingLevel(session);
       const playUrl = await this.api.playUrl(room.roomId);
       const wake = this.options.wake ? resolveWakeOptions(this.options.wake) : undefined;
-      if (wake)
+
+      if (wake) {
         kws = await createKWS({
           modelsPath: join(this.options.dataDir, 'models'),
           keywords: wake.keywords,
           cooldownMs: wake.cooldownMs,
         });
+      }
+
       signal.throwIfAborted();
       const monitor = this.createLiveStatusMonitor(room.roomId, generation, signal);
       this.liveStatusMonitor = monitor;
+
       const media = new LiveMedia({
         roomId: room.roomId,
         input: playUrl,
@@ -421,6 +461,7 @@ class BliveAgentRuntime implements BliveAgent {
         onError: error => this.emitError('media', error),
         onStopped: error => monitor.mediaStopped(error),
       });
+
       const visit = new RoomVisit({
         trace: this.options.trace,
         generation,
@@ -439,6 +480,7 @@ class BliveAgentRuntime implements BliveAgent {
         afterRun: () => this.inspectDecision(generation, signal),
         emit: event => this.emit(event),
       });
+
       this.visit = visit;
       visit.start();
       this.setStatus('watching');
@@ -446,11 +488,13 @@ class BliveAgentRuntime implements BliveAgent {
       monitor.start();
     } catch (error) {
       this.options.livePage.close();
+
       if (this.visit?.generation === generation) {
         await this.closeVisit('open_failed');
       } else {
         await Promise.all([kws?.close(), session?.close(), perception.close()]);
       }
+
       throw error;
     }
   }
@@ -472,9 +516,11 @@ class BliveAgentRuntime implements BliveAgent {
 
     try {
       const startedAt = Date.now();
+
       session = await this.requireCiel().session(
         createRoomSessionOptions(room, new Date(startedAt), mode),
       );
+
       this.applyThinkingLevel(session);
       signal.throwIfAborted();
 
@@ -494,6 +540,7 @@ class BliveAgentRuntime implements BliveAgent {
             totalSeconds,
           }),
       });
+
       const visit = new RoomVisit({
         trace: this.options.trace,
         generation,
@@ -523,6 +570,7 @@ class BliveAgentRuntime implements BliveAgent {
       } else {
         await Promise.all([session?.close(), perception.close()]);
       }
+
       throw error;
     }
   }
@@ -541,12 +589,19 @@ class BliveAgentRuntime implements BliveAgent {
     }
 
     void this.enqueue(async () => {
-      if (this.visit !== visit || signal.aborted) return;
+      if (this.visit !== visit || signal.aborted) {
+        return;
+      }
+
       try {
         // 异常中断只清理资源，不能把未读完的录播当作完整内容总结。
-        if (!error && !signal.aborted) await visit.finishRecording(signal);
+        if (!error && !signal.aborted) {
+          await visit.finishRecording(signal);
+        }
       } catch (cause) {
-        if (!signal.aborted) this.emitError('recording_summary', cause);
+        if (!signal.aborted) {
+          this.emitError('recording_summary', cause);
+        }
       } finally {
         await this.stopRuntime();
       }
@@ -568,7 +623,10 @@ class BliveAgentRuntime implements BliveAgent {
     }
 
     const decision = await readRoomDecision(visit.session.agent, signal);
-    if (!decision || signal.aborted || this.visit !== visit) return;
+
+    if (!decision || signal.aborted || this.visit !== visit) {
+      return;
+    }
 
     this.emit({
       type: 'room_evaluated',
@@ -602,6 +660,7 @@ class BliveAgentRuntime implements BliveAgent {
   ): Promise<void> {
     for (let attempt = 0; attempt < 30; attempt += 1) {
       signal.throwIfAborted();
+
       if (generation !== this.visitGeneration) {
         throw new Error('等待直播页面时房间已切换');
       }
@@ -609,6 +668,7 @@ class BliveAgentRuntime implements BliveAgent {
       const readiness = await this.options.livePage.readiness();
 
       signal.throwIfAborted();
+
       if (readiness.ready && readiness.roomId === roomId) {
         return;
       }
@@ -642,30 +702,44 @@ class BliveAgentRuntime implements BliveAgent {
     error?: Error,
   ) {
     const visit = this.visit;
+
     if (
       !visit ||
       visit.generation !== generation ||
       signal.aborted ||
       this.currentStatus !== 'watching'
-    )
+    ) {
       return;
+    }
 
     const mode = this.requireStartOptions().mode;
     // 先禁止新弹幕并中止正在思考的 Agent，再排队关闭资源，避免下播后仍发送。
     this.setStatus('stopping');
     visit.cancel();
-    if (error) this.emitError('media', error);
+
+    if (error) {
+      this.emitError('media', error);
+    }
+
     void this.enqueue(async () => {
-      if (signal.aborted || this.visit?.generation !== generation) return;
+      if (signal.aborted || this.visit?.generation !== generation) {
+        return;
+      }
+
       await this.closeVisit(reason);
+
       if (reason === 'offline' && mode.type === 'explore') {
         await this.explore(mode.areaId, signal);
       } else {
         await this.stopRuntime();
       }
     }).catch(async cause => {
-      if (signal.aborted) return;
+      if (signal.aborted) {
+        return;
+      }
+
       this.emitError('live_status', cause);
+
       // 重新选房失败也必须退出 stopping/exploring，不能留下无媒体的观看状态。
       try {
         await this.stop();
@@ -694,6 +768,7 @@ class BliveAgentRuntime implements BliveAgent {
     if (this.startOptions?.mode.type !== 'recording') {
       this.options.livePage.close();
     }
+
     await visit.close();
 
     this.emit({ type: 'room_closed', roomId: visit.room.roomId, reason });
@@ -731,6 +806,7 @@ class BliveAgentRuntime implements BliveAgent {
       if (this.visit?.room.roomId !== event.roomId) {
         return;
       }
+
       this.visit.history.push({ content: event.content, sentAt: Date.now() });
     }
 
@@ -817,6 +893,7 @@ function isValidDate(value: string): boolean {
   }
 
   const date = new Date(`${value}T00:00:00.000Z`);
+
   return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
 }
 

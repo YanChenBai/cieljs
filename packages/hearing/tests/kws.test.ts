@@ -10,6 +10,7 @@ const result = vi.hoisted(() => ({
   timestamps: [0.25],
   tokens: [],
 }));
+
 vi.mock('sherpa-onnx-node', () => ({
   default: {
     KeywordSpotter: class {
@@ -39,9 +40,11 @@ vi.mock('sherpa-onnx-node', () => ({
 import { KWS, keywordTokens } from '../src/kws.ts';
 
 const directories: string[] = [];
+
 afterEach(() => {
-  for (const directory of directories.splice(0))
+  for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('中文唤醒词转换为模型声母韵母 token', () => {
@@ -52,8 +55,11 @@ test('中文唤醒词转换为模型声母韵母 token', () => {
 test('独立 wake 事件映射时间，冷却期抑制重复命中并支持取消订阅', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'hearing-kws-'));
   directories.push(directory);
-  for (const name of ['encoder', 'decoder', 'joiner'])
+
+  for (const name of ['encoder', 'decoder', 'joiner']) {
     writeFileSync(join(directory, `${name}-epoch-12-avg-2-chunk-16-left-64.onnx`), 'test');
+  }
+
   writeFileSync(join(directory, 'tokens.txt'), 'x 1\nià 2\něr 3\n');
   const kws = new KWS({ modelsPath: directory, keywords: ['夏尔'], modelPath: directory });
   const listener = vi.fn();

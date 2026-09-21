@@ -29,11 +29,13 @@ it('取消后忽略迟到结果，不再安排轮询', async () => {
   vi.useFakeTimers();
   const pending = Promise.withResolvers<string | undefined>();
   const controller = new AbortController();
+
   const result = waitForPage(() => pending.promise, {
     action: '等待播放器',
     timeoutMs: 100,
     signal: controller.signal,
   });
+
   const rejected = expect(result).rejects.toThrow('切房');
 
   controller.abort(new Error('切房'));
@@ -44,6 +46,7 @@ it('取消后忽略迟到结果，不再安排轮询', async () => {
 
 it('读取失败直接报告，不把脚本错误隐藏为未登录', async () => {
   vi.useFakeTimers();
+
   const result = waitForPage(
     async () => {
       throw new Error('页面已销毁');

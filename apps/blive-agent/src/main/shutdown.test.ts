@@ -27,13 +27,16 @@ it('任一资源关闭失败时等待其他资源完成并拒绝退出', async (
   const shutdown = new ShutdownCoordinator();
   const pending = Promise.withResolvers<void>();
   const failure = new Error('flush failed');
+
   shutdown.register(async () => {
     throw failure;
   });
+
   shutdown.register(() => pending.promise);
 
   const closing = shutdown.close();
   let settled = false;
+
   void closing.catch(() => {
     settled = true;
   });

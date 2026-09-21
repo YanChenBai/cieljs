@@ -35,6 +35,7 @@ export async function selectExplorationRoom(options: {
     currentRoomId: previous?.room.roomId,
     cooling,
   });
+
   // 记录的是模型真正看到的候选；被冷却拿掉的另记一条，便于对照 API 原始结果。
   trace?.record('list_live_rooms', filtered.candidates, 'bilibili:exploration');
 
@@ -72,6 +73,7 @@ export async function selectExplorationRoom(options: {
       cooldownMs: ROOM_REVISIT_COOLDOWN_MS,
     }),
   });
+
   signal.throwIfAborted();
 
   const selection = parseDecision(messageText(result.answer), RoomSelectionSchema);

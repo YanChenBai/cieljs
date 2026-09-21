@@ -33,15 +33,26 @@ const text = computed(() => messageText(props.value));
 
 const blocks = computed(() => {
   const value = props.value;
-  if (!value || typeof value !== 'object') return [];
 
-  if ('type' in value && value.type === 'image') return [value];
-  if ('content' in value && Array.isArray(value.content)) return value.content;
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+
+  if ('type' in value && value.type === 'image') {
+    return [value];
+  }
+
+  if ('content' in value && Array.isArray(value.content)) {
+    return value.content;
+  }
+
   return [];
 });
 
 const formattedText = computed(() => {
-  if (text.value === undefined) return undefined;
+  if (text.value === undefined) {
+    return undefined;
+  }
 
   return readableText(text.value);
 });

@@ -56,6 +56,7 @@ class CielInstance implements Ciel {
   private async startResources(): Promise<void> {
     try {
       const resources = await CielResources.open(this.options);
+
       const runtime = new Runtime({
         model: this.options.model,
         apiKey: this.options.apiKey,
@@ -80,6 +81,7 @@ class CielInstance implements Ciel {
         this.runtime?.close(),
         this.resources?.[Symbol.asyncDispose](),
       ]);
+
       const cleanupFailures = cleanupResults
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
         .map(result => result.reason);

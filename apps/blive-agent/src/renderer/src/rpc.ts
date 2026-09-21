@@ -16,7 +16,10 @@ export const rpc: RouterClient<WatchRouter> = createORPCClient(
 const controllers = new Set<AbortController>();
 
 window.addEventListener('beforeunload', () => {
-  for (const controller of controllers) controller.abort();
+  for (const controller of controllers) {
+    controller.abort();
+  }
+
   channel.port1.close();
 });
 
@@ -41,15 +44,21 @@ export const watchBridge: BliveAgentBridge = {
   onEvent(listener) {
     const controller = new AbortController();
     controllers.add(controller);
+
     void (async () => {
       try {
-        for await (const event of await rpc.watch.events(undefined, { signal: controller.signal }))
+        for await (const event of await rpc.watch.events(undefined, {
+          signal: controller.signal,
+        })) {
           listener(event);
+        }
       } catch (error) {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
           listener({ type: 'error', stage: 'connection', message: String(error) });
+        }
       }
     })();
+
     return () => {
       controller.abort();
       controllers.delete(controller);

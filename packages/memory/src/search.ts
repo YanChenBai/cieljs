@@ -8,6 +8,7 @@ export function normalizeSearchText(text: string): string {
 
 export function tokenizeSearchText(text: string): string[] {
   const normalized = normalizeSearchText(text);
+
   const words = Array.from(wordSegmenter.segment(normalized))
     .filter(segment => segment.isWordLike)
     .map(segment => segment.segment);

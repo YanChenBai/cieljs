@@ -4,10 +4,15 @@ import { LiveStatusMonitor, type LiveStatus } from './live-status-monitor.ts';
 
 const monitors: LiveStatusMonitor[] = [];
 beforeEach(() => vi.useFakeTimers());
+
 afterEach(() => {
-  for (const monitor of monitors.splice(0)) monitor.close();
+  for (const monitor of monitors.splice(0)) {
+    monitor.close();
+  }
+
   vi.useRealTimers();
 });
+
 function setup() {
   const callbacks = {
     readStatus: vi.fn<() => Promise<LiveStatus>>().mockResolvedValue('live'),
@@ -15,8 +20,10 @@ function setup() {
     onMediaFailure: vi.fn(),
     onError: vi.fn(),
   };
+
   const monitor = new LiveStatusMonitor(callbacks);
   monitors.push(monitor);
+
   return { monitor, ...callbacks };
 }
 

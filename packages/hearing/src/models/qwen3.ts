@@ -31,21 +31,29 @@ export class Qwen3Recognizer {
   }
   recognize(samples: Float32Array, depth = 0): string {
     const stream = this.runtime.createStream();
+
     stream.acceptWaveform({
       samples,
       sampleRate: SAMPLE_RATE,
     });
+
     this.runtime.decode(stream);
     const result = this.runtime.getResult(stream);
     const content = parseQwen3AsrText(result.text);
-    if (!isDegenerateResult(result, content, this.maxNewTokens)) return content;
+
+    if (!isDegenerateResult(result, content, this.maxNewTokens)) {
+      return content;
+    }
+
     if (
       depth >= MAX_TRANSCRIPTION_RETRY_DEPTH ||
       samples.length < MIN_TRANSCRIPTION_RETRY_SAMPLES
     ) {
       return '';
     }
+
     const midpoint = Math.floor(samples.length / 2);
+
     return joinTranscriptParts([
       this.recognize(samples.subarray(0, midpoint), depth + 1),
       this.recognize(samples.subarray(midpoint), depth + 1),
@@ -55,6 +63,7 @@ export class Qwen3Recognizer {
 
 function parseQwen3AsrText(text: string): string {
   const marker = text.indexOf(QWEN3_ASR_TEXT_MARKER);
+
   return (marker < 0 ? text : text.slice(marker + QWEN3_ASR_TEXT_MARKER.length)).trim();
 }
 
@@ -68,31 +77,48 @@ function isDegenerateResult(
 
 function hasExcessiveRepetition(content: string): boolean {
   const characters = Array.from(content.normalize().replaceAll(/[\s\p{P}\p{S}]+/gu, ''));
-  if (characters.length < 32) return false;
+
+  if (characters.length < 32) {
+    return false;
+  }
+
   for (let unitLength = 1; unitLength <= 8; unitLength += 1) {
     const unitStart = characters.length - unitLength;
     const unit = characters.slice(unitStart).join('');
     let repeats = 1;
+
     for (let cursor = unitStart - unitLength; cursor >= 0; cursor -= unitLength) {
-      if (characters.slice(cursor, cursor + unitLength).join('') !== unit) break;
+      if (characters.slice(cursor, cursor + unitLength).join('') !== unit) {
+        break;
+      }
+
       repeats += 1;
     }
-    if (repeats >= 8 && repeats * unitLength >= characters.length / 2) return true;
+
+    if (repeats >= 8 && repeats * unitLength >= characters.length / 2) {
+      return true;
+    }
   }
+
   return false;
 }
 
 function joinTranscriptParts(parts: readonly string[]): string {
   return parts.filter(Boolean).reduce((combined, part) => {
-    if (!combined) return part;
+    if (!combined) {
+      return part;
+    }
+
     const separator =
       /[\p{Script=Han}\p{P}]$/u.test(combined) || /^[\p{Script=Han}\p{P}]/u.test(part) ? '' : ' ';
+
     return `${combined}${separator}${part}`;
   }, '');
 }
 
 export function createQwen3Config(modelsPath: string): OfflineRecognizerConfig {
   const paths = resolveModelPaths(modelsPath);
+
   return {
     featConfig: {
       sampleRate: SAMPLE_RATE,

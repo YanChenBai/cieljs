@@ -61,6 +61,7 @@ async function executeDanmaku(
 
   if (params.action === 'defer') {
     context.emit({ type: 'danmaku_deferred', reason: params.reason });
+
     return toolResult({ status: 'deferred', reason: params.reason });
   }
 
@@ -72,6 +73,7 @@ async function executeDanmaku(
 async function deliverDanmaku(context: DanmakuToolContext, room: RoomInfo, content: string) {
   if (context.delivery() === 'simulate') {
     context.emit({ type: 'danmaku_simulated', content });
+
     return { status: 'simulated' as const, content };
   }
 

@@ -68,6 +68,7 @@ class PerceptionRuntime implements Perception {
     }
 
     this.asr = new ASR(options.asr);
+
     this.unsubscribers.push(
       this.asr.on('result', result => this.addTranscript(result)),
       this.asr.on('speechend', at => this.handleSpeechEnd(at)),
@@ -83,6 +84,7 @@ class PerceptionRuntime implements Perception {
 
   async snapshot(options: SnapshotOptions = {}): Promise<PerceptionSnapshot> {
     const endAt = cloneValidDate(options.endAt ?? new Date(), 'snapshot.endAt');
+
     const startAt = cloneValidDate(
       options.startAt ?? new Date(endAt.getTime() - this.retentionMs),
       'snapshot.startAt',
@@ -176,11 +178,13 @@ class PerceptionRuntime implements Perception {
   private freezeSnapshot(startAt: Date, endAt: Date, sequence: number) {
     const start = startAt.getTime();
     const end = endAt.getTime();
+
     const transcripts = this.transcripts
       .filter(
         transcript => transcript.endAt.getTime() >= start && transcript.endAt.getTime() <= end,
       )
       .sort(compareTranscripts);
+
     const frames = this.frames
       .filter(frame => {
         const at = frame.at.getTime();

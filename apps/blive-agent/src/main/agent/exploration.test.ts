@@ -40,6 +40,7 @@ function setup(candidates: RoomCandidate[], answer: unknown) {
       content: [{ type: 'text', text: JSON.stringify(answer) }],
     },
   });
+
   const rooms = vi.fn().mockResolvedValue(candidates);
   const room = vi.fn(async (roomId: number) => roomInfo(roomId));
   const events: WatchEvent[] = [];
@@ -69,6 +70,7 @@ describe('探索选房', () => {
     await expect(context.select({ cooling: [departure(789)] })).rejects.toThrow(
       'Agent 选择的直播间 789 不在本轮候选中',
     );
+
     expect(context.events).toEqual([]);
     expect(context.room).not.toHaveBeenCalled();
     expect(context.question()).toContain('"roomId":999');
@@ -87,6 +89,7 @@ describe('探索选房', () => {
         cooling: [],
       }),
     ).rejects.toThrow('不在本轮候选中');
+
     expect(context.question()).toContain('"roomId":789');
   });
 
@@ -103,6 +106,7 @@ describe('探索选房', () => {
         cooling: [],
       }),
     ).rejects.toThrow('分区 1 当前没有其他直播候选');
+
     expect(context.room).not.toHaveBeenCalled();
   });
 

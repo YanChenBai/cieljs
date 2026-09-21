@@ -84,6 +84,7 @@ export class MemoryRetrieval {
     );
   }
 
+  // oxlint-disable-next-line eslint/complexity -- 多检索路由的合并、去重和分页需要共享同一命中表。
   async searchBySource(
     selector: MemorySelector,
     query: string,
@@ -102,6 +103,7 @@ export class MemoryRetrieval {
     if (!['auto', 'exact', 'text'].includes(mode)) {
       throw new MemoryValidationError('无效的来源检索模式');
     }
+
     const routes: RawSourceHit[][] = [];
 
     if (mode === 'auto' || mode === 'exact') {
@@ -251,6 +253,7 @@ export class MemoryRetrieval {
       AND ${memoryEmbeddings.dimensions} = ${model.dimensions}
       AND ${memoryEmbeddings.status} = 'ready'
       THEN 1 - (${vectorCache.embedding} <=> ${JSON.stringify(vector)}::vector) ELSE NULL END`;
+
     const rows = await this.db
       .select({
         id: memories.id,
@@ -319,6 +322,9 @@ export class MemoryRetrieval {
       return [];
     }
 
+    const memoryIds = [...hits.keys()];
+    const condition = and(inArray(memories.id, memoryIds), filterCondition(selector, options));
+
     const rows = await this.db
       .select({ memory: memories, revision: memoryRevisions })
       .from(memories)
@@ -329,7 +335,7 @@ export class MemoryRetrieval {
           eq(memoryRevisions.revision, memories.currentRevision),
         ),
       )
-      .where(and(inArray(memories.id, [...hits.keys()]), filterCondition(selector, options)));
+      .where(condition);
 
     options.signal?.throwIfAborted();
     const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);

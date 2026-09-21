@@ -8,21 +8,27 @@ import { createTraceRouter } from './router.ts';
 import { traceStorage } from './store.ts';
 
 const hosts: TraceHost[] = [];
+
 async function host(capacity?: number) {
   const storage = await Storage.open({ dataDir: 'memory://', modules: [traceStorage] });
   const value = await TraceHost.open({ storage, capacity });
   hosts.push(value);
+
   return value;
 }
+
 async function entries(value: TraceHost): Promise<TraceEntry[]> {
   await value.flushRecords();
+
   return value.store.list<TraceEntry>('entry');
 }
+
 afterEach(async () => {
   for (const value of hosts) {
     await value.close();
     await value.storage.close();
   }
+
   hosts.length = 0;
   vi.useRealTimers();
 });
@@ -34,36 +40,45 @@ describe('Trace 按需内容', () => {
     value.recordMessage('视频语音 · 0:02', '第二段', 'video');
     const snapshot = await entries(value);
     expect(snapshot).toHaveLength(2);
+
     expect(snapshot.every(entry => entry.kind === 'message' && entry.sessionId === 'video')).toBe(
       true,
     );
+
     const contents = await Promise.all(snapshot.map(entry => value.store.get(entry.output!.id)));
     expect(contents).toEqual(expect.arrayContaining(['第一段', '第二段']));
     expect(await value.storage.journal.read(0)).toEqual([]);
     const receive = value.agentListener('video');
+
     await receive({
       type: 'message_end',
       message: { role: 'user', content: '开始总结', timestamp: Date.now() },
     });
+
     const ordered = await entries(value);
     expect(ordered.at(-1)?.name).toBe('user');
     expect(new Set(ordered.map(entry => entry.sequence)).size).toBe(ordered.length);
   });
+
   it('大对象、循环引用和二进制不会进入事件消息', async () => {
     const value = await host();
+
     const data: Record<string, unknown> = {
       image: { type: 'image', mimeType: 'image/png', data: 'x'.repeat(200_000) },
       buffer: new Uint8Array(10_000),
     };
+
     data.self = data;
     value.record('frame', data);
     const snapshot = await entries(value);
     expect(JSON.stringify(snapshot).length).toBeLessThan(500);
     const id = snapshot[0]!.output!.id;
     const client = createRouterClient(createTraceRouter(value));
+
     expect(await client.values.get({ id, path: ['image'] })).toMatchObject({
       data: 'x'.repeat(200_000),
     });
+
     expect(await client.values.get({ id, path: ['buffer'] })).toBeInstanceOf(Uint8Array);
     const stored = (await value.store.get<Record<string, unknown>>(id))!;
     expect(stored.self).toBe(stored);
@@ -72,9 +87,11 @@ describe('Trace 按需内容', () => {
   it('内容读取不执行 getter，并拒绝原型路径', async () => {
     const value = await host();
     const getter = vi.fn(() => 'secret');
+
     const data = Object.fromEntries(
       Array.from({ length: 250 }, (_, index) => [String(index), index]),
     );
+
     Object.defineProperty(data, 'secret', { get: getter });
     value.record('large', data);
     const id = (await entries(value))[0]!.output!.id;
@@ -99,12 +116,14 @@ describe('Trace 按需内容', () => {
     const listener = vi.fn();
     value.subscribe(listener);
     const receive = value.agentListener('room:1');
+
     await receive({
       type: 'tool_execution_start',
       toolCallId: 'call:1',
       toolName: 'search',
       args: { query: '主播' },
     });
+
     await receive({
       type: 'tool_execution_update',
       toolCallId: 'call:1',
@@ -112,6 +131,7 @@ describe('Trace 按需内容', () => {
       args: { query: '主播' },
       partialResult: { found: '处理中' },
     });
+
     await value.flushRecords();
     vi.advanceTimersByTime(60);
 
@@ -119,6 +139,7 @@ describe('Trace 按需内容', () => {
     const running = streaming.entries.find(entry => entry.toolCallId === 'call:1');
     expect(running).toMatchObject({ status: 'running', input: { preview: 'Object' } });
     expect(await value.store.get(running!.output!.id)).toEqual({ found: '处理中' });
+
     expect((await value.store.list<TraceEntry>('step')).map(step => step.name)).toEqual([
       'tool_execution_start',
     ]);
@@ -130,9 +151,11 @@ describe('Trace 按需内容', () => {
       result: { found: true },
       isError: false,
     });
+
     await value.flushRecords();
     vi.advanceTimersByTime(60);
     expect(listener).toHaveBeenCalledTimes(2);
+
     expect((await entries(value))[0]).toMatchObject({
       kind: 'tool',
       status: 'completed',
@@ -168,6 +191,7 @@ describe('Trace 按需内容', () => {
         },
       },
     });
+
     await value.flushRecords();
     vi.advanceTimersByTime(60);
 
@@ -175,6 +199,7 @@ describe('Trace 按需内容', () => {
       total: { input: 120, output: 20, cacheRead: 800, cacheWrite: 0, total: 940 },
       context: { input: 120, output: 20, cacheRead: 800, cacheWrite: 0, total: 940 },
     });
+
     expect(listener.mock.calls.at(-1)?.[0].usage.total.total).toBe(940);
   });
 
@@ -185,6 +210,7 @@ describe('Trace 按需内容', () => {
 
   it('会话压缩事件进入轨迹步骤，摘要可从详情读取', async () => {
     const value = await host();
+
     await value.storage.journal.record('room:compaction', {
       type: 'session_compaction',
       summary: '累计摘要',
@@ -192,18 +218,21 @@ describe('Trace 按需内容', () => {
       createdAt: 10,
       contextTokens: 120,
     });
+
     await value.flushRecords();
 
     const client = createRouterClient(createTraceRouter(value));
     const steps = await client.steps.list({ sessionId: 'room:compaction' });
 
     expect(steps).toHaveLength(1);
+
     expect(steps[0]).toMatchObject({
       name: 'session_compaction',
       label: '上下文压缩',
       text: '累计摘要',
       sessionId: 'room:compaction',
     });
+
     // 压缩事件里的估算要经重放进入会话的当前上下文。
     expect(
       value.sessions().find(session => session.id === 'room:compaction')?.usage.context?.total,
@@ -212,14 +241,17 @@ describe('Trace 按需内容', () => {
 
   it('按 Session 查询并重新回放各自的记录', async () => {
     const value = await host();
+
     await value.agentListener('room:first')({
       type: 'message_end',
       message: { role: 'user', content: '第一间房', timestamp: 10 },
     });
+
     await value.agentListener('room:second')({
       type: 'message_end',
       message: { role: 'user', content: '第二间房', timestamp: 20 },
     });
+
     await value.flushRecords();
 
     const client = createRouterClient(createTraceRouter(value));
@@ -235,14 +267,17 @@ describe('Trace 按需内容', () => {
 
   it('路由按宿主给定的 Session 边界隔离查询与订阅', async () => {
     const value = await host();
+
     await value.agentListener('watch:room')({
       type: 'message_end',
       message: { role: 'user', content: '直播消息', timestamp: 10 },
     });
+
     await value.agentListener('investigation:first')({
       type: 'message_end',
       message: { role: 'user', content: '调查消息', timestamp: 20 },
     });
+
     await value.flushRecords();
 
     const client = createRouterClient(
@@ -250,6 +285,7 @@ describe('Trace 按需内容', () => {
         session: sessionId => sessionId.startsWith('investigation:'),
       }),
     );
+
     const updates = await client.updates();
     const initial = await updates.next();
     const snapshot = initial.value as TraceUpdate;

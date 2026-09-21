@@ -9,6 +9,7 @@ describe('直播分区查询', () => {
     await new BilibiliApi({ fetch }).streamerDynamics(194484313, readInPage);
     const url = new URL(readInPage.mock.calls[0]![0]);
     expect(url.pathname).toBe('/x/polymer/web-dynamic/v1/feed/space');
+
     expect(Object.fromEntries(url.searchParams)).toEqual({
       host_mid: '194484313',
       offset: '',
@@ -16,9 +17,11 @@ describe('直播分区查询', () => {
       platform: 'web',
       features: 'itemOpusStyle',
     });
+
     expect(fetch).not.toHaveBeenCalled();
     expect(readInPage).toHaveBeenCalledOnce();
   });
+
   it.each([
     [1, '1', '0'],
     [21, '1', '21'],
@@ -34,6 +37,7 @@ describe('直播分区查询', () => {
       .mockResolvedValueOnce(
         Response.json({ code: 0, data: { list: [{ roomid: 123, uid: 456, title: '聊天' }] } }),
       );
+
     const api = new BilibiliApi({ fetch });
     const rooms = await api.rooms(id);
     const input = fetch.mock.calls[1]![0];
@@ -47,6 +51,7 @@ describe('直播分区查询', () => {
     const api = new BilibiliApi({
       fetch: vi.fn().mockResolvedValue(Response.json({ code: -403, message: '拒绝访问' })),
     });
+
     await expect(api.rooms(1)).rejects.toThrow('-403');
   });
 });
@@ -61,6 +66,7 @@ describe('主播近期公开信息', () => {
     expect(url.pathname).toBe('/x/space/arc/search');
     expect(url.searchParams.get('ps')).toBe('3');
   });
+
   it('动态置顶优先，并从动态卡片提取投稿标题列表', async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
@@ -93,6 +99,7 @@ describe('主播近期公开信息', () => {
           data: { list: { vlist: [{ bvid: 'BV2xx', title: '近期投稿', created: 456 }] } },
         }),
       );
+
     const api = new BilibiliApi({ fetch });
 
     const dynamics = await api.streamerDynamics(456);
@@ -101,6 +108,7 @@ describe('主播近期公开信息', () => {
 
     expect(dynamics.map(item => item.title)).toEqual(['动态里的投稿', '普通动态']);
     expect(dynamics[0]?.url).toBe('https://t.bilibili.com/video');
+
     expect(videos).toEqual([
       expect.objectContaining({ id: 'BV2xx', title: '近期投稿', publishedAt: 456 }),
     ]);

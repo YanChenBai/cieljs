@@ -73,7 +73,10 @@ export class TraceHost implements AsyncDisposable {
     readonly store: TraceStore,
     private readonly capacity = 300,
   ) {
-    if (!Number.isSafeInteger(capacity) || capacity < 1) throw new Error('capacity 必须是正整数');
+    if (!Number.isSafeInteger(capacity) || capacity < 1) {
+      throw new Error('capacity 必须是正整数');
+    }
+
     this.projectionStore = store;
   }
 
@@ -90,6 +93,7 @@ export class TraceHost implements AsyncDisposable {
     awaitReplay?: boolean;
   }) {
     const store = await TraceStore.open(options.storage);
+
     const host = new TraceHost(
       options.storage,
       options.source ?? options.storage.journal,
@@ -97,12 +101,18 @@ export class TraceHost implements AsyncDisposable {
       store,
       options.capacity,
     );
+
     host.sequence = await host.store.sequence();
-    if (host.persistsProjectionState) await host.prepareProjection();
+
+    if (host.persistsProjectionState) {
+      await host.prepareProjection();
+    }
+
     host.unsubscribe = host.source.subscribe(() => {
       // 失败保留在 projection 中，由 flushRecords/close 向调用者报告。
       void host.catchUp().catch(() => {});
     });
+
     if (options.awaitReplay ?? true) {
       await host.catchUp();
       await host.finishProjection();
@@ -114,9 +124,12 @@ export class TraceHost implements AsyncDisposable {
         .then(() => host.finishProjection())
         .catch(error => host.captureProjectionFailure(error))
         .finally(() => {
-          if (!host.closed) host.scheduleFlush();
+          if (!host.closed) {
+            host.scheduleFlush();
+          }
         });
     }
+
     return host;
   }
 
@@ -124,22 +137,30 @@ export class TraceHost implements AsyncDisposable {
     this.projection = this.projection.then(async () => {
       while (!this.closed) {
         const records = await this.source.read(this.cursor);
-        if (!records.length) return;
+
+        if (!records.length) {
+          return;
+        }
+
         for (const trace of records) {
           const entryId = trace.event.type.startsWith('message_')
             ? trace.messageId!
             : `${trace.id}:0`;
+
           const previous = await this.projectionStore.get<TraceEntry>(entryId);
 
           let observer = this.observers.get(trace.sessionId);
+
           if (!observer) {
             observer = new AgentTrace(trace.sessionId, {
               createEntry: (id, kind, name) => this.createEntry(id, kind, name),
               saveEntry: entry => this.saveEntry(entry),
               storeValue: (id, value) => this.storeValue(id, value),
             });
+
             this.observers.set(trace.sessionId, observer);
           }
+
           this.currentTrace = trace;
           this.currentEntrySequence = previous?.sequence;
           this.currentTurnNumber = this.resolveTurnNumber(trace);
@@ -153,18 +174,23 @@ export class TraceHost implements AsyncDisposable {
           this.currentTurnNumber = undefined;
           this.cursor = trace.sequence;
         }
+
         if (records.some(record => !record.transient)) {
           await this.persistProjectionState();
         }
       }
     });
+
     // 后台失败不能只留在 Promise 链中，否则界面会永久停在旧快照。
     void this.projection.catch(error => this.captureProjectionFailure(error));
+
     return this.projection;
   }
 
   private captureProjectionFailure(error: unknown) {
-    if (this.projectionFailure) return;
+    if (this.projectionFailure) {
+      return;
+    }
 
     this.projectionFailure = error;
     const cause = error instanceof Error ? (error.cause ?? error) : error;
@@ -194,12 +220,14 @@ export class TraceHost implements AsyncDisposable {
   sessions(): TraceSession[] {
     return this.tally.sessions().map(session => {
       const progress = this.sessionProgress.get(session.id);
+
       return { ...session, turn: progress?.turn ?? 0, steps: progress?.steps ?? 0 };
     });
   }
 
   subscribe(listener: (update: TraceUpdate) => void) {
     this.listeners.add(listener);
+
     return () => {
       this.listeners.delete(listener);
     };
@@ -228,6 +256,7 @@ export class TraceHost implements AsyncDisposable {
       tools: agent.state.tools,
       model: agent.state.model,
     }));
+
     return agent.subscribe(async event => {
       await receive(event);
     });
@@ -236,7 +265,10 @@ export class TraceHost implements AsyncDisposable {
   /** 创建独立的 Agent 事件归并器；宿主只分配序号并保存归并结果。 */
   agentListener(sessionId: string, metadata?: () => AgentTraceMetadata) {
     return (event: AgentEvent, context?: AgentTraceMetadata) => {
-      if (this.closed) return;
+      if (this.closed) {
+        return;
+      }
+
       return this.writer.record(sessionId, event, { ...metadata?.(), ...context });
     };
   }
@@ -246,25 +278,37 @@ export class TraceHost implements AsyncDisposable {
     if (this.source !== this.storage.journal && !trace.transient) {
       this.put(trace.id, 'value', trace.sequence, trace, trace.runId, trace.sessionId);
     }
+
     const step = createTraceStep(trace, metadata.tools, metadata.model);
+
     if (trace.transient) {
       step.raw = undefined;
       step.output = this.transientOutput(step);
     }
+
     step.turnNumber = this.currentTurnNumber;
     this.trackSessionProgress(step);
+
     if (!trace.transient) {
       this.put(step.id, 'step', trace.sequence, step, trace.runId, trace.sessionId);
     }
+
     this.stepChanges.set(step.id, step);
     this.scheduleFlush();
 
-    for (const wake of this.wakeListeners) wake();
+    for (const wake of this.wakeListeners) {
+      wake();
+    }
   }
 
   private transientOutput(step: TraceEntry) {
-    if (step.messageId) return this.entries.get(step.messageId)?.output;
-    if (!step.toolCallId) return;
+    if (step.messageId) {
+      return this.entries.get(step.messageId)?.output;
+    }
+
+    if (!step.toolCallId) {
+      return;
+    }
 
     return [...this.entries.values()].find(entry => entry.toolCallId === step.toolCallId)?.output;
   }
@@ -285,12 +329,17 @@ export class TraceHost implements AsyncDisposable {
         const events = await this.source.read(afterSequence, 100);
 
         for (const event of events) {
-          if (this.closed || signal?.aborted) return;
+          if (this.closed || signal?.aborted) {
+            return;
+          }
+
           afterSequence = event.sequence;
           yield event;
         }
 
-        if (!events.length) await pending;
+        if (!events.length) {
+          await pending;
+        }
       }
     } finally {
       this.wakeListeners.delete(notify);
@@ -300,20 +349,24 @@ export class TraceHost implements AsyncDisposable {
 
   close(): Promise<void> {
     this.closing ??= this.closeResources();
+
     return this.closing;
   }
 
   private async closeResources() {
     this.unsubscribe?.();
+
     try {
       await this.flushRecords();
     } finally {
       this.closed = true;
       this.lifetime.abort();
       this.stepChanges.clear();
+
       for (const wake of this.wakeListeners) {
         wake();
       }
+
       clearTimeout(this.timer);
       this.listeners.clear();
       this.entries.clear();
@@ -341,8 +394,10 @@ export class TraceHost implements AsyncDisposable {
 
   private storeValue(id: string, value: unknown): ValueRef {
     const trace = this.currentTrace;
+
     if (trace?.transient) {
       this.projectionStore.putTransient(id, value);
+
       return { id, preview: preview(value) };
     }
 
@@ -356,14 +411,17 @@ export class TraceHost implements AsyncDisposable {
     } else {
       this.put(id, 'value', this.eventSequence, value, trace?.runId, trace?.sessionId);
     }
+
     return { id, preview: preview(value) };
   }
 
   private saveEntry(entry: TraceEntry) {
     entry.turnNumber ??= this.currentTurnNumber;
     this.tally.touch(entry.sessionId, entry.endedAt ?? entry.startedAt);
+
     if (!this.currentTrace?.transient) {
       this.put(entry.id, 'entry', entry.sequence, entry, entry.runId, entry.sessionId);
+
       if (entry.name === 'agent_start') {
         this.put(`run:${entry.id}`, 'run', entry.sequence, entry, entry.runId, entry.sessionId);
       }
@@ -384,35 +442,47 @@ export class TraceHost implements AsyncDisposable {
 
   /** 一轮 = 一次 Agent 运行，所以按 runId 计数；同一 run 的后续事件沿用已分配的号。 */
   private resolveTurnNumber(trace: TraceEvent) {
-    if (!trace.runId) return;
+    if (!trace.runId) {
+      return;
+    }
 
     const sessionKey = trace.sessionId;
     let sessionRuns = this.runNumbers.get(sessionKey);
+
     if (!sessionRuns) {
       sessionRuns = new Map();
       this.runNumbers.set(sessionKey, sessionRuns);
     }
 
     const existing = sessionRuns.get(trace.runId);
-    if (existing) return existing;
+
+    if (existing) {
+      return existing;
+    }
 
     const turnNumber = sessionRuns.size + 1;
     sessionRuns.set(trace.runId, turnNumber);
+
     return turnNumber;
   }
 
+  // oxlint-disable-next-line eslint/complexity -- 不同 Trace 协议事件需要归一为稳定的进度去重键。
   private trackSessionProgress(step: TraceEntry) {
     let progress = this.sessionProgress.get(step.sessionId);
+
     if (!progress) {
       progress = { turn: 0, steps: 0, seen: new Set() };
       this.sessionProgress.set(step.sessionId, progress);
     }
 
-    if (step.turnNumber) progress.turn = step.turnNumber;
+    if (step.turnNumber) {
+      progress.turn = step.turnNumber;
+    }
 
     const scope = JSON.stringify([step.sessionId, step.runId]);
     const isToolResult = step.kind === 'message' && step.label === 'toolResult';
     let key = step.id;
+
     if ((step.kind === 'tool' || isToolResult) && step.toolCallId) {
       key = `${scope}:tool:${step.toolCallId}`;
     } else if (step.kind === 'message' && step.messageId) {
@@ -423,14 +493,18 @@ export class TraceHost implements AsyncDisposable {
       key = `${scope}:turn:${step.turnId}`;
     }
 
-    if (step.name === 'agent_start') progress.seen.clear();
+    if (step.name === 'agent_start') {
+      progress.seen.clear();
+    }
 
     if (!progress.seen.has(key)) {
       progress.seen.add(key);
       progress.steps += 1;
     }
 
-    if (step.name === 'agent_end') progress.seen.clear();
+    if (step.name === 'agent_end') {
+      progress.seen.clear();
+    }
   }
 
   private projectionState(): ProjectionState {
@@ -451,6 +525,7 @@ export class TraceHost implements AsyncDisposable {
   private async prepareProjection() {
     let state: ProjectionState | undefined;
     let stateReadFailed = false;
+
     try {
       state = await this.store.projectionState<ProjectionState>();
     } catch (error) {
@@ -461,12 +536,18 @@ export class TraceHost implements AsyncDisposable {
     const latest = await this.storage.db.execute<{ sequence: string }>(sql`
       SELECT COALESCE(MAX(sequence), 0) AS sequence FROM storage.events
     `);
+
     const latestSequence = Number(latest.rows[0]!.sequence);
+
     if (state && isProjectionState(state) && state.cursor <= latestSequence) {
       this.restoreProjectionState(state);
+
       return;
     }
-    if (!state && !stateReadFailed && latestSequence === 0) return;
+
+    if (!state && !stateReadFailed && latestSequence === 0) {
+      return;
+    }
 
     this.projectionStore = await this.store.createRebuild();
     this.rebuilding = true;
@@ -481,24 +562,30 @@ export class TraceHost implements AsyncDisposable {
     for (const [sessionId, runs] of state.runNumbers) {
       this.runNumbers.set(sessionId, new Map(runs));
     }
+
     for (const [sessionId, progress] of state.sessionProgress) {
       this.sessionProgress.set(sessionId, { ...progress, seen: new Set(progress.seen) });
     }
   }
 
   private async persistProjectionState() {
-    if (!this.persistsProjectionState) return;
+    if (!this.persistsProjectionState) {
+      return;
+    }
 
     this.projectionStore.saveProjectionState(this.sequence, this.projectionState());
     await this.projectionStore.flush();
   }
 
   private async finishProjection() {
-    if (!this.rebuilding) return;
+    if (!this.rebuilding) {
+      return;
+    }
 
     this.rebuildCompletion ??= this.store.activate(this.projectionStore).then(() => {
       this.rebuilding = false;
     });
+
     await this.rebuildCompletion;
   }
 
@@ -511,6 +598,7 @@ export class TraceHost implements AsyncDisposable {
     sessionId?: string,
   ) {
     this.projectionStore.put(id, category, sequence, value, runId, sessionId);
+
     if (this.rebuilding && !this.currentTrace) {
       this.store.put(id, category, sequence, value, runId, sessionId);
     }
@@ -535,7 +623,9 @@ export class TraceHost implements AsyncDisposable {
     this.dirty.clear();
     this.stepChanges.clear();
 
-    for (const listener of this.listeners) listener(update);
+    for (const listener of this.listeners) {
+      listener(update);
+    }
   }
 }
 

@@ -123,6 +123,7 @@ describe('ConversationScheduler', () => {
     const thinking = harness.scheduler.state;
 
     expect(thinking.status).toBe('thinking');
+
     if (thinking.status === 'thinking') {
       expect(thinking.pending?.speechEndCount).toBe(3);
     }
@@ -154,6 +155,7 @@ describe('ConversationScheduler', () => {
     const state = harness.scheduler.state;
 
     expect(state.status).toBe('waiting');
+
     if (state.status === 'waiting') {
       expect(state.pending.speechEndCount).toBe(2);
       expect(state.pending.endInclusive.toISOString()).toBe('2026-01-01T00:00:03.000Z');

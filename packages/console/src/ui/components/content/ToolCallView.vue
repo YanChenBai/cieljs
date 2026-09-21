@@ -39,11 +39,13 @@ const title = computed(() => props.call?.label ?? name.value);
 const needsInput = computed(
   () => props.block?.arguments === undefined && Boolean(props.call?.input),
 );
+
 const { value: input } = useTraceValue(
   () => props.client,
   () => props.call,
   () => (needsInput.value ? 'input' : undefined),
 );
+
 const args = computed(() => props.block?.arguments ?? input.value);
 
 const {

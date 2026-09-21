@@ -86,9 +86,11 @@ export function assertEmbeddingVectors(
 
   for (const vector of vectors) {
     const hasCorrectDimensions = Array.isArray(vector) && vector.length === dimensions;
+
     const containsOnlyFiniteValues =
       hasCorrectDimensions &&
       vector.every(value => typeof value === 'number' && Number.isFinite(value));
+
     const containsNonZeroValue = containsOnlyFiniteValues && vector.some(value => value !== 0);
 
     if (!hasCorrectDimensions) {

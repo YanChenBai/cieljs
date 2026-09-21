@@ -46,12 +46,16 @@ const filteredAreas = computed(() => {
 
 // 模式和目标 ID 一起推导，校验与提交始终使用同一份选择。
 const selectedMode = computed<WatchMode>(() => {
-  if (mode.value === 'follow') return { type: 'follow', roomId: roomId.value ?? 0 };
+  if (mode.value === 'follow') {
+    return { type: 'follow', roomId: roomId.value ?? 0 };
+  }
+
   if (mode.value === 'recording') {
     const source =
       recordingSource.value === 'url'
         ? { type: 'url' as const, url: recordingUrl.value.trim() }
         : { type: 'file' as const, path: recordingFile.value };
+
     const date = recordingDate.value;
 
     return {
@@ -81,7 +85,7 @@ const valid = computed(() => {
   const hasSource =
     selected.source.type === 'url'
       ? /^https?:\/\//u.test(selected.source.url)
-      : !!selected.source.path;
+      : Boolean(selected.source.path);
 
   return hasSource;
 });
@@ -103,7 +107,10 @@ async function pickRecordingFile() {
 function start() {
   const mediaReady = mode.value === 'recording' || props.livePageReady;
   const canStart = valid.value && props.ready && mediaReady && !props.pending && !props.active;
-  if (!canStart) return;
+
+  if (!canStart) {
+    return;
+  }
 
   emit('start', {
     mode: selectedMode.value,

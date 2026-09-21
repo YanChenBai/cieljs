@@ -21,6 +21,7 @@ import {
 // 这里只按调用方授权组装工具，参数协议和执行逻辑放在各领域模块。
 export function memoryTools(options: MemoryToolsOptions): AgentTool[] {
   const resolved = resolveToolOptions(options);
+
   const tools: AgentTool[] = [
     searchCurrentSpaceMemoryTool({ space: options.space, resolved }),
     searchCurrentSpaceMemoryBySourceTool({ space: options.space, resolved }),
@@ -81,6 +82,7 @@ export function memoryTools(options: MemoryToolsOptions): AgentTool[] {
 
 export function globalMemoryTools(options: GlobalMemoryToolsOptions): AgentTool[] {
   const resolved = resolveToolOptions(options);
+
   const tools: AgentTool[] = [
     searchGlobalMemoryTool({ memory: options.memory, resolved }),
     searchGlobalMemoryBySourceTool({ memory: options.memory, resolved }),

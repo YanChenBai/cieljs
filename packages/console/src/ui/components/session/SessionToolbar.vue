@@ -7,6 +7,7 @@ import { traceSessionLabel } from '../../utils/session-label.ts';
 const props = defineProps<{
   sessions: TraceSession[];
 }>();
+
 const sessionId = defineModel<string>('sessionId', { required: true });
 
 function selectedSessionLabel(value: unknown) {

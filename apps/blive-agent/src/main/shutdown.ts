@@ -27,6 +27,7 @@ export class ShutdownCoordinator {
 
   private async closeResources() {
     const results = await Promise.allSettled([...this.resources].map(close => close()));
+
     const failures = results
       .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
       .map(result => result.reason);

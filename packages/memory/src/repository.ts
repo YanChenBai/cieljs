@@ -43,12 +43,14 @@ export class MemoryRepository {
 
   getDate(at = new Date()): string {
     assertTimestamp(at);
+
     const parts = new Intl.DateTimeFormat('en', {
       timeZone: this.timeZone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     }).formatToParts(at);
+
     const part = (type: string) => parts.find(item => item.type === type)!.value;
 
     return `${part('year')}-${part('month')}-${part('day')}`;
@@ -76,6 +78,7 @@ export class MemoryRepository {
           updatedAt: createdAt,
         })
         .returning();
+
       const [revision] = await transaction
         .insert(memoryRevisions)
         .values({
@@ -118,6 +121,7 @@ export class MemoryRepository {
   ): Promise<MemoryEntry[]> {
     const limit = integerOption(options.limit ?? 50, 'limit');
     const offset = integerOption(options.offset ?? 0, 'offset', 0, Number.MAX_SAFE_INTEGER);
+
     const rows = await this.db
       .select({ memory: memories, revision: memoryRevisions })
       .from(memories)
@@ -148,8 +152,10 @@ export class MemoryRepository {
       this.assertMutable(current.memory, input.expectedRevision);
 
       const revisionNumber = current.memory.currentRevision + 1;
+
       const sources =
         input.sources === undefined ? current.revision.sources : normalizeSources(input.sources);
+
       const content = input.content ?? current.revision.content;
       const updatedAt = new Date();
 
@@ -268,6 +274,7 @@ export class MemoryRepository {
   async rebuildChunks(): Promise<void> {
     await this.db.transaction(async transaction => {
       await transaction.delete(memoryChunks);
+
       const rows = await transaction
         .select({ memory: memories, revision: memoryRevisions })
         .from(memories)
@@ -280,6 +287,7 @@ export class MemoryRepository {
         );
 
       const revisions = await transaction.select().from(memoryRevisions);
+
       for (const revision of revisions) {
         await transaction
           .update(memoryRevisions)
@@ -422,10 +430,21 @@ export class MemoryRepository {
       throw new MemoryValidationError('至少提供一个要更新的字段');
     }
 
-    if (input.content !== undefined) assertContent(input.content);
-    if (input.kind !== undefined) assertKind(input.kind);
-    if (input.expiresAt) assertTimestamp(input.expiresAt);
-    if (input.sources !== undefined) normalizeSources(input.sources);
+    if (input.content !== undefined) {
+      assertContent(input.content);
+    }
+
+    if (input.kind !== undefined) {
+      assertKind(input.kind);
+    }
+
+    if (input.expiresAt) {
+      assertTimestamp(input.expiresAt);
+    }
+
+    if (input.sources !== undefined) {
+      normalizeSources(input.sources);
+    }
   }
 
   private async replaceChunks(
@@ -450,6 +469,7 @@ export class MemoryRepository {
     }));
 
     await transaction.insert(memoryChunks).values(chunks);
+
     await this.embeddingIndex.addPending(
       transaction,
       chunks.map(chunk => chunk.id),

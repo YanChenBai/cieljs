@@ -8,13 +8,22 @@ export function traceSessionLabel(session: TraceSession) {
     minute: '2-digit',
     hour12: false,
   });
+
   const roomId = sourceValue(session.sources, 'bilibili:room:') ?? roomIdFromSessionId(session.id);
   const streamerName = decodeSource(sourceValue(session.sources, 'bilibili:streamer-name:'));
   const parts = [time];
 
-  if (roomId) parts.push(roomId);
-  if (streamerName) parts.push(streamerName);
-  if (session.title) parts.push(session.title);
+  if (roomId) {
+    parts.push(roomId);
+  }
+
+  if (streamerName) {
+    parts.push(streamerName);
+  }
+
+  if (session.title) {
+    parts.push(session.title);
+  }
 
   return parts.join('·');
 }
@@ -28,7 +37,9 @@ function roomIdFromSessionId(sessionId: string) {
 }
 
 function decodeSource(value: string | undefined) {
-  if (!value) return undefined;
+  if (!value) {
+    return undefined;
+  }
 
   try {
     return decodeURIComponent(value);

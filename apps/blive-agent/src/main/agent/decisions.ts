@@ -27,7 +27,10 @@ export async function readRoomDecision(
   signal: AbortSignal,
 ): Promise<RoomDecision | undefined> {
   const answer = agent.state.messages.findLast(message => message.role === 'assistant');
-  if (!answer) return;
+
+  if (!answer) {
+    return;
+  }
 
   try {
     return parseDecision(messageText(answer), RoomDecisionSchema);
@@ -36,6 +39,7 @@ export async function readRoomDecision(
     const tools = agent.state.tools;
     // 纠正只补充本轮决策，不能再次发送弹幕或执行其他副作用。
     agent.state.tools = [];
+
     try {
       await agent.prompt(`上一条房间决策未通过校验：${String(error)}
 请仅依据本轮已有观察与工具结果重新输出一个完整 JSON，不调用工具，不重复互动，不编造证据。
@@ -44,9 +48,14 @@ JSON Schema：${JSON.stringify(RoomDecisionSchema)}`);
     } finally {
       agent.state.tools = tools;
     }
+
     signal.throwIfAborted();
     const corrected = agent.state.messages.findLast(message => message.role === 'assistant');
-    if (!corrected || corrected === answer) throw error;
+
+    if (!corrected || corrected === answer) {
+      throw error;
+    }
+
     return parseDecision(messageText(corrected), RoomDecisionSchema);
   }
 }
@@ -54,9 +63,14 @@ JSON Schema：${JSON.stringify(RoomDecisionSchema)}`);
 export function parseDecision<T extends TSchema>(text: string, schema: T): Static<T> {
   const normalized = text.trim();
   const blocks = [...normalized.matchAll(/```(?:json)?\s*\n?([\s\S]*?)```/giu)];
-  if (blocks.length > 1) throw new Error('Agent 输出包含多个决策 JSON，无法确定最终选择');
+
+  if (blocks.length > 1) {
+    throw new Error('Agent 输出包含多个决策 JSON，无法确定最终选择');
+  }
+
   const content = blocks.length === 1 ? blocks[0]![1]!.trim() : decisionObject(normalized);
   let value: unknown;
+
   try {
     value = JSON.parse(content);
   } catch (error) {
@@ -66,12 +80,16 @@ export function parseDecision<T extends TSchema>(text: string, schema: T): Stati
   if (!Value.Check(schema, value)) {
     throw new Error(`Agent 决策字段校验失败：${JSON.stringify(Value.Errors(schema, value))}`);
   }
+
   return value;
 }
 
 /** 允许分析文字后的裸 JSON；按字符串和括号边界提取，不能贪婪拼接多个选择。 */
+// oxlint-disable-next-line eslint/complexity -- JSON 边界扫描必须显式处理引号、转义和括号状态。
 function decisionObject(text: string) {
-  if (text.startsWith('{')) return text;
+  if (text.startsWith('{')) {
+    return text;
+  }
 
   const objects: string[] = [];
   let start = -1;
@@ -81,27 +99,53 @@ function decisionObject(text: string) {
 
   for (let index = 0; index < text.length; index++) {
     const character = text[index];
+
     if (start < 0) {
-      if (character !== '{') continue;
+      if (character !== '{') {
+        continue;
+      }
+
       start = index;
     }
+
     if (quoted) {
-      if (escaped) escaped = false;
-      else if (character === '\\') escaped = true;
-      else if (character === '"') quoted = false;
+      if (escaped) {
+        escaped = false;
+      } else if (character === '\\') {
+        escaped = true;
+      } else if (character === '"') {
+        quoted = false;
+      }
+
       continue;
     }
-    if (character === '"') quoted = true;
-    if (character === '{') depth++;
-    if (character !== '}') continue;
+
+    if (character === '"') {
+      quoted = true;
+    }
+
+    if (character === '{') {
+      depth++;
+    }
+
+    if (character !== '}') {
+      continue;
+    }
+
     depth--;
-    if (depth !== 0) continue;
+
+    if (depth !== 0) {
+      continue;
+    }
 
     objects.push(text.slice(start, index + 1));
     start = -1;
   }
 
-  if (objects.length > 1) throw new Error('Agent 输出包含多个决策 JSON，无法确定最终选择');
+  if (objects.length > 1) {
+    throw new Error('Agent 输出包含多个决策 JSON，无法确定最终选择');
+  }
+
   return objects.length === 1 && start < 0 ? objects[0]! : text;
 }
 

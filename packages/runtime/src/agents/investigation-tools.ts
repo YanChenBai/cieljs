@@ -15,6 +15,7 @@ import {
 /** 调查写权限只作用于宿主指定目标；跨空间始终只是检索能力。 */
 export function createInvestigationTools(options: InvestigationToolOptions): AgentTool[] {
   const context = createInvestigationToolContext(options);
+
   const tools: AgentTool[] = [
     createSearchMemoryTool(context),
     createReadMemoryTool(context),
@@ -22,7 +23,9 @@ export function createInvestigationTools(options: InvestigationToolOptions): Age
     createReadSessionTool(context),
     createReadTargetSessionTool(context),
   ];
+
   const canWrite = options.memoryAccess === 'read-write';
+
   const sources = () => [
     `investigation:${options.investigationSessionId}`,
     ...options.resolveSources(),
