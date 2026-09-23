@@ -8,6 +8,7 @@ export function useInvestigationSidebar() {
   const width = shallowRef(216);
   const viewportWidth = shallowRef(window.innerWidth);
   const dragging = shallowRef(false);
+
   const maxWidth = computed(() =>
     Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, viewportWidth.value - RESERVED_WIDTH)),
   );
@@ -22,7 +23,9 @@ export function useInvestigationSidebar() {
   }
 
   function startDrag(event: PointerEvent) {
-    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return;
+    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) {
+      return;
+    }
 
     event.currentTarget.setPointerCapture(event.pointerId);
     dragging.value = true;
@@ -30,7 +33,9 @@ export function useInvestigationSidebar() {
   }
 
   function moveDrag(event: PointerEvent) {
-    if (dragging.value) resize(event.clientX);
+    if (dragging.value) {
+      resize(event.clientX);
+    }
   }
 
   function endDrag() {
@@ -38,11 +43,17 @@ export function useInvestigationSidebar() {
   }
 
   function keyboardResize(event: KeyboardEvent) {
-    if (event.key === 'ArrowLeft') resize(width.value - 16);
-    else if (event.key === 'ArrowRight') resize(width.value + 16);
-    else if (event.key === 'Home') resize(MIN_WIDTH);
-    else if (event.key === 'End') resize(maxWidth.value);
-    else return;
+    if (event.key === 'ArrowLeft') {
+      resize(width.value - 16);
+    } else if (event.key === 'ArrowRight') {
+      resize(width.value + 16);
+    } else if (event.key === 'Home') {
+      resize(MIN_WIDTH);
+    } else if (event.key === 'End') {
+      resize(maxWidth.value);
+    } else {
+      return;
+    }
 
     event.preventDefault();
   }
@@ -51,6 +62,7 @@ export function useInvestigationSidebar() {
     updateViewport();
     window.addEventListener('resize', updateViewport);
   });
+
   onUnmounted(() => window.removeEventListener('resize', updateViewport));
 
   return {

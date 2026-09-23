@@ -16,44 +16,69 @@ export const vFollowScroll: ObjectDirective<HTMLElement> = {
     let atBottom = true;
     /** 用户是否主动滚离过底部；在那之前即使宿主关掉 autoScroll 也要保持贴底。 */
     let everDetached = false;
+
     const near = () => {
       // 面板不可见时几何量都是 0，保持原状态，否则会被误判成「已滚离底部」。
-      if (element.clientHeight === 0) return atBottom;
+      if (element.clientHeight === 0) {
+        return atBottom;
+      }
+
       return element.scrollHeight - element.scrollTop - element.clientHeight <= NEAR_BOTTOM;
     };
+
     const follow = () => {
-      if (!atBottom) return;
+      if (!atBottom) {
+        return;
+      }
+
       // autoScroll 只在用户已经自己翻过之后才生效，否则首次进入会停在顶部。
-      if (!enabled.get(element) && everDetached) return;
+      if (!enabled.get(element) && everDetached) {
+        return;
+      }
+
       element.scrollTop = element.scrollHeight;
     };
+
     // 程序化吸底自身也会触发 scroll，重新判定后仍是「在底部」，不会自锁。
     const onScroll = () => {
       const next = near();
-      if (next === atBottom) return;
+
+      if (next === atBottom) {
+        return;
+      }
+
       atBottom = next;
-      if (!atBottom) everDetached = true;
+
+      if (!atBottom) {
+        everDetached = true;
+      }
+
       element.toggleAttribute('data-detached', !atBottom);
     };
+
     const observer = new MutationObserver(follow);
+
     observer.observe(element, {
       subtree: true,
       childList: true,
       characterData: true,
       attributes: true,
     });
+
     // 分栏尺寸变化（拖宽/拉高）时继续吸底。
     const resizeObserver = new ResizeObserver(follow);
     resizeObserver.observe(element);
     element.addEventListener('scroll', onScroll, { passive: true });
     // 图片加载会改变内容高度，此时只有仍贴着底部才需要跟随。
     element.addEventListener('load', follow, true);
+
     cleanups.set(element, () => {
       observer.disconnect();
       resizeObserver.disconnect();
       element.removeEventListener('scroll', onScroll);
       element.removeEventListener('load', follow, true);
     });
+
     // 挂载时视为贴着底部：清掉可能由复用节点留下的属性。
     element.toggleAttribute('data-detached', false);
     follow();

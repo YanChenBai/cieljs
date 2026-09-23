@@ -5,8 +5,10 @@ import { join } from 'node:path';
 import { expect, it } from 'vite-plus/test';
 
 import { copyMissingResources } from './resources.ts';
+
 it('目标 models 已存在时补齐资源，重复迁移不覆盖文件', async () => {
   const root = await mkdtemp(join(tmpdir(), 'ciel-migration-'));
+
   try {
     const source = join(root, 'old/models');
     const target = join(root, '.ciel/models');

@@ -20,11 +20,13 @@ test('关闭等待索引刷新，刷新失败向调用者报告且数据库仍�
   const manager = await MemoryManager.open({ storage });
   const failure = new Error('flush');
   const spy = vi.spyOn(VectorIndex.prototype, 'flush').mockRejectedValueOnce(failure);
+
   try {
     await expect(manager.close()).rejects.toBe(failure);
   } finally {
     spy.mockRestore();
   }
+
   const another = await MemoryManager.open({ storage });
   await another.close();
 });

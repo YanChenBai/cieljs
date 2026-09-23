@@ -25,27 +25,42 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
 
   if (values.help) {
     printHelp();
+
     return;
   }
 
   const output = values.output;
-  if (!output) fail('--output is required');
+
+  if (!output) {
+    fail('--output is required');
+  }
+
   const modelsPath = values['models-path'];
-  if (!modelsPath) fail('--models-path is required');
-  if (positionals.length === 0) fail('at least one WAV sample is required');
+
+  if (!modelsPath) {
+    fail('--models-path is required');
+  }
+
+  if (positionals.length === 0) {
+    fail('at least one WAV sample is required');
+  }
+
   await Promise.all(positionals.map(file => access(file)));
 
   const stop = loading('Creating voiceprint');
+
   let result: {
     dimensions: number;
     output: string;
     samples: number;
     type: 'voiceprint';
   };
+
   try {
     const extractor = new SpeakerEmbeddingExtractor(createAudioConfig(modelsPath).speaker);
     const embeddings = positionals.map(file => computeEmbedding(extractor, file));
     const target = writeVoiceprint(output, averageEmbeddings(embeddings));
+
     result = {
       type: 'voiceprint',
       output: target,
@@ -55,7 +70,8 @@ export async function createVoiceprint(args: readonly string[]): Promise<void> {
   } finally {
     stop();
   }
-  process.stdout.write(JSON.stringify(result) + '\n');
+
+  process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
 function computeEmbedding(
@@ -63,14 +79,18 @@ function computeEmbedding(
   file: string,
 ): Float32Array {
   const wave = readWave(file);
+
   if (wave.sampleRate !== SAMPLE_RATE) {
     throw new Error(`${file} must use a 16000 Hz sample rate`);
   }
+
   const stream = extractor.createStream();
   stream.acceptWaveform(wave);
+
   if (!extractor.isReady(stream)) {
     throw new Error(`${file} is too short to create a voiceprint`);
   }
+
   return extractor.compute(stream);
 }
 
@@ -81,6 +101,6 @@ function printHelp(): void {
 }
 
 function fail(message: string): never {
-  process.stderr.write(message + '\n');
+  process.stderr.write(`${message}\n`);
   process.exit(2);
 }

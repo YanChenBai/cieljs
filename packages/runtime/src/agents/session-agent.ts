@@ -60,10 +60,12 @@ export async function createRuntimeSessionAgent(options: {
   const sessionSpace = options.sessionManager.space(options.spaceId);
   const memorySpace = options.memoryManager.space(options.spaceId);
   const initialSources = options.resolveSources();
+
   const session = await sessionSpace.session({
     id: options.sessionId,
     sources: initialSources,
   });
+
   const messages = await session.context();
   let sessionInfo = await session.getInfo();
 
@@ -100,12 +102,12 @@ export async function createRuntimeSessionAgent(options: {
       sources: () => [`session:${session.id}`, ...options.resolveSources()],
     }),
   ];
+
   assertUniqueTools(tools);
 
   const summarize = createSessionSummarizer(options.model, options.apiKey);
 
   let isClosed = false;
-  let agent: ManagedAgent;
 
   // 自动路径每次运行前检查一次；手动路径忽略阈值，但同样只改模型可见的上下文，
   // Agent 转录必须同步为压缩后的结果。
@@ -128,10 +130,11 @@ export async function createRuntimeSessionAgent(options: {
   // 等当前运行结束再改转录，避免中途替换正在使用的消息。
   const compactContext = async () => {
     await agent.waitForIdle();
+
     return compactSession(true);
   };
 
-  agent = new ManagedAgent({
+  const agent = new ManagedAgent({
     sessionId: session.id,
     streamFn: (model, context, streamOptions) =>
       streamSimple(model, context, { ...streamOptions, apiKey: options.apiKey }),

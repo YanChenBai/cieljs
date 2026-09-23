@@ -31,6 +31,7 @@ export class SenseVoiceRecognizer {
     const stream = this.runtime.createStream();
     stream.acceptWaveform({ samples, sampleRate: SAMPLE_RATE });
     this.runtime.decode(stream);
+
     return parseSenseVoiceResult(this.runtime.getResult(stream));
   }
 }
@@ -39,14 +40,18 @@ export function parseSenseVoiceResult(
   result: Pick<OfflineRecognizerResult, 'text' | 'lang' | 'emotion' | 'event'>,
 ) {
   const tags = [...result.text.matchAll(/<\|([^|]+)\|>/gu)].map(match => match[1]!);
+
   const language =
     normalizeTag(result.lang) || tags.find(tag => /^(zh|en|ja|ko|yue|nospeech)$/u.test(tag));
+
   const emotion =
     normalizeTag(result.emotion) ||
     tags
       .find(tag => /^(NEUTRAL|HAPPY|SAD|ANGRY|FEARFUL|DISGUSTED|SURPRISED|EMO_UNKNOWN)$/u.test(tag))
       ?.toLowerCase();
+
   const event = normalizeTag(result.event);
+
   const events = event
     ? [event]
     : tags

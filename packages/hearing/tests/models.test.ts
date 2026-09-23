@@ -12,17 +12,22 @@ describe('createAudioConfig', () => {
       maxNewTokens: 64,
       maxTotalLen: 512,
     });
+
     expect(createQwen3Config('/models').modelConfig?.qwen3Asr?.convFrontend).toMatch(
       /conv_frontend\.onnx$/,
     );
+
     expect(createQwen3Config('/models').modelConfig?.qwen3Asr?.encoder).toMatch(
       /encoder\.int8\.onnx$/,
     );
+
     expect(createQwen3Config('/models').modelConfig?.qwen3Asr?.decoder).toMatch(
       /decoder\.int8\.onnx$/,
     );
+
     expect(createQwen3Config('/models').modelConfig?.qwen3Asr?.tokenizer).toMatch(/tokenizer$/);
     expect(config.vad.sileroVad).toBeUndefined();
+
     expect(config.vad.tenVad).toMatchObject({
       threshold: 0.25,
       minSilenceDuration: 0.5,
@@ -30,6 +35,7 @@ describe('createAudioConfig', () => {
       windowSize: 256,
       maxSpeechDuration: 10,
     });
+
     expect(config.vad.tenVad?.model).toMatch(/ten-vad\.int8\.onnx$/);
   });
 

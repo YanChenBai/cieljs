@@ -32,6 +32,7 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
   constructor(private readonly db: Database) {}
 
   /** 同一事件对象可由多个观察器提交，但只持久化一次。投影在同一事务内提交。 */
+  // oxlint-disable-next-line eslint/complexity -- 追加事实需同时处理去重、序列化、事务投影和并发复用。
   record(
     sessionId: string,
     event: RuntimeEvent,
@@ -41,7 +42,9 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
     if (this.closed) {
       return Promise.reject(new Error('RuntimeJournal 已关闭'));
     }
+
     const previous = this.seen.get(event)?.get(sessionId);
+
     if (previous) {
       if (!project) {
         return previous;
@@ -49,32 +52,43 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
 
       return previous.then(async record => {
         await this.db.transaction(transaction => project(transaction, record));
+
         return record;
       });
     }
+
     const state = this.states.get(sessionId) ?? {
       runId: randomUUID(),
       calls: new Map<string, string>(),
     };
+
     this.states.set(sessionId, state);
+
     if (event.type === 'agent_start') {
       state.runId = randomUUID();
       state.turnId = undefined;
       state.messageId = undefined;
       state.calls.clear();
     }
+
     if (event.type === 'turn_start') {
       state.turnId = randomUUID();
     }
-    if (event.type === 'message_start' || (event.type.startsWith('message_') && !state.messageId))
+
+    if (event.type === 'message_start' || (event.type.startsWith('message_') && !state.messageId)) {
       state.messageId = randomUUID();
+    }
+
     if ('message' in event && event.message.role === 'assistant') {
       for (const block of event.message.content) {
-        if (block.type === 'toolCall' && state.messageId)
+        if (block.type === 'toolCall' && state.messageId) {
           state.calls.set(block.id, state.messageId);
+        }
       }
     }
+
     let toolCallId: string | undefined;
+
     if ('toolCallId' in event) {
       toolCallId = event.toolCallId;
     } else if ('message' in event && event.message.role === 'toolResult') {
@@ -82,13 +96,16 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
     }
 
     let messageId: string | undefined;
+
     if (event.type.startsWith('message_')) {
       messageId = state.messageId;
     } else if (toolCallId) {
       messageId = state.calls.get(toolCallId);
     }
+
     // 事件中的 message 在流式生成时会被原地修改，入队前固定快照。
     const snapshot = structuredClone(event);
+
     const record: RuntimeRecord = {
       version: 1,
       id: randomUUID(),
@@ -112,14 +129,17 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
         })),
       },
     };
+
     if (event.type === 'message_end') {
       state.messageId = undefined;
     }
+
     const operation = this.pending.then(async () => {
       await this.db.transaction(async tx => {
         const result = await tx.execute<{ sequence: number | string }>(sql`
           SELECT nextval(pg_get_serial_sequence('storage.events', 'sequence')) AS sequence
         `);
+
         record.sequence = Number(result.rows[0]!.sequence);
 
         if (!record.transient) {
@@ -129,21 +149,30 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
                 VALUES (${record.id}, ${record.sequence}, ${sessionId}, ${messageId ?? null}, ${JSON.stringify(record)}::jsonb)`,
           );
         }
+
         await project?.(tx, record);
       });
+
       this.updateTransientRecords(record);
-      for (const listener of this.listeners) listener();
+
+      for (const listener of this.listeners) {
+        listener();
+      }
+
       return record;
     });
+
     this.pending = operation.then(
       () => {},
       error => {
         this.failure = error;
       },
     );
+
     const entries = this.seen.get(event) ?? new Map<string, Promise<RuntimeRecord>>();
     entries.set(sessionId, operation);
     this.seen.set(event, entries);
+
     return operation;
   }
 
@@ -154,9 +183,13 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
       .where(gt(runtimeRecords.sequence, after))
       .orderBy(asc(runtimeRecords.sequence))
       .limit(limit);
+
     const records = rows.map(row => row.record);
+
     for (const record of this.transientRecords.values()) {
-      if (record.sequence > after) records.push(record);
+      if (record.sequence > after) {
+        records.push(record);
+      }
     }
 
     return records.toSorted((left, right) => left.sequence - right.sequence).slice(0, limit);
@@ -164,6 +197,7 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
 
   subscribe(listener: () => void) {
     this.listeners.add(listener);
+
     return () => {
       this.listeners.delete(listener);
     };
@@ -171,10 +205,12 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
 
   async flush() {
     let pending: Promise<void>;
+
     do {
       pending = this.pending;
       await pending;
     } while (pending !== this.pending);
+
     if (this.failure) {
       const error = this.failure;
       this.failure = undefined;
@@ -192,10 +228,16 @@ export class RuntimeJournal implements RuntimeReader, RuntimeWriter {
 
   private updateTransientRecords(record: RuntimeRecord) {
     const key = transientKey(record);
-    if (!key) return;
+
+    if (!key) {
+      return;
+    }
 
     const previousSequence = this.transientSequences.get(key);
-    if (previousSequence !== undefined) this.transientRecords.delete(previousSequence);
+
+    if (previousSequence !== undefined) {
+      this.transientRecords.delete(previousSequence);
+    }
 
     if (record.transient) {
       this.transientSequences.set(key, record.sequence);

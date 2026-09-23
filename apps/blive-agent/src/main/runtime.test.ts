@@ -38,18 +38,23 @@ const mocks = vi.hoisted(() => ({
   kwsClose: vi.fn(),
   kwsWrite: vi.fn(),
 }));
+
 vi.mock('@cieljs/hearing', () => ({ createKWS: mocks.createKWS }));
+
 vi.mock('cieljs', () => ({
   defineCiel: (options: DefineCielOptions) => {
     mocks.defineCiel(options);
+
     return mocks;
   },
 }));
+
 vi.mock('@cieljs/perception', () => ({ createPerception: vi.fn() }));
 vi.mock('./config.ts', () => ({ watchDataDirectory: () => '/blive-agent-test' }));
 vi.mock('./voiceprints.ts', () => ({ loadVoiceprints: vi.fn(() => []) }));
 vi.mock('./bilibili/api.ts', () => ({ BilibiliApi: class {} }));
 vi.mock('./bilibili/live-page.ts', () => ({ LivePage: class {} }));
+
 vi.mock('./media/live-media.ts', () => ({
   LiveMedia: class {
     get endAt() {
@@ -73,6 +78,7 @@ const room = {
   areaName: '聊天',
   live: true,
 };
+
 let runtime: BliveAgent;
 let faux: ReturnType<typeof registerFauxProvider>;
 
@@ -87,11 +93,13 @@ function setup(
   const prompt = vi.fn().mockResolvedValue(undefined);
   const compact = vi.fn().mockResolvedValue(true);
   mocks.kwsOn.mockImplementation(() => vi.fn());
+
   mocks.createKWS.mockResolvedValue({
     on: mocks.kwsOn,
     close: mocks.kwsClose,
     write: mocks.kwsWrite,
   });
+
   mocks.session.mockImplementation(async (options: OpenSessionOptions) => ({
     id: options.sessionId,
     spaceId: options.spaceId,
@@ -99,15 +107,18 @@ function setup(
     compact,
     close: sessionClose,
   }));
+
   const perceptionClose = vi.fn().mockResolvedValue(undefined);
   const setModel = vi.fn().mockResolvedValue(undefined);
   const asrOn = vi.fn(() => vi.fn());
+
   const perception = {
     asr: { on: asrOn, setModel },
     close: perceptionClose,
     on: vi.fn(() => vi.fn()),
     snapshot: vi.fn().mockResolvedValue({ compose: async () => [] }),
   } as unknown as Perception;
+
   const page = {
     liveStatus: vi.fn().mockResolvedValue('live'),
     account: vi.fn<() => Promise<Account | undefined>>().mockResolvedValue(undefined),
@@ -116,6 +127,7 @@ function setup(
     readiness: vi.fn().mockResolvedValue({ ready: true, roomId: room.roomId }),
     sendDanmaku: vi.fn().mockResolvedValue({ accepted: true }),
   };
+
   const api = {
     roomByStreamer: vi.fn().mockResolvedValue(room),
     playUrl: vi.fn().mockResolvedValue('https://example.com/live'),
@@ -124,10 +136,13 @@ function setup(
     streamerDynamics: vi.fn().mockResolvedValue([]),
     streamerVideos: vi.fn().mockResolvedValue([]),
   };
+
   vi.mocked(createPerception).mockImplementation(options => {
     mocks.perceptionOptions.push(options!);
+
     return perception;
   });
+
   runtime = createBliveAgent({
     dataDir: 'C:\\blive-agent',
     trace,
@@ -139,6 +154,7 @@ function setup(
     perception: perceptionOptions,
     thinkingLevel,
   });
+
   return { page, api, sessionClose, perceptionClose, setModel, asrOn, prompt, compact };
 }
 
@@ -156,9 +172,11 @@ describe('直播关键词唤醒', () => {
     receiveWake()({ keyword: '夏尔', at: new Date() });
     receiveWake()({ keyword: '夏尔', at: new Date() });
     expect(page.sendDanmaku).not.toHaveBeenCalled();
+
     expect(events.filter(event => (event as { type: string }).type.startsWith('danmaku'))).toEqual(
       [],
     );
+
     expect(prompt).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(4000);
     expect(prompt).toHaveBeenCalledOnce();
@@ -179,14 +197,17 @@ describe('直播关键词唤醒', () => {
     await vi.advanceTimersByTimeAsync(4000);
     expect(page.sendDanmaku).not.toHaveBeenCalled();
     expect(prompt).toHaveBeenCalledOnce();
+
     const tool = mocks.defineCiel.mock.calls[0]![0].tools!.find(
       tool => tool.name === 'send_danmaku',
     )!;
+
     await tool.execute('reply', {
       action: 'send',
       content: '听到了，今天聊什么呀',
       reason: '回应呼唤',
     });
+
     expect(page.sendDanmaku).toHaveBeenCalledExactlyOnceWith('听到了，今天聊什么呀');
     // 15 秒冷却内的重复命中不重新思考，跨过冷却边界才排下一轮。
     receiveWake()({ keyword: '夏尔', at: new Date() });
@@ -214,9 +235,11 @@ describe('直播关键词唤醒', () => {
 
   it('录播不创建关键词检测器', async () => {
     setup(undefined, { keywords: ['夏尔'] });
+
     await runtime.start({
       mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
     });
+
     expect(mocks.createKWS).not.toHaveBeenCalled();
   });
 });
@@ -226,6 +249,7 @@ beforeEach(() => {
   mocks.mediaOptions.length = 0;
   mocks.perceptionOptions.length = 0;
 });
+
 afterEach(async () => {
   await runtime?.close();
   faux?.unregister();
@@ -255,30 +279,37 @@ describe('观看生命周期', () => {
     await runtime.start({ mode: { type: 'follow', roomId: 123 } });
     expect(api.streamerDynamics).not.toHaveBeenCalled();
     expect(api.streamerVideos).not.toHaveBeenCalled();
+
     expect(mocks.defineCiel.mock.calls[0]?.[0].tools?.map(tool => tool.name)).toEqual(
       expect.arrayContaining(['get_streamer_dynamics', 'get_streamer_videos']),
     );
   });
+
   it('视频对话保留无转写文本的声音事件', async () => {
     const recordMessage = vi.fn();
     const { asrOn } = setup({ observe: vi.fn(), recordMessage } as unknown as TraceHost);
+
     await runtime.start({
       mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
     });
+
     const calls = asrOn.mock.calls as unknown as [string, (result: ASRResult) => void][];
     const receive = calls.find(([event]) => event === 'result')![1];
+
     receive({
       content: '',
       events: [{ type: 'applause' }],
       startAt: new Date(),
       endAt: new Date(),
     });
+
     expect(recordMessage).toHaveBeenCalledWith(
       expect.stringContaining('视频语音'),
       '声音事件（模型识别）：applause',
       expect.any(String),
     );
   });
+
   it('直播 ASR 结果作为字幕事件发送，空转写不显示', async () => {
     const { asrOn } = setup();
     const events: unknown[] = [];
@@ -294,6 +325,7 @@ describe('观看生命周期', () => {
       { type: 'asr_subtitle', content: '大家晚上好' },
     ]);
   });
+
   it('观看时切换听觉模型沿用当前感知实例', async () => {
     const { setModel, perceptionClose } = setup();
     await runtime.start({ mode: { type: 'follow', roomId: 123 } });
@@ -302,61 +334,79 @@ describe('观看生命周期', () => {
     expect(perceptionClose).not.toHaveBeenCalled();
     expect(runtime.status).toBe('watching');
   });
+
   it('直播感知使用宿主的听觉转写提示词', async () => {
     setup();
     await runtime.start({ mode: { type: 'follow', roomId: 123 } });
     expect(mocks.perceptionOptions.at(-1)?.context).toBe(createPerceptionContext);
   });
+
   it.each(['follow', 'recording'] as const)(
     '%s 合并声纹和 ASR 配置，下一次观看重新扫描',
     async type => {
       setup(undefined, undefined, { asr: { model: 'sensevoice-small', bufferSeconds: 30 } });
+
       vi.mocked(loadVoiceprints).mockReturnValue([
         { name: '弥生', file: '/voices/弥生.voiceprint' },
       ]);
+
       const mode =
         type === 'follow'
           ? { type, roomId: 123 }
           : { type, roomId: 123, source: { type: 'file' as const, path: '/video.mp4' } };
+
       await runtime.start({ mode });
+
       expect(mocks.perceptionOptions.at(-1)?.asr).toEqual({
         model: 'sensevoice-small',
         bufferSeconds: 30,
         modelsPath: 'C:\\blive-agent\\models',
         speaker: [{ name: '弥生', file: '/voices/弥生.voiceprint' }],
       });
+
       await runtime.stop();
+
       vi.mocked(loadVoiceprints).mockReturnValue([
         { name: '夏尔', file: '/voices/夏尔.voiceprint' },
       ]);
+
       await runtime.start({ mode });
+
       expect(mocks.perceptionOptions.at(-1)?.asr?.speaker).toEqual([
         { name: '夏尔', file: '/voices/夏尔.voiceprint' },
       ]);
+
       expect(loadVoiceprints).toHaveBeenCalledTimes(2);
     },
   );
+
   it('录播感知使用宿主的听觉转写提示词', async () => {
     setup();
+
     await runtime.start({
       mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
     });
+
     expect(mocks.perceptionOptions.at(-1)?.context).toBe(createPerceptionContext);
   });
+
   it('中途停止视频先等待识别、只生成一次部分总结，再关闭会话', async () => {
     const { perceptionClose, sessionClose } = setup();
     const recognition = Promise.withResolvers<void>();
     perceptionClose.mockReturnValue(recognition.promise);
     const prompt = vi.fn().mockResolvedValue(undefined);
     const abort = vi.fn();
+
     mocks.session.mockResolvedValue({
       id: 'video',
       agent: { abort, prompt, state: { messages: [] } },
       close: sessionClose,
     });
+
     await runtime.start({
       mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
     });
+
     const stopping = runtime.stop();
     const repeated = runtime.stop();
     expect(repeated).toBe(stopping);
@@ -378,44 +428,55 @@ describe('观看生命周期', () => {
   it('关闭应用取消视频处理，不触发部分总结', async () => {
     setup();
     const prompt = vi.fn();
+
     mocks.session.mockResolvedValue({
       id: 'video',
       agent: { abort: vi.fn(), prompt, state: { messages: [] } },
       close: vi.fn(),
     });
+
     await runtime.start({
       mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
     });
+
     await runtime.close();
     expect(prompt).not.toHaveBeenCalled();
     expect(runtime.status).toBe('closed');
   });
+
   it('视频先完成感知预处理，结束后只提交一次完整输入', async () => {
     vi.useFakeTimers();
     const { perceptionClose } = setup();
     const prompt = vi.fn().mockResolvedValue(undefined);
+
     mocks.session.mockResolvedValue({
       id: 'video',
       agent: { abort: vi.fn(), prompt, state: { messages: [] } },
       close: vi.fn(),
     });
+
     const events: unknown[] = [];
     runtime.onEvent(event => events.push(event));
+
     await runtime.start({
       mode: { type: 'recording', roomId: 123, source: { type: 'file', path: '/video.mp4' } },
     });
+
     await vi.advanceTimersByTimeAsync(90_000);
     expect(prompt).not.toHaveBeenCalled();
     mocks.mediaOptions[0]!.onStopped?.();
     await vi.advanceTimersByTimeAsync(0);
     expect(prompt).toHaveBeenCalledOnce();
+
     expect(perceptionClose.mock.invocationCallOrder[0]).toBeLessThan(
       prompt.mock.invocationCallOrder[0]!,
     );
+
     expect(events).toContainEqual({ type: 'video_progress', stage: 'recognizing' });
     expect(events).toContainEqual({ type: 'video_progress', stage: 'analyzing' });
     expect(runtime.status).toBe('idle');
   });
+
   it('停止期间返回的房间查询不能重新导航或打开 Session', async () => {
     const { api, page } = setup();
     const query = Promise.withResolvers<typeof room>();
@@ -443,19 +504,24 @@ describe('观看生命周期', () => {
     await runtime.start({ mode: { type: 'follow', roomId: 456 } });
 
     expect(mocks.session.mock.calls[0][0].spaceId).toBe('bilibili:room:123');
+
     expect(mocks.session.mock.calls[1][0]).toMatchObject({
       spaceId: 'bilibili:room:789',
       crossSpace: true,
     });
+
     expect(mocks.session.mock.calls[1][0].sessionId).toMatch(
       /^bilibili:room:789:\d{4}-\d{2}-\d{2}$/,
     );
+
     expect(sessionClose.mock.invocationCallOrder[0]).toBeLessThan(
       page.open.mock.invocationCallOrder[1],
     );
+
     expect(perceptionClose).toHaveBeenCalledTimes(1);
     // 渲染进程靠 room_opened 携带的 Session 身份跟随切换后的房间。
     const opened = events.filter(event => (event as { type: string }).type === 'room_opened');
+
     expect(opened.at(-1)).toEqual({
       type: 'room_opened',
       room: expect.objectContaining({ roomId: 789 }),
@@ -466,9 +532,11 @@ describe('观看生命周期', () => {
   it('流地址失败会释放已经打开的 Session 与感知', async () => {
     const { api, sessionClose, perceptionClose } = setup();
     api.playUrl.mockRejectedValue(new Error('播放地址失败'));
+
     await expect(runtime.start({ mode: { type: 'follow', roomId: 456 } })).rejects.toThrow(
       '播放地址失败',
     );
+
     expect(sessionClose).toHaveBeenCalledTimes(1);
     expect(perceptionClose).toHaveBeenCalledTimes(1);
     expect(runtime.room).toBeUndefined();
@@ -482,22 +550,27 @@ describe('观看生命周期', () => {
     const starting = runtime.start({ mode: { type: 'explore', areaId: 1 } });
     const rejected = starting.catch(error => error);
     await vi.waitFor(() => expect(mocks.investigate).toHaveBeenCalled());
+
     expect(mocks.investigate.mock.calls[0][0]).toMatchObject({
       target: { type: 'global' },
       crossSpace: true,
     });
+
     const stopping = runtime.stop();
     expect(mocks.investigate.mock.calls[0][0].signal.aborted).toBe(true);
+
     investigation.resolve({
       answer: {
         role: 'assistant',
         content: [{ type: 'text', text: '{"roomId":123,"reason":"聊天"}' }],
       },
     });
+
     expect(await rejected).toBeInstanceOf(Error);
     await stopping;
     expect(page.open).not.toHaveBeenCalled();
   });
+
   it('录播复用房间 Space，但使用独立日期 Session 且不打开直播页面', async () => {
     const { page } = setup();
 
@@ -511,20 +584,24 @@ describe('观看生命周期', () => {
     });
 
     expect(page.open).not.toHaveBeenCalled();
+
     expect(mocks.session).toHaveBeenCalledWith(
       expect.objectContaining({
         spaceId: 'bilibili:room:123',
         sessionId: 'bilibili:room:123:recording:2026-09-07',
       }),
     );
+
     expect(mocks.mediaOptions[0]).toMatchObject({
       input: 'C:\\Videos\\recording.mp4',
       live: false,
       roomId: 123,
     });
   });
+
   it('录播自然结束后生成最终总结再关闭访问', async () => {
     const { sessionClose } = setup();
+
     await runtime.start({
       mode: {
         type: 'recording',
@@ -532,24 +609,28 @@ describe('观看生命周期', () => {
         source: { type: 'url', url: 'https://example.com/recording.mp4' },
       },
     });
+
     const session = await mocks.session.mock.results[0]!.value;
 
     mocks.mediaOptions[0]!.onStopped?.();
 
     await vi.waitFor(() => expect(runtime.status).toBe('idle'));
-    expect(session.agent.prompt).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ content: expect.stringContaining('最终总结') }),
-      ]),
-    );
+
+    const summaryContent = expect.stringContaining('最终总结');
+    const summaryMessage = expect.objectContaining({ content: summaryContent });
+
+    expect(session.agent.prompt).toHaveBeenCalledWith(expect.arrayContaining([summaryMessage]));
+
     expect(session.agent.prompt.mock.invocationCallOrder[0]).toBeLessThan(
       sessionClose.mock.invocationCallOrder[0],
     );
   });
+
   it('录播异常退出只报告错误并释放资源，不生成最终总结', async () => {
     const { sessionClose, perceptionClose } = setup();
     const events: unknown[] = [];
     runtime.onEvent(event => events.push(event));
+
     await runtime.start({
       mode: {
         type: 'recording',
@@ -557,6 +638,7 @@ describe('观看生命周期', () => {
         source: { type: 'url', url: 'https://example.com/recording.mp4' },
       },
     });
+
     const session = await mocks.session.mock.results[0]!.value;
     const error = new Error('FFmpeg 解码失败');
 
@@ -571,23 +653,28 @@ describe('观看生命周期', () => {
     expect(mocks.mediaClose).toHaveBeenCalledOnce();
     expect(runtime.room).toBeUndefined();
   });
+
   it('连续低分会真正重新探索和开房，不在思考结束回调中死锁', async () => {
     vi.useFakeTimers();
     const { api, page, sessionClose } = setup();
     const secondRoom = { ...room, roomId: 789 };
     api.rooms.mockResolvedValueOnce([room]).mockResolvedValue([secondRoom]);
     api.room.mockImplementation(async (id: number) => (id === 123 ? room : secondRoom));
+
     page.readiness.mockImplementation(async () => ({
       ready: true,
       roomId: page.open.mock.lastCall![0],
     }));
+
     const answer = (id: number) => ({
       answer: {
         role: 'assistant',
         content: [{ type: 'text', text: JSON.stringify({ roomId: id, reason: '看看新内容' }) }],
       },
     });
+
     mocks.investigate.mockResolvedValueOnce(answer(123)).mockResolvedValue(answer(789));
+
     mocks.session.mockImplementation(async (options: OpenSessionOptions) => ({
       id: options.sessionId,
       spaceId: options.spaceId,
@@ -617,31 +704,38 @@ describe('观看生命周期', () => {
         },
       },
     }));
+
     await runtime.start({ mode: { type: 'explore', areaId: 1 } });
     await vi.advanceTimersByTimeAsync(90_001);
     expect(api.rooms).toHaveBeenCalledTimes(2);
     expect(runtime.room?.roomId).toBe(789);
+
     expect(sessionClose.mock.invocationCallOrder[0]).toBeLessThan(
       page.open.mock.invocationCallOrder[1],
     );
+
     expect(mocks.session.mock.calls[1][0].spaceId).toBe('bilibili:room:789');
   });
+
   it('切房时选房失败只报错，保留当前房间继续观看', async () => {
     vi.useFakeTimers();
     const { api, page, sessionClose } = setup();
     const secondRoom = { ...room, roomId: 789 };
     api.rooms.mockResolvedValueOnce([room]).mockResolvedValue([secondRoom]);
     api.room.mockImplementation(async (id: number) => (id === 123 ? room : secondRoom));
+
     page.readiness.mockImplementation(async () => ({
       ready: true,
       roomId: page.open.mock.lastCall![0],
     }));
+
     mocks.investigate.mockResolvedValueOnce({
       answer: {
         role: 'assistant',
         content: [{ type: 'text', text: JSON.stringify({ roomId: 123, reason: '看看新内容' }) }],
       },
     });
+
     // 第二轮选房给出不在候选里的房间，选房直接失败。
     mocks.investigate.mockResolvedValue({
       answer: {
@@ -649,6 +743,7 @@ describe('观看生命周期', () => {
         content: [{ type: 'text', text: JSON.stringify({ roomId: 999, reason: '换一个' }) }],
       },
     });
+
     mocks.session.mockImplementation(async (options: OpenSessionOptions) => ({
       id: options.sessionId,
       spaceId: options.spaceId,
@@ -678,6 +773,7 @@ describe('观看生命周期', () => {
         },
       },
     }));
+
     const events: { type: string; stage?: string }[] = [];
     runtime.onEvent(event => events.push(event as { type: string; stage?: string }));
 
@@ -692,23 +788,28 @@ describe('观看生命周期', () => {
     expect(page.open).toHaveBeenCalledOnce();
     expect(sessionClose).not.toHaveBeenCalled();
   });
+
   it('切房后的候选剔除刚离开的房间，并把上一段观看带进选房问题', async () => {
     vi.useFakeTimers();
     const { api, page } = setup();
     const secondRoom = { ...room, roomId: 789, streamerName: '二号主播' };
     api.rooms.mockResolvedValueOnce([room]).mockResolvedValue([room, secondRoom]);
     api.room.mockImplementation(async (id: number) => (id === 123 ? room : secondRoom));
+
     page.readiness.mockImplementation(async () => ({
       ready: true,
       roomId: page.open.mock.lastCall![0],
     }));
+
     const answer = (id: number) => ({
       answer: {
         role: 'assistant',
         content: [{ type: 'text', text: JSON.stringify({ roomId: id, reason: '看看新内容' }) }],
       },
     });
+
     mocks.investigate.mockResolvedValueOnce(answer(123)).mockResolvedValue(answer(789));
+
     mocks.session.mockImplementation(async (options: OpenSessionOptions) => ({
       id: options.sessionId,
       spaceId: options.spaceId,
@@ -752,16 +853,19 @@ describe('观看生命周期', () => {
     expect(candidates).toContain('"roomId":789');
     expect(candidates).not.toContain('"roomId":123');
   });
+
   it('决策校验失败只报错，不停止观看', async () => {
     vi.useFakeTimers();
     const { api, page, sessionClose } = setup();
     api.rooms.mockResolvedValue([room]);
+
     mocks.investigate.mockResolvedValue({
       answer: {
         role: 'assistant',
         content: [{ type: 'text', text: JSON.stringify({ roomId: 123, reason: '看看新内容' }) }],
       },
     });
+
     mocks.session.mockImplementation(async (options: OpenSessionOptions) => ({
       id: options.sessionId,
       spaceId: options.spaceId,
@@ -775,6 +879,7 @@ describe('观看生命周期', () => {
         },
       },
     }));
+
     const events: unknown[] = [];
     runtime.onEvent(event => events.push(event));
 
@@ -836,23 +941,31 @@ it('探索模式确认下播后释放旧房间并重新选房', async () => {
   const { api, page, sessionClose } = setup();
   const secondRoom = { ...room, roomId: 789 };
   api.rooms.mockResolvedValueOnce([room]).mockResolvedValue([secondRoom]);
+
   api.room.mockResolvedValueOnce(room).mockImplementation(async (id: number) => {
-    if (id === 123) return { ...room, live: false };
+    if (id === 123) {
+      return { ...room, live: false };
+    }
+
     return secondRoom;
   });
+
   page.readiness.mockImplementation(async () => ({
     ready: true,
     roomId: page.open.mock.lastCall![0],
   }));
+
   page.liveStatus.mockImplementation(async () =>
     page.open.mock.lastCall![0] === 123 ? 'offline' : 'live',
   );
+
   const answer = (id: number) => ({
     answer: {
       role: 'assistant',
       content: [{ type: 'text', text: JSON.stringify({ roomId: id, reason: '下一间' }) }],
     },
   });
+
   mocks.investigate.mockResolvedValueOnce(answer(123)).mockResolvedValue(answer(789));
   await runtime.start({ mode: { type: 'explore', areaId: 1 } });
   await vi.advanceTimersByTimeAsync(0);

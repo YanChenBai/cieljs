@@ -5,6 +5,7 @@ import { findCompactionBoundary } from '../src/compaction.ts';
 import { estimateContextTokens, estimateAgentMessageTokens } from '../src/tokens.ts';
 
 const user = (content: string): AgentMessage => ({ role: 'user', content, timestamp: 1 });
+
 function assistant(totalTokens: number): Extract<AgentMessage, { role: 'assistant' }> {
   return {
     role: 'assistant',
@@ -42,6 +43,7 @@ describe('Pi 上下文 token 计算', () => {
 
   test('totalTokens 为零时汇总输入、输出和缓存，不重复叠加 reasoning', () => {
     const message = assistant(0);
+
     Object.assign(message.usage, {
       input: 10,
       output: 20,
@@ -49,6 +51,7 @@ describe('Pi 上下文 token 计算', () => {
       cacheWrite: 40,
       reasoning: 5,
     });
+
     expect(estimateContextTokens({ summary: null, messages: [message] }).tokens).toBe(100);
   });
 
@@ -57,6 +60,7 @@ describe('Pi 上下文 token 计算', () => {
     error.stopReason = 'error';
     const aborted = assistant(800);
     aborted.stopReason = 'aborted';
+
     expect(
       estimateContextTokens({
         summary: null,
@@ -92,11 +96,14 @@ describe('Pi 上下文 token 计算', () => {
         timestamp: 1,
       }),
     ).toBe(1202);
+
     const message = assistant(0);
+
     message.content = [
       { type: 'thinking', thinking: '12345678' },
       { type: 'toolCall', id: 'call', name: 'tool', arguments: { a: 1 } },
     ];
+
     expect(estimateAgentMessageTokens(message)).toBe(5);
   });
 
@@ -107,10 +114,12 @@ describe('Pi 上下文 token 计算', () => {
       keepRecentMessages: 1,
       summarize: async () => '摘要',
     };
+
     const context = { summary: null, messages: [user('a'.repeat(316)), user('abcd')] };
     expect(findCompactionBoundary(context, options)).toBe(0);
     context.messages[0] = user('a'.repeat(320));
     expect(findCompactionBoundary(context, options)).toBe(1);
+
     expect(
       findCompactionBoundary(
         { summary: null, messages: Array.from({ length: 50 }, () => user('a')) },
@@ -125,6 +134,7 @@ describe('Pi 上下文 token 计算', () => {
     expect(findCompactionBoundary(context, options)).toBe(0);
     context.messages[1] = assistant(3617);
     expect(findCompactionBoundary(context, options)).toBe(2);
+
     expect(
       findCompactionBoundary(
         { summary: null, messages: [user('abcd'), assistant(90000)] },

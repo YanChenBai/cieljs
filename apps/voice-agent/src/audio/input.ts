@@ -64,6 +64,7 @@ class DecibriAudioInput implements AudioInput {
     } finally {
       options.signal?.removeEventListener('abort', onAbort);
       mic.stop();
+
       if (this.active === mic) {
         this.active = undefined;
       }

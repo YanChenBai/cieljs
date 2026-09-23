@@ -10,6 +10,7 @@ describe('SpeakerTracker', () => {
       Float32Array.of(0.99, 0.01),
       Float32Array.of(0, 1),
     ]);
+
     const tracker = new SpeakerTracker(extractor, [], 0.8, 4);
     const samples = new Float32Array(48_000);
 

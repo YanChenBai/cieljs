@@ -15,6 +15,7 @@ export function sessionTools(options: SessionToolsOptions): AgentTool[] {
   }
 
   const limits = resolveToolOptions(options);
+
   const tools: AgentTool[] = [
     createUpdateSessionTitleTool({
       session: options.session,
@@ -41,6 +42,7 @@ export function sessionTools(options: SessionToolsOptions): AgentTool[] {
   const manager = options.crossSpace?.manager;
   const finder = manager ?? options.space;
   const discovered = new Set<string>();
+
   const assertDiscovered = (sessionId: string) => {
     if (!discovered.has(sessionId)) {
       throw new SessionAccessError('请先通过 find_sessions_by_source 发现该 Session');
@@ -68,6 +70,7 @@ export function sessionTools(options: SessionToolsOptions): AgentTool[] {
         const session = manager
           ? await requireAnySession(manager, sessionId)
           : await requireSpaceSession(options.space, sessionId);
+
         return session.search(query, searchOptions);
       },
     }),

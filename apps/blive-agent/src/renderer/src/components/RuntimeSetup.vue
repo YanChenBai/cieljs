@@ -13,8 +13,14 @@ const props = defineProps<{
 }>();
 
 const downloadLabel = computed(() => {
-  if (props.models?.installing || props.pending === 'install-models') return '正在下载模型…';
-  if (props.models?.error) return '重试下载';
+  if (props.models?.installing || props.pending === 'install-models') {
+    return '正在下载模型…';
+  }
+
+  if (props.models?.error) {
+    return '重试下载';
+  }
+
   return '下载听觉模型';
 });
 
@@ -22,7 +28,10 @@ const emit = defineEmits<{ installModels: []; selectModel: [model: ASRModelId] }
 
 function selectModel(event: Event) {
   const value = (event.target as HTMLSelectElement).value;
-  if (value === 'qwen3-asr-1.7b-int8' || value === 'sensevoice-small') emit('selectModel', value);
+
+  if (value === 'qwen3-asr-1.7b-int8' || value === 'sensevoice-small') {
+    emit('selectModel', value);
+  }
 }
 </script>
 

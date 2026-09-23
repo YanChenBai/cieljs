@@ -46,22 +46,37 @@ export class TraceUsageTally {
 
   consume(record: RuntimeRecord) {
     const session = this.touch(record.sessionId, record.timestamp);
-    if (record.metadata.session?.title) session.title = record.metadata.session.title;
-    if (record.metadata.session?.sources) session.sources = [...record.metadata.session.sources];
+
+    if (record.metadata.session?.title) {
+      session.title = record.metadata.session.title;
+    }
+
+    if (record.metadata.session?.sources) {
+      session.sources = [...record.metadata.session.sources];
+    }
 
     if (record.event.type === 'session_compaction') {
       // 压缩换了上下文，保留消息里的旧 usage 不再代表当前规模；先用摘要加保留原文的
       // 估算顶上，等下一次真实请求再覆盖。缺估算的旧记录只能清空。
       const context = contextFromTokens(record.event.contextTokens);
       session.context = context;
-      if (this.contextSessionId === record.sessionId) this.context = context;
+
+      if (this.contextSessionId === record.sessionId) {
+        this.context = context;
+      }
+
       return;
     }
 
-    if (record.event.type !== 'message_end') return;
+    if (record.event.type !== 'message_end') {
+      return;
+    }
 
     const usage = assistantUsage(record.event.message);
-    if (!usage) return;
+
+    if (!usage) {
+      return;
+    }
 
     this.context = usage;
     this.contextSessionId = record.sessionId;
@@ -72,21 +87,28 @@ export class TraceUsageTally {
 
   touch(sessionId: string, timestamp: number): SessionUsageState {
     const existing = this.sessionStates.get(sessionId);
+
     if (existing) {
       existing.startedAt = Math.min(existing.startedAt, timestamp);
       existing.endedAt = Math.max(existing.endedAt, timestamp);
+
       return existing;
     }
 
     const session = { startedAt: timestamp, endedAt: timestamp, total: empty(), context: null };
     this.sessionStates.set(sessionId, session);
+
     return session;
   }
 
   snapshot(sessionId?: string): TraceUsageState {
     if (sessionId) {
       const session = this.sessionStates.get(sessionId);
-      if (!session) return { total: empty(), context: null };
+
+      if (!session) {
+        return { total: empty(), context: null };
+      }
+
       return { total: { ...session.total }, context: session.context && { ...session.context } };
     }
 
@@ -158,7 +180,9 @@ function empty(): TraceUsage {
 
 /** 压缩后的上下文只有总量估算，输入项留空；缓存命中率用的是累计量，不受影响。 */
 function contextFromTokens(tokens: number | undefined): TraceUsage | null {
-  if (tokens === undefined || !Number.isFinite(tokens) || tokens <= 0) return null;
+  if (tokens === undefined || !Number.isFinite(tokens) || tokens <= 0) {
+    return null;
+  }
 
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: tokens };
 }
@@ -169,15 +193,24 @@ function contextFromTokens(tokens: number | undefined): TraceUsage | null {
  */
 function assistantUsage(message: unknown): TraceUsage | null {
   const value = message as { role?: unknown; usage?: Partial<Usage> };
-  if (value?.role !== 'assistant' || !value.usage) return null;
+
+  if (value?.role !== 'assistant' || !value.usage) {
+    return null;
+  }
 
   const usage = value.usage;
   const counts = [usage.input, usage.output, usage.cacheRead, usage.cacheWrite, usage.totalTokens];
-  if (!counts.every(count => Number.isFinite(count) && count! >= 0)) return null;
+
+  if (!counts.every(count => Number.isFinite(count) && count! >= 0)) {
+    return null;
+  }
 
   const { input = 0, output = 0, cacheRead = 0, cacheWrite = 0 } = usage;
   const total = usage.totalTokens || input + output + cacheRead + cacheWrite;
-  if (total <= 0) return null;
+
+  if (total <= 0) {
+    return null;
+  }
 
   return { input, output, cacheRead, cacheWrite, total };
 }

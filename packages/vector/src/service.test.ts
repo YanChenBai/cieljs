@@ -7,6 +7,7 @@ import { VectorService } from './service.ts';
 test('缓存隔离模型配置、用途与输入粒度，并去重并发和批内文本', async () => {
   await using storage = await Storage.open({ dataDir: 'memory://', modules: [vectorStorage] });
   const embedBatch = vi.fn(async (texts: string[]) => texts.map(() => [1, 0]));
+
   const options = {
     storage,
     provider: { model: 'same-name', dimensions: 2, embedBatch },
@@ -15,16 +16,19 @@ test('缓存隔离模型配置、用途与输入粒度，并去重并发和批�
     granularity: 'chunk',
     inputConfig: 'raw',
   };
+
   await using vectors = new VectorService(options);
 
   const [first, second] = await Promise.all([
     vectors.embedBatch(['hello', 'hello'], { purpose: 'document' }),
     vectors.embed('hello', { purpose: 'document' }),
   ]);
+
   expect(first).toEqual([
     [1, 0],
     [1, 0],
   ]);
+
   expect(second).toEqual([1, 0]);
   expect(embedBatch).toHaveBeenCalledTimes(1);
   first[0]![0] = 999;
@@ -52,12 +56,15 @@ test('缓存隔离模型配置、用途与输入粒度，并去重并发和批�
 test('共享计算不受单个等待者取消影响，失败可重试', async () => {
   await using storage = await Storage.open({ dataDir: 'memory://', modules: [vectorStorage] });
   let release!: () => void;
+
   const embedBatch = vi.fn(async () => {
     await new Promise<void>(resolve => {
       release = resolve;
     });
+
     return [[1, 0]];
   });
+
   await using vectors = new VectorService({
     storage,
     provider: { model: 'test', dimensions: 2, embedBatch },

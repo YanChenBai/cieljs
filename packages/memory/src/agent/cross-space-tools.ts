@@ -95,6 +95,7 @@ export const searchDiscoveredSpaceMemoryTool = defineTool(
       '只读搜索指定 spaceId 内未归档、未过期的每日和长期记忆正文，不搜索 sources 或全局层。当前空间已允许访问；其他空间必须先由本组工具的 find_memory_spaces_by_source 发现。结果可能截断，用 memory.id 和对应 spaceId 调用 read_discovered_space_memory 分页读取。',
     execute: async (params, { signal }) => {
       assertDiscovered(discoveredSpaces, params.spaceId);
+
       const hits = await manager.space(params.spaceId).search(params.query, {
         mode: params.mode,
         kind: params.kind,
@@ -116,6 +117,7 @@ export const searchDiscoveredSpaceMemoryBySourceTool = defineTool(
       '只读匹配指定 spaceId 中当前有效记忆的 sources，不搜索正文或全局层。当前空间已允许访问；其他空间必须先由 find_memory_spaces_by_source 发现。结果的 memoryId 可交给 read_discovered_space_memory，并使用同一 spaceId 读取正文。',
     execute: async (params, { signal }) => {
       assertDiscovered(discoveredSpaces, params.spaceId);
+
       const hits = await manager.space(params.spaceId).searchBySource(params.query, {
         mode: params.mode,
         limit: params.limit ?? resolved.searchLimit,

@@ -18,13 +18,15 @@ interface FindSessionsBySourceToolOptions {
   scopeDescription: string;
 }
 
+const resultLimitSchema = Type.Integer({ minimum: 1, maximum: 20 });
+
 export const findSessionsBySourceTool = defineTool(
   Type.Object({
     query: Type.String({
       minLength: 1,
       description: '要匹配的 Session 来源，例如业务 ID、用户或房间名称、昵称、标题或别名。',
     }),
-    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+    limit: Type.Optional(resultLimitSchema),
   }),
   (options: FindSessionsBySourceToolOptions) => ({
     name: 'find_sessions_by_source',
@@ -41,7 +43,9 @@ export const findSessionsBySourceTool = defineTool(
         signal,
       });
 
-      for (const hit of hits) options.discovered.add(hit.session.id);
+      for (const hit of hits) {
+        options.discovered.add(hit.session.id);
+      }
 
       return sessionResult({ query: params.query, hits });
     },

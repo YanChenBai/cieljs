@@ -24,14 +24,20 @@ export async function installModel(args: readonly string[]): Promise<void> {
       'Usage: vp run @cieljs/hearing#install-model -- --models-path <directory> [--model ID] [--kws] [--no-speaker] [--force]\n\n' +
         'Choose qwen3-asr-1.7b-int8 or sensevoice-small; --kws installs the wake model.\n',
     );
+
     return;
   }
 
-  if (!values.kws && !Object.hasOwn(ASR_MODELS, values.model!))
-    throw new Error('Unsupported ASR model: ' + values.model);
-  if (!values['models-path']?.trim()) throw new Error('--models-path is required');
+  if (!values.kws && !Object.hasOwn(ASR_MODELS, values.model!)) {
+    throw new Error(`Unsupported ASR model: ${values.model}`);
+  }
+
+  if (!values['models-path']?.trim()) {
+    throw new Error('--models-path is required');
+  }
 
   let currentFile = '';
+
   const modelsPath = await (values.kws ? installKWSModels : installModels)({
     modelsPath: values['models-path'],
     model: values.model as ASRModelId,

@@ -81,9 +81,11 @@ it('站内链接留在本窗口，站外链接一律不打开', async () => {
   expect(contents.loadURL).toHaveBeenLastCalledWith('https://space.bilibili.com/194484313');
 
   contents.loadURL.mockClear();
+
   for (const url of ['https://example.com/', 'javascript:alert(1)']) {
     expect(open({ url })).toEqual({ action: 'deny' });
   }
+
   expect(contents.loadURL).not.toHaveBeenCalled();
 });
 

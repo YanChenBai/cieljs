@@ -18,16 +18,19 @@ function setup(live = true, kws?: NonNullable<ConstructorParameters<typeof LiveM
     killed: false,
     kill: vi.fn(),
   });
+
   child.kill.mockImplementation(() => {
     child.killed = true;
     child.emit('close', 0, 'SIGTERM');
   });
+
   spawn.mockReturnValue(child);
   const onStopped = vi.fn();
   const onError = vi.fn();
   const onProgress = vi.fn();
   const imageWrite = vi.fn().mockResolvedValue(undefined);
   const audioWrite = vi.fn();
+
   const media = new LiveMedia({
     roomId: 123,
     input: 'https://example.com/live',
@@ -41,7 +44,9 @@ function setup(live = true, kws?: NonNullable<ConstructorParameters<typeof LiveM
     onError,
     onProgress,
   });
+
   media.start();
+
   return { media, child, onStopped, onError, onProgress, imageWrite, audioWrite };
 }
 
@@ -55,9 +60,11 @@ it('ASR 推理尚未结束时 KWS 已收到同一块音频，关闭会等待两�
   expect(kws.write).toHaveBeenCalledOnce();
   expect(kws.write.mock.calls[0]).toEqual(audioWrite.mock.calls[0]);
   let closed = false;
+
   const closing = media.close().then(() => {
     closed = true;
   });
+
   recognizing.resolve();
   await Promise.resolve();
   expect(closed).toBe(false);
@@ -69,9 +76,11 @@ it('ASR 推理尚未结束时 KWS 已收到同一块音频，关闭会等待两�
 it('加速解码的帧按媒体时间分布，进度支持分块输出', async () => {
   const { media, child, imageWrite, onProgress } = setup(false);
   child.stdio[3]!.write(Buffer.from([255, 216, 255, 217, 255, 216, 255, 217]));
+
   expect(
     imageWrite.mock.calls[1]![0].at.getTime() - imageWrite.mock.calls[0]![0].at.getTime(),
   ).toBe(6666);
+
   child.stderr.write('Duration: 00:02:00.00, start: 0\nout_time_');
   child.stderr.write('us=60000000\n');
   expect(onProgress).toHaveBeenCalledWith(60, 120);

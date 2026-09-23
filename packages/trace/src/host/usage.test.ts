@@ -43,9 +43,11 @@ const ended = (message: AgentMessage) => record({ type: 'message_end', message }
 
 it('累计每次请求的用量，并以最近一次请求作为当前上下文', () => {
   const tally = new TraceUsageTally();
+
   tally.consume(
     ended(assistant({ input: 100, output: 20, cacheRead: 800, cacheWrite: 0, totalTokens: 920 })),
   );
+
   tally.consume(
     ended(assistant({ input: 50, output: 10, cacheRead: 900, cacheWrite: 5, totalTokens: 965 })),
   );
@@ -58,6 +60,7 @@ it('累计每次请求的用量，并以最近一次请求作为当前上下文'
 
 it('压缩后用估算更新当前上下文，累计用量保持不变', () => {
   const tally = new TraceUsageTally();
+
   tally.consume(
     ended(assistant({ input: 100, output: 20, cacheRead: 800, cacheWrite: 0, totalTokens: 920 })),
   );
@@ -76,11 +79,13 @@ it('压缩后用估算更新当前上下文，累计用量保持不变', () => {
     total: { input: 100, output: 20, cacheRead: 800, cacheWrite: 0, total: 920 },
     context: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 120 },
   });
+
   expect(tally.snapshot('live')?.context?.total).toBe(120);
 });
 
 it('压缩记录缺少估算时清空当前上下文，不留下压缩前的大值', () => {
   const tally = new TraceUsageTally();
+
   tally.consume(
     ended(assistant({ input: 100, output: 20, cacheRead: 800, cacheWrite: 0, totalTokens: 920 })),
   );
@@ -95,11 +100,13 @@ it('压缩记录缺少估算时清空当前上下文，不留下压缩前的大�
 
 it('按 Session 独立统计用量与当前上下文', () => {
   const tally = new TraceUsageTally();
+
   tally.consume({
     ...ended(assistant({ input: 10, output: 2, cacheRead: 80, cacheWrite: 0, totalTokens: 92 })),
     sessionId: 'first',
     timestamp: 10,
   });
+
   tally.consume({
     ...ended(assistant({ input: 20, output: 4, cacheRead: 60, cacheWrite: 1, totalTokens: 85 })),
     sessionId: 'second',
@@ -110,11 +117,13 @@ it('按 Session 独立统计用量与当前上下文', () => {
     total: { input: 10, output: 2, cacheRead: 80, cacheWrite: 0, total: 92 },
     context: { input: 10, output: 2, cacheRead: 80, cacheWrite: 0, total: 92 },
   });
+
   expect(tally.sessions().map(session => session.id)).toEqual(['first', 'second']);
 });
 
 it('保留 Session 标题与来源，并随累计状态恢复', () => {
   const tally = new TraceUsageTally();
+
   tally.consume({
     ...record({ type: 'agent_start' }),
     metadata: {
@@ -146,6 +155,7 @@ it('只认 message_end，流式增量不会重复计入', () => {
 
 it('没有总量时按各项相加兜底', () => {
   const tally = new TraceUsageTally();
+
   tally.consume(
     ended(assistant({ input: 30, output: 5, cacheRead: 60, cacheWrite: 5, totalTokens: 0 })),
   );
@@ -155,10 +165,13 @@ it('没有总量时按各项相加兜底', () => {
 
 it('零用量与非 assistant 消息不计入，也不顶替当前上下文', () => {
   const tally = new TraceUsageTally();
+
   tally.consume(
     ended(assistant({ input: 100, output: 20, cacheRead: 800, cacheWrite: 0, totalTokens: 920 })),
   );
+
   tally.consume(ended({ role: 'user', content: '继续', timestamp: 0 }));
+
   tally.consume(
     ended(assistant({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 })),
   );
@@ -169,11 +182,13 @@ it('零用量与非 assistant 消息不计入，也不顶替当前上下文', ()
 
 it('残缺的用量整条丢弃，不污染累计', () => {
   const tally = new TraceUsageTally();
+
   // 类型上不存在这种消息，但记录来自磁盘，读到的可能是任何东西。
   const broken = {
     ...assistant({ input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2 }),
     usage: { input: Number.NaN, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 },
   } as unknown as AgentMessage;
+
   tally.consume(ended(broken));
 
   expect(tally.snapshot()).toEqual({

@@ -75,6 +75,7 @@ export class Runtime implements AsyncDisposable {
     this.assertRunning();
 
     const resolveSources = createSourceResolver(options.sources);
+
     const opening = createRuntimeSessionAgent({
       model: this.options.model,
       apiKey: this.options.apiKey,
@@ -90,6 +91,7 @@ export class Runtime implements AsyncDisposable {
       assertRunning: this.assertRunning.bind(this),
       onClose: this.removeSession.bind(this),
     });
+
     this.sessionOpenings.add(opening);
 
     let handle: SessionAgentHandle;
@@ -109,6 +111,7 @@ export class Runtime implements AsyncDisposable {
     this.assertRunning();
 
     const resolveSources = createSourceResolver(options.sources);
+
     const investigation = runInvestigation({
       model: this.options.model,
       apiKey: this.options.apiKey,
@@ -132,6 +135,7 @@ export class Runtime implements AsyncDisposable {
     });
 
     this.investigations.add(investigation);
+
     void investigation.then(
       () => this.investigations.delete(investigation),
       () => this.investigations.delete(investigation),
@@ -151,7 +155,9 @@ export class Runtime implements AsyncDisposable {
   }
 
   private async startResources() {
-    if (this.currentStatus !== 'closing') this.currentStatus = 'running';
+    if (this.currentStatus !== 'closing') {
+      this.currentStatus = 'running';
+    }
   }
 
   private async closeResources() {
@@ -162,15 +168,19 @@ export class Runtime implements AsyncDisposable {
     // 先阻止新操作；即使启动失败，关闭仍需完成并进入终态。
     const starting = this.startPromise;
     this.currentStatus = 'closing';
+
     if (starting) {
       await Promise.allSettled([starting]);
       this.currentStatus = 'closing';
     }
+
     const openingResults = await Promise.allSettled(this.sessionOpenings);
+
     const activeResults = await Promise.allSettled([
       ...[...this.sessions].map(session => session.close()),
       ...this.investigations,
     ]);
+
     this.currentStatus = 'closed';
 
     const failures = [...openingResults, ...activeResults]

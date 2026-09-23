@@ -33,6 +33,7 @@ export class VectorService implements AsyncDisposable {
 
   constructor(readonly options: VectorOptions) {
     options.storage.require(vectorStorage);
+
     for (const value of [
       options.providerId,
       options.revision,
@@ -43,9 +44,11 @@ export class VectorService implements AsyncDisposable {
         throw new TypeError('向量 providerId、revision、inputConfig 不能为空');
       }
     }
+
     this.provider = resolveEmbeddingProvider(options.provider)!;
     this.dimensions = this.provider.dimensions;
     this.batchSize = this.provider.batchSize;
+
     this.model = hash(
       JSON.stringify([
         options.providerId,
@@ -70,39 +73,54 @@ export class VectorService implements AsyncDisposable {
     if (this.closed) {
       throw new Error('VectorService 已关闭');
     }
+
     options.signal?.throwIfAborted();
+
     const missing: {
       key: string;
       text: string;
       resolve: (value: number[]) => void;
       reject: (error: unknown) => void;
     }[] = [];
+
     const results = texts.map(text => {
       const key = this.key(text, options.purpose);
       let promise = this.pending.get(key);
+
       if (!promise) {
         promise = new Promise<number[]>((resolve, reject) =>
           missing.push({ key, text, resolve, reject }),
         );
+
         this.pending.set(key, promise);
+
         void promise.then(
           () => this.pending.delete(key),
           () => this.pending.delete(key),
         );
       }
+
       return promise;
     });
+
     // 每个调用者只取消自己的等待，共享计算不会被其中一个调用者中断。
     void this.compute(missing, options.purpose);
     const result = Promise.all(results).then(vectors => vectors.map(vector => [...vector]));
+
     if (!options.signal) {
       return result;
     }
+
     const signal = options.signal;
+
     return new Promise((resolve, reject) => {
       const abort = () => reject(signal.reason);
       signal.addEventListener('abort', abort, { once: true });
-      if (signal.aborted) abort();
+
+      if (signal.aborted) {
+        abort();
+      }
+
       void result.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
     });
   }
@@ -118,21 +136,30 @@ export class VectorService implements AsyncDisposable {
   ) {
     try {
       const missing: typeof items = [];
+
       for (const item of items) {
         const [cached] = await this.options.storage.db
           .select()
           .from(vectorCache)
           .where(eq(vectorCache.key, item.key));
-        if (cached) item.resolve(cached.embedding);
-        else missing.push(item);
+
+        if (cached) {
+          item.resolve(cached.embedding);
+        } else {
+          missing.push(item);
+        }
       }
+
       for (let start = 0; start < missing.length; start += this.batchSize) {
         const batch = missing.slice(start, start + this.batchSize);
+
         const vectors = await this.provider.embedBatch(
           batch.map(item => item.text),
           { purpose },
         );
+
         assertEmbeddingVectors(vectors, batch.length, this.dimensions);
+
         await this.options.storage.db
           .insert(vectorCache)
           .values(
@@ -145,10 +172,13 @@ export class VectorService implements AsyncDisposable {
             })),
           )
           .onConflictDoNothing();
+
         batch.forEach((item, index) => item.resolve(vectors[index]!));
       }
     } catch (error) {
-      for (const item of items) item.reject(error);
+      for (const item of items) {
+        item.reject(error);
+      }
     }
   }
 

@@ -14,13 +14,16 @@ describe('ThoughtScheduler', () => {
     [false, 'Request aborted'],
   ] as const)('主动取消=%s 时正确区分请求中止 %s 和运行失败', async (cancelled, message) => {
     let rejectPrompt!: (error: Error) => void;
+
     const prompt = vi.fn(
       () =>
         new Promise<void>((_resolve, reject) => {
           rejectPrompt = reject;
         }),
     );
+
     const onError = vi.fn();
+
     const scheduler = new ThoughtScheduler({
       perception: { snapshot: vi.fn().mockResolvedValue({ compose: async () => [] }) },
       agent: { prompt },
@@ -32,13 +35,17 @@ describe('ThoughtScheduler', () => {
 
     scheduler.trigger(new Date(1));
     await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+
     if (cancelled) {
       scheduler.cancel();
     }
+
     rejectPrompt(new Error(`Agent 运行失败：${message}`));
+
     if (!cancelled) {
       await vi.waitFor(() => expect(onError).toHaveBeenCalledOnce());
     }
+
     await scheduler.close();
     expect(onError).toHaveBeenCalledTimes(cancelled ? 0 : 1);
   });
@@ -46,6 +53,7 @@ describe('ThoughtScheduler', () => {
   it('忽略迟到和重复时间，后续快照边界保持递增', async () => {
     const prompt = vi.fn().mockResolvedValue(undefined);
     const snapshot = vi.fn().mockResolvedValue({ compose: async () => [] });
+
     const scheduler = new ThoughtScheduler({
       perception: { snapshot },
       agent: { prompt },
@@ -53,6 +61,7 @@ describe('ThoughtScheduler', () => {
       startedAt: new Date(100),
       context: () => ({ role: 'user', content: '观察', timestamp: 0 }),
     });
+
     scheduler.trigger(new Date(110));
     await vi.waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
     scheduler.trigger(new Date(105));
@@ -62,10 +71,12 @@ describe('ThoughtScheduler', () => {
     expect(snapshot).toHaveBeenLastCalledWith({ startAt: new Date(111), endAt: new Date(120) });
     await scheduler.close();
   });
+
   it('内容过滤后暂停自动提交，保留原始错误', async () => {
     const error = new Error('Provider finish_reason: content_filter');
     const prompt = vi.fn().mockRejectedValue(error);
     const onError = vi.fn();
+
     const scheduler = new ThoughtScheduler({
       perception: { snapshot: vi.fn().mockResolvedValue({ compose: async () => [] }) },
       agent: { prompt },
@@ -74,22 +85,28 @@ describe('ThoughtScheduler', () => {
       context: () => ({ role: 'user', content: '观察', timestamp: 0 }),
       onError,
     });
+
     scheduler.trigger(new Date(1));
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(error));
     scheduler.trigger(new Date(2));
     await scheduler.close();
     expect(prompt).toHaveBeenCalledOnce();
   });
+
   it('思考期间的新触发会合并到下一轮', async () => {
     let releaseFirst: (() => void) | undefined;
+
     const firstRun = new Promise<void>(resolve => {
       releaseFirst = resolve;
     });
+
     const prompt = vi
       .fn()
       .mockImplementationOnce(() => firstRun)
       .mockResolvedValue(undefined);
+
     const snapshot = vi.fn().mockResolvedValue({ compose: async () => [] });
+
     const scheduler = new ThoughtScheduler({
       perception: { snapshot } as Pick<Perception, 'snapshot'>,
       agent: { prompt } as unknown as Pick<Agent, 'prompt'>,
@@ -111,9 +128,11 @@ describe('ThoughtScheduler', () => {
       endAt: new Date(3),
     });
   });
+
   it('关闭期间完成的快照不会启动新思考', async () => {
     const composing = Promise.withResolvers<[]>();
     const prompt = vi.fn();
+
     const scheduler = new ThoughtScheduler({
       perception: { snapshot: vi.fn().mockResolvedValue({ compose: () => composing.promise }) },
       agent: { prompt },
@@ -121,6 +140,7 @@ describe('ThoughtScheduler', () => {
       startedAt: new Date(0),
       context: () => ({ role: 'user', content: '观察', timestamp: 0 }),
     });
+
     scheduler.trigger(new Date(1));
     scheduler.trigger(new Date(2));
     const closing = scheduler.close();
@@ -133,14 +153,17 @@ describe('ThoughtScheduler', () => {
   it('单轮思考超过预算时中止本轮并报告超时', async () => {
     vi.useFakeTimers();
     let rejectPrompt!: (error: Error) => void;
+
     const prompt = vi.fn(
       () =>
         new Promise<void>((_resolve, reject) => {
           rejectPrompt = reject;
         }),
     );
+
     const abort = vi.fn(() => rejectPrompt(new Error('Request was aborted')));
     const onError = vi.fn();
+
     const scheduler = new ThoughtScheduler({
       perception: { snapshot: vi.fn().mockResolvedValue({ compose: async () => [] }) },
       agent: { prompt, abort },
@@ -158,6 +181,7 @@ describe('ThoughtScheduler', () => {
     await vi.advanceTimersByTimeAsync(1_000);
 
     expect(abort).toHaveBeenCalledOnce();
+
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ message: '单轮思考超过 1000 ms，已中止本轮' }),
     );
@@ -170,10 +194,12 @@ describe('ThoughtScheduler', () => {
 describe('关键词优先调度', () => {
   const wait = { minWaitMs: 1500, maxWaitMs: 4000 };
   let scheduler: ThoughtScheduler;
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(10_000);
   });
+
   afterEach(async () => {
     await scheduler.close();
     vi.useRealTimers();
@@ -183,11 +209,13 @@ describe('关键词优先调度', () => {
     const signal: WakeEvent = { keyword: '夏尔', at: new Date(9000) };
     const prompt = vi.fn().mockResolvedValue(undefined);
     const snapshot = vi.fn().mockResolvedValue({ compose: async () => [] });
+
     const context = vi.fn((wake?: WakeEvent) => ({
       role: 'user' as const,
       content: wake ? createWakeContext(wake) : '普通观察',
       timestamp: Date.now(),
     }));
+
     scheduler = new ThoughtScheduler({
       perception: { snapshot },
       agent: { prompt },
@@ -195,6 +223,7 @@ describe('关键词优先调度', () => {
       minimumIntervalMs: 60_000,
       startedAt: new Date(0),
     });
+
     return { signal, prompt, snapshot, context };
   }
 
@@ -268,6 +297,7 @@ it('最终总结包含间隔内尚未思考的尾段感知', async () => {
   const tail = { role: 'user' as const, content: '最后一句语音', timestamp: 2 };
   const prompt = vi.fn().mockResolvedValue(undefined);
   const snapshot = vi.fn().mockResolvedValue({ compose: async () => [tail] });
+
   const scheduler = new ThoughtScheduler({
     perception: { snapshot },
     agent: { prompt },
@@ -275,11 +305,13 @@ it('最终总结包含间隔内尚未思考的尾段感知', async () => {
     startedAt: new Date(0),
     context: () => ({ role: 'user', content: '上下文', timestamp: 0 }),
   });
+
   scheduler.trigger(new Date(1));
   await vi.waitFor(() => expect(prompt).toHaveBeenCalledTimes(1));
   scheduler.trigger(new Date(2));
   await scheduler.finish('最终总结');
   expect(snapshot).toHaveBeenLastCalledWith({ startAt: new Date(2), endAt: expect.any(Date) });
+
   expect(prompt).toHaveBeenLastCalledWith(
     expect.arrayContaining([tail, expect.objectContaining({ content: '最终总结' })]),
   );

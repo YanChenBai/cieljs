@@ -37,12 +37,17 @@ async function createStorage() {
     dataDir: root,
     modules: [sessionStorage, memoryStorage, vectorStorage],
   });
+
   storages.push(storage);
+
   return { storage };
 }
 
 afterEach(async () => {
-  for (const storage of storages.splice(0)) await storage.close();
+  for (const storage of storages.splice(0)) {
+    await storage.close();
+  }
+
   await Promise.all(
     temporaryDirectories.splice(0).map(directory =>
       rm(directory, {
@@ -51,6 +56,7 @@ afterEach(async () => {
       }),
     ),
   );
+
   qwen.mockClear();
   closeMcp.mockClear();
 });
@@ -59,6 +65,7 @@ describe('defineCiel', () => {
   test('借用共享 MCP，关闭一个 runtime 不影响另一个', async () => {
     const storage = await createStorage();
     const faux = registerFauxProvider();
+
     const tool = defineTool(Type.Object({}), () => ({
       name: 'mcp_search',
       label: 'MCP 搜索',
@@ -111,22 +118,27 @@ describe('defineCiel', () => {
     const storage = await createStorage();
     const faux = registerFauxProvider();
     const contexts: Context[] = [];
+
     faux.setResponses([
       context => {
         contexts.push(context);
+
         return fauxAssistantMessage('普通会话回答');
       },
       context => {
         contexts.push(context);
+
         return fauxAssistantMessage('第一次调查回答');
       },
       context => {
         contexts.push(context);
+
         return fauxAssistantMessage('第二次调查回答');
       },
     ]);
 
     let roomId = 'room:1000';
+
     const ciel = defineCiel({
       model: faux.getModel(),
       systemPrompt: '你是 Ciel。',
@@ -161,6 +173,7 @@ describe('defineCiel', () => {
       sources: () => [roomId],
       question: '以前发生过什么？',
     });
+
     const secondInvestigation = await ciel.investigate({
       sessionId: 'investigation:1',
       target: { type: 'space', spaceId: 'livestream', sessionId: session.id },

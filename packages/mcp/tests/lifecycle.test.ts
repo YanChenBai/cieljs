@@ -8,7 +8,9 @@ const { clients, connect, listTools, close } = vi.hoisted(() => ({
   listTools: vi.fn(async () => ({ tools: [] })),
   close: vi.fn(async (_name: string) => {}),
 }));
+
 const options = { cwd: '.', configFile: 'mcp.json' };
+
 vi.mock('@modelcontextprotocol/client', () => ({
   Client: class {
     constructor(private readonly options: { name: string }) {
@@ -21,7 +23,9 @@ vi.mock('@modelcontextprotocol/client', () => ({
     }
   },
 }));
+
 vi.mock('@modelcontextprotocol/client/stdio', () => ({ StdioClientTransport: class {} }));
+
 vi.mock('../src/config.ts', () => ({
   loadMcpConfig: async () => ({
     cwd: '.',
@@ -30,6 +34,7 @@ vi.mock('../src/config.ts', () => ({
     },
   }),
 }));
+
 afterEach(() => {
   clients.length = 0;
   connect.mockReset();
@@ -64,20 +69,25 @@ test('第二个服务启动失败时回收全部客户端，并保留清理错�
   const closingError = new Error('close');
   listTools.mockResolvedValueOnce({ tools: [] }).mockRejectedValueOnce(openingError);
   close.mockRejectedValueOnce(closingError);
+
   await expect(Mcp.open(options)).rejects.toMatchObject({
     name: 'SuppressedError',
     error: closingError,
     suppressed: openingError,
   });
+
   expect(close.mock.calls).toEqual([['ciel:second'], ['ciel:first']]);
 });
 
 test('重复关闭会等待正在进行的客户端清理', async () => {
   const mcp = await Mcp.open(options);
+
   let release = () => {};
+
   const pending = new Promise<void>(resolve => {
     release = resolve;
   });
+
   close.mockReturnValueOnce(pending);
   const closing = mcp.close();
   expect(mcp.close()).toBe(closing);

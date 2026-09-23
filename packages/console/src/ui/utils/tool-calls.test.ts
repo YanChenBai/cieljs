@@ -170,6 +170,7 @@ it('展示载荷优先取 details，details 为空时回落到整个结果', () 
 it('文本型结果取整段文本，其余形状交给 JSON 查看器', () => {
   expect(toolResultText('动态列表')).toBe('动态列表');
   expect(toolResultText('  ')).toBeUndefined();
+
   expect(
     toolResultText({
       content: [
@@ -179,6 +180,7 @@ it('文本型结果取整段文本，其余形状交给 JSON 查看器', () => {
       ],
     }),
   ).toBe('第一段\n第二段');
+
   expect(toolResultText({ content: [], details: { status: 'delivered' } })).toBeUndefined();
   expect(toolResultText({ status: 'delivered' })).toBeUndefined();
   expect(toolResultText(undefined)).toBeUndefined();

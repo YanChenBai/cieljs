@@ -10,11 +10,25 @@ import * as z from 'zod';
 
 import { copyMissingResources } from './resources.ts';
 
+const requiredTextSchema = z.string().trim().min(1);
+const intervalSchema = z.number().int().min(500);
+const durationSchema = z.number().int().min(1_000);
+const waitDurationSchema = z.number().int().nonnegative();
+
+const wakeConfigSchema = z
+  .object({
+    keywords: z.array(requiredTextSchema).min(1).default(['夏尔']),
+    minWaitMs: waitDurationSchema.default(1500),
+    maxWaitMs: waitDurationSchema.default(4000),
+    cooldownMs: waitDurationSchema.default(15000),
+  })
+  .refine(value => value.maxWaitMs >= value.minWaitMs, 'maxWaitMs 不能小于 minWaitMs');
+
 const watchConfigSchema = z.object({
   ai: z.object({
-    provider: z.string().trim().min(1),
-    model: z.string().trim().min(1),
-    apiKey: z.string().trim().min(1),
+    provider: requiredTextSchema,
+    model: requiredTextSchema,
+    apiKey: requiredTextSchema,
     baseUrl: z
       .string()
       .trim()
@@ -26,26 +40,14 @@ const watchConfigSchema = z.object({
   }),
   interaction: z
     .object({
-      minimumThinkIntervalMs: z.number().int().min(500).default(2_000),
-      periodicObservationMs: z.number().int().min(1_000).default(10_000),
+      minimumThinkIntervalMs: intervalSchema.default(2_000),
+      periodicObservationMs: durationSchema.default(10_000),
       /** 单轮思考的时间预算；超过就中止本轮，省略表示不限制。 */
-      thinkTimeoutMs: z.number().int().min(1_000).optional(),
+      thinkTimeoutMs: durationSchema.optional(),
     })
     .prefault({}),
-  wake: z
-    .union([
-      z.literal(false),
-      z
-        .object({
-          keywords: z.array(z.string().trim().min(1)).min(1).default(['夏尔']),
-          minWaitMs: z.number().int().nonnegative().default(1500),
-          maxWaitMs: z.number().int().nonnegative().default(4000),
-          cooldownMs: z.number().int().nonnegative().default(15000),
-        })
-        .refine(value => value.maxWaitMs >= value.minWaitMs, 'maxWaitMs 不能小于 minWaitMs'),
-    ])
-    .prefault({}),
-  ffmpegPath: z.string().trim().min(1).optional(),
+  wake: z.union([z.literal(false), wakeConfigSchema]).prefault({}),
+  ffmpegPath: requiredTextSchema.optional(),
 });
 
 export type WatchConfig = z.infer<typeof watchConfigSchema>;
@@ -71,6 +73,7 @@ export function resolveWatchConfig(): WatchConfig {
     const details = result.error.issues
       .map(issue => `${issue.path.join('.') || 'config'}：${issue.message}`)
       .join('；');
+
     throw new Error(`Blive Agent 配置不合法：${details}`);
   }
 
@@ -86,6 +89,7 @@ export function resolveWatchModel(config = resolveWatchConfig()) {
 
   // 只覆盖当前运行使用的模型，避免污染共享注册信息。
   const resolvedModel = config.ai.baseUrl ? { ...model, baseUrl: config.ai.baseUrl } : model;
+
   return { model: resolvedModel, apiKey: config.ai.apiKey };
 }
 

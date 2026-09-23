@@ -10,6 +10,7 @@ const decision: MessageRendererMatch = {
 
 it('第一个命中的渲染器胜出，后面的不再过问', () => {
   const later = vi.fn(() => true);
+
   const renderers = [
     { match: () => false, component: { name: 'rejected' } },
     {
@@ -30,8 +31,10 @@ it('没有渲染器或都不命中时返回 undefined，交给默认渲染兜底
   expect(messageRenderer(decision, undefined)).toBeUndefined();
   expect(messageRenderer(decision, [])).toBeUndefined();
   expect(messageRenderer(decision, [never])).toBeUndefined();
+
   expect(
     messageRenderer(decision, [{ match: assistantOnly, component: { name: 'user' } }]),
   ).toBeUndefined();
+
   expect(assistantOnly).toHaveBeenCalledWith(decision);
 });

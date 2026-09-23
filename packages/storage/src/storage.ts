@@ -35,12 +35,15 @@ export class Storage implements AsyncDisposable {
     if (!options.dataDir?.trim()) {
       throw new TypeError('Storage dataDir 不能为空');
     }
+
     const modules = options.modules ?? [];
     const ids = new Set<string>();
+
     for (const module of modules) {
       if (!/^[a-z][a-z0-9_]*$/.test(module.id) || ids.has(module.id) || module.id === 'storage') {
         throw new TypeError(`无效或重复的 Storage module: ${module.id}`);
       }
+
       ids.add(module.id);
     }
 
@@ -48,6 +51,7 @@ export class Storage implements AsyncDisposable {
     await using disposables = new AsyncDisposableStack();
     disposables.defer(() => client.close());
     await client.waitReady;
+
     await client.exec(`CREATE EXTENSION IF NOT EXISTS vector;
       CREATE EXTENSION IF NOT EXISTS pg_trgm;
       CREATE SCHEMA IF NOT EXISTS storage;
@@ -56,35 +60,46 @@ export class Storage implements AsyncDisposable {
         session_id text NOT NULL, message_id text, record jsonb NOT NULL
       );
       CREATE INDEX IF NOT EXISTS events_session ON storage.events(session_id, sequence);`);
+
     const storage = new Storage(
       client,
       drizzle({ client }),
       !options.dataDir.startsWith('memory://'),
     );
+
     for (const module of modules) {
       await client.transaction(async tx => {
         await tx.exec(`CREATE SCHEMA IF NOT EXISTS "${module.id}";
           CREATE TABLE IF NOT EXISTS "${module.id}".__migrations (id text PRIMARY KEY, sql text NOT NULL)`);
+
         for (const migration of module.migrations) {
           const applied = await tx.query<{ sql: string }>(
             `SELECT sql FROM "${module.id}".__migrations WHERE id = $1`,
             [migration.id],
           );
+
           if (applied.rows.length) {
-            if (applied.rows[0]!.sql !== migration.sql)
+            if (applied.rows[0]!.sql !== migration.sql) {
               throw new Error(`迁移内容已修改: ${module.id}/${migration.id}`);
+            }
+
             continue;
           }
+
           await tx.exec(migration.sql);
+
           await tx.query(`INSERT INTO "${module.id}".__migrations VALUES ($1, $2)`, [
             migration.id,
             migration.sql,
           ]);
         }
       });
+
       storage.modules.add(module.id);
     }
+
     disposables.move();
+
     return storage;
   }
 
@@ -92,6 +107,7 @@ export class Storage implements AsyncDisposable {
     if (this.closing) {
       throw new Error('Storage 已关闭');
     }
+
     if (!this.modules.has(module.id)) {
       throw new Error(`Storage 未注册模块: ${module.id}`);
     }
@@ -106,11 +122,13 @@ export class Storage implements AsyncDisposable {
     if (this.closing) {
       return;
     }
+
     await this.client.exec('CHECKPOINT');
   }
 
   close(): Promise<void> {
     this.closing ??= this.closeResources();
+
     return this.closing;
   }
 
@@ -122,6 +140,7 @@ export class Storage implements AsyncDisposable {
     await using disposables = new AsyncDisposableStack();
     disposables.defer(() => this.client.close());
     await this.journal.close();
+
     if (this.checkpointOnClose) {
       // 所有写入排空后再推进最终 checkpoint，正常退出不把 WAL 恢复留给下次启动。
       await this.client.exec('CHECKPOINT');

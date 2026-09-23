@@ -52,8 +52,10 @@ test('speechend publishes a frozen snapshot with the matching ASR result', async
     context: ({ modality }) => (modality === 'hearing' ? '听觉提示' : undefined),
     retentionMs: 60_000,
   });
+
   const asr = perception.asr as unknown as InstanceType<typeof MockASR>;
   const published = new Promise<SpeechEndEvent>(resolve => perception.on('speechend', resolve));
+
   const result = {
     content: '测试内容',
     speaker: 'alice',
@@ -71,8 +73,10 @@ test('speechend publishes a frozen snapshot with the matching ASR result', async
     modelsPath: '/models',
     speaker: [{ name: 'alice', file: 'alice.voiceprint' }],
   });
+
   expect(event.result).toMatchObject({ content: '测试内容', speaker: 'alice' });
   expect(event.snapshot.endAt).toEqual(result.endAt);
+
   expect(messages).toMatchObject([
     {
       role: 'user',
@@ -94,6 +98,7 @@ test('未传入 context 时使用包内默认听觉提示词', async () => {
   const perception = createPerception({ asr: { modelsPath: '/models' }, vision: false });
   const asr = perception.asr as unknown as InstanceType<typeof MockASR>;
   const published = new Promise<SpeechEndEvent>(resolve => perception.on('speechend', resolve));
+
   const result = {
     content: '测试内容',
     startAt: new Date('2026-09-05T12:00:01.000Z'),

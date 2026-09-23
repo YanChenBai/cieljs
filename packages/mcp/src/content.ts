@@ -44,15 +44,16 @@ export function mcpErrorMessage(result: CallToolResult): string {
 
 function convertContentBlock(block: ContentBlock): AgentContent[] {
   switch (block.type) {
-    case 'text':
+    case 'text': {
       return [
         {
           type: 'text',
           text: block.text,
         },
       ];
+    }
 
-    case 'image':
+    case 'image': {
       return [
         {
           type: 'image',
@@ -60,33 +61,38 @@ function convertContentBlock(block: ContentBlock): AgentContent[] {
           mimeType: block.mimeType,
         },
       ];
+    }
 
-    case 'audio':
+    case 'audio': {
       return [
         {
           type: 'text',
           text: `[MCP audio: ${block.mimeType}]`,
         },
       ];
+    }
 
-    case 'resource_link':
+    case 'resource_link': {
       return [
         {
           type: 'text',
           text: formatResourceLink(block),
         },
       ];
+    }
 
-    case 'resource':
+    case 'resource': {
       return convertEmbeddedResource(block);
+    }
 
-    default:
+    default: {
       return [
         {
           type: 'text',
           text: JSON.stringify(block),
         },
       ];
+    }
   }
 }
 

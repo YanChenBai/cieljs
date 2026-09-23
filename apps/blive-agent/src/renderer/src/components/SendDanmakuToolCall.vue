@@ -17,18 +17,31 @@ const args = computed(
 
 const details = computed(() => {
   const { result } = props;
-  if (!result || typeof result !== 'object' || !('details' in result)) return {};
+
+  if (!result || typeof result !== 'object' || !('details' in result)) {
+    return {};
+  }
 
   const value = (result as { details?: unknown }).details;
+
   return (value && typeof value === 'object' ? value : {}) as { status?: unknown };
 });
 
 const outcome = computed(() => {
-  if (props.loadError) return '结果加载失败';
-  if (props.status === 'running') return '执行中…';
-  if (props.status === 'error') return '执行失败';
+  if (props.loadError) {
+    return '结果加载失败';
+  }
+
+  if (props.status === 'running') {
+    return '执行中…';
+  }
+
+  if (props.status === 'error') {
+    return '执行失败';
+  }
 
   const { status } = details.value;
+
   return (typeof status === 'string' ? Outcome[status] : undefined) ?? '已返回';
 });
 </script>

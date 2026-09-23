@@ -46,11 +46,19 @@ export class NativeASR {
   private currentModel: ASRModelId;
 
   setModel(model: ASRModelId): void {
-    if (this.closed) throw new Error('ASR is closed');
-    if (model === this.currentModel) return;
+    if (this.closed) {
+      throw new Error('ASR is closed');
+    }
+
+    if (model === this.currentModel) {
+      return;
+    }
+
     const definition = ASR_MODELS[model];
-    if (!this.vad && !definition.events)
+
+    if (!this.vad && !definition.events) {
       throw new Error('Selected ASR model does not support audio events');
+    }
 
     // 先准备新识别器，失败时旧模型仍可继续；尾段必须由旧模型完成。
     const recognizer = definition.create(this.options.modelsPath);
@@ -59,6 +67,7 @@ export class NativeASR {
     this.currentModel = model;
   }
 
+  // oxlint-disable-next-line eslint/complexity -- 构造阶段集中校验并装配可选 VAD、事件和说话人能力。
   constructor(private readonly options: ASROptions) {
     validateOptions(options);
     this.currentModel = options.model ?? DEFAULT_ASR_MODEL;
@@ -68,26 +77,44 @@ export class NativeASR {
     this.bufferCapacity = Math.ceil(bufferSeconds * SAMPLE_RATE);
     this.buffer = new CircularBuffer(this.bufferCapacity);
     const model = ASR_MODELS[options.model ?? DEFAULT_ASR_MODEL];
-    if (!model) throw new Error(`Unsupported ASR model: ${options.model}`);
-    if (options.mode === 'events' && !model.events)
+
+    if (!model) {
+      throw new Error(`Unsupported ASR model: ${options.model}`);
+    }
+
+    if (options.mode === 'events' && !model.events) {
       throw new Error('Selected ASR model does not support audio events');
+    }
+
     this.recognizer = model.create(options.modelsPath);
     this.eventWindow = Math.round((options.eventWindowSeconds ?? 5) * SAMPLE_RATE);
-    if (options.mode !== 'events') this.vad = new Vad(models.vad, bufferSeconds);
+
+    if (options.mode !== 'events') {
+      this.vad = new Vad(models.vad, bufferSeconds);
+    }
+
     this.windowSize = models.vad.tenVad?.windowSize ?? VAD_WINDOW_SIZE;
-    if (options.speaker !== false)
+
+    if (options.speaker !== false) {
       this.speaker = new SpeakerTracker(
         new SpeakerEmbeddingExtractor(models.speaker),
         options.speaker ?? [],
         options.speakerThreshold ?? DEFAULT_SPEAKER_THRESHOLD,
         options.maxSpeakers ?? DEFAULT_MAX_SPEAKERS,
       );
+    }
   }
 
   write(segment: ASRSegment): void {
     try {
-      if (!this.streamStartAt) this.streamStartAt = segment.startAt;
-      if (this.closed) throw new Error('ASR is closed');
+      if (!this.streamStartAt) {
+        this.streamStartAt = segment.startAt;
+      }
+
+      if (this.closed) {
+        throw new Error('ASR is closed');
+      }
+
       const samples = this.normalizer.write(segment);
       this.push(samples);
       this.processWindows();
@@ -99,20 +126,29 @@ export class NativeASR {
 
   flush(): void {
     try {
-      if (this.closed || !this.streamStartAt) return;
+      if (this.closed || !this.streamStartAt) {
+        return;
+      }
+
       this.push(this.normalizer.flush());
       this.processWindows();
+
       if (!this.vad) {
         this.processWindows();
         const remaining = this.buffer.size();
-        if (remaining > 0)
+
+        if (remaining > 0) {
           this.transcribe({
             start: this.eventOffset,
             samples: this.buffer.get(this.buffer.head(), remaining),
           });
+        }
+
         return;
       }
+
       const remaining = this.buffer.size();
+
       if (remaining > 0) {
         const samples = this.buffer.get(this.buffer.head(), remaining);
         this.buffer.pop(remaining);
@@ -120,6 +156,7 @@ export class NativeASR {
         padded.set(samples);
         this.vad.acceptWaveform(padded);
       }
+
       this.vad.flush();
       this.drainVad();
     } catch (error) {
@@ -144,10 +181,15 @@ export class NativeASR {
 
   private push(samples: Float32Array): void {
     let offset = 0;
+
     while (offset < samples.length) {
       this.processWindows();
       const free = this.bufferCapacity - this.buffer.size();
-      if (free === 0) throw new Error('ASR circular buffer is full');
+
+      if (free === 0) {
+        throw new Error('ASR circular buffer is full');
+      }
+
       const length = Math.min(free, samples.length - offset);
       this.buffer.push(samples.subarray(offset, offset + length));
       offset += length;
@@ -162,8 +204,10 @@ export class NativeASR {
         this.transcribe({ start: this.eventOffset, samples });
         this.eventOffset += samples.length;
       }
+
       return;
     }
+
     while (this.buffer.size() >= this.windowSize) {
       const samples = this.buffer.get(this.buffer.head(), this.windowSize);
       this.buffer.pop(this.windowSize);
@@ -182,6 +226,7 @@ export class NativeASR {
 
   private transcribe(segment: SpeechSegment): void {
     const baseAt = this.streamStartAt;
+
     if (!baseAt) {
       throw new Error('Cannot map ASR timestamps before audio is written');
     }
@@ -191,6 +236,7 @@ export class NativeASR {
     this.emit('speechstart', segmentStartAt);
 
     const result = this.recognizer!.transcribe(segment.samples);
+
     if (result.content || result.events?.length) {
       this.emit('result', {
         ...result,
@@ -200,11 +246,15 @@ export class NativeASR {
         endAt: segmentEndAt,
       });
     }
+
     this.emit('speechend', segmentEndAt);
   }
 
   async close(): Promise<void> {
-    if (this.closed) return;
+    if (this.closed) {
+      return;
+    }
+
     try {
       this.flush();
     } finally {
@@ -230,11 +280,13 @@ export class ASR implements AsyncDisposable {
 
   constructor(options: ASROptions) {
     this.backend = process.versions.electron ? new ProcessASR(options) : new NativeASR(options);
-    if (options.wake)
+
+    if (options.wake) {
       this.gate = new WakeGate(this.backend, {
         ...options.wake,
         modelsPath: options.modelsPath,
       });
+    }
   }
 
   async setModel(model: ASRModelId): Promise<void> {
@@ -253,13 +305,17 @@ export class ASR implements AsyncDisposable {
     if (event === 'error' && this.gate) {
       const first = this.gate.kws.on('error', callback as ASREventMap['error']);
       const second = this.backend.on(event, callback);
+
       return () => {
         first();
         second();
       };
     }
-    if (event === 'wake' && this.gate)
+
+    if (event === 'wake' && this.gate) {
       return this.gate.kws.on('wake', callback as ASREventMap['wake']);
+    }
+
     return this.backend.on(event, callback);
   }
 
@@ -280,13 +336,18 @@ function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
+// oxlint-disable-next-line eslint/complexity -- 每个分支对应独立配置约束，集中校验可保留一致错误语义。
 function validateOptions(options: ASROptions): void {
   for (const [name, value] of Object.entries(options.vad ?? {})) {
-    if (value === undefined) continue;
+    if (value === undefined) {
+      continue;
+    }
+
     if (!Number.isFinite(value) || value <= 0) {
       throw new Error(`vad.${name} must be a positive number`);
     }
   }
+
   if (
     options.vad &&
     (options.vad?.maxSpeechDuration ?? 10) + (options.vad?.minSilenceDuration ?? 0.5) >
@@ -294,13 +355,17 @@ function validateOptions(options: ASROptions): void {
   ) {
     throw new Error('VAD speech and silence durations must fit in the audio buffer');
   }
+
   const seconds = options.eventWindowSeconds ?? 5;
+
   if (
     !Number.isFinite(seconds) ||
     Math.round(seconds * SAMPLE_RATE) < 1 ||
     (options.mode === 'events' && seconds > (options.bufferSeconds ?? DEFAULT_BUFFER_SECONDS))
-  )
+  ) {
     throw new Error('eventWindowSeconds must fit in the audio buffer');
+  }
+
   if (
     options.bufferSeconds !== undefined &&
     (!Number.isFinite(options.bufferSeconds) ||
@@ -308,12 +373,14 @@ function validateOptions(options: ASROptions): void {
   ) {
     throw new Error(`bufferSeconds must hold at least one ${VAD_WINDOW_SIZE}-sample VAD window`);
   }
+
   if (
     options.speakerThreshold !== undefined &&
     !(options.speakerThreshold > 0 && options.speakerThreshold <= 1)
   ) {
     throw new Error('speakerThreshold must be greater than 0 and at most 1');
   }
+
   if (
     options.maxSpeakers !== undefined &&
     (!Number.isInteger(options.maxSpeakers) || options.maxSpeakers < 1)
@@ -327,11 +394,16 @@ export async function createASR(
   prepare: Omit<InstallModelsOptions, 'modelsPath'> = {},
 ): Promise<ASR> {
   await installModels({ ...prepare, ...options });
-  if (options.wake && !options.wake.modelPath)
+
+  if (options.wake && !options.wake.modelPath) {
     await installKWSModels({ ...prepare, modelsPath: options.modelsPath });
+  }
+
   const asr = new ASR(options);
+
   try {
     await asr.flush();
+
     return asr;
   } catch (error) {
     await asr.close().catch(() => {});

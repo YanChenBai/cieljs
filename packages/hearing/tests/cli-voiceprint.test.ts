@@ -48,6 +48,7 @@ vi.mock('../src/models.ts', () => ({
 vi.mock('../src/voiceprint.ts', () => ({
   averageEmbeddings: (embeddings: Float32Array[]) => {
     mocks.averagedEmbeddings = embeddings;
+
     return Float32Array.of(1, 0);
   },
   writeVoiceprint: () => '.ciel/voiceprints/alice.voiceprint',

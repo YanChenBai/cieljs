@@ -13,12 +13,16 @@ function duration(entry: TraceStepGroup) {
   const reference = entry.endedAt ?? entry.runningUntil ?? entry.updatedAt;
   const elapsed = Math.max(0, reference - entry.startedAt);
   const value = elapsed < 1000 ? `${Math.round(elapsed)} ms` : `${(elapsed / 1000).toFixed(1)} s`;
+
   return entry.status === 'running' ? `${value}…` : value;
 }
 
 function beginsRound(index: number) {
   const round = props.entries[index]?.turnNumber;
-  if (!round) return false;
+
+  if (!round) {
+    return false;
+  }
 
   return props.entries[index - 1]?.turnNumber !== round;
 }

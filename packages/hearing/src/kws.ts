@@ -17,6 +17,7 @@ import { ProcessASR } from './process-asr.ts';
 import type { ASREventMap, ASRSegment, Unsubscribe } from './types.ts';
 
 const MODEL = 'sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01';
+
 const FILES = {
   encoder: 'encoder-epoch-12-avg-2-chunk-16-left-64.onnx',
   decoder: 'decoder-epoch-12-avg-2-chunk-16-left-64.onnx',
@@ -50,48 +51,70 @@ export class NativeKWS {
   private startAt?: Date;
   private lastWake = -Infinity;
 
+  // oxlint-disable-next-line eslint/complexity -- 原生 KWS 初始化集中验证模型文件、关键词和运行时参数。
   constructor(private readonly options: KWSOptions) {
-    if (!options.keywords.length) throw new Error('At least one wake keyword is required');
-    if (!Number.isFinite(options.cooldownMs ?? 1_500) || (options.cooldownMs ?? 1_500) < 0)
+    if (!options.keywords.length) {
+      throw new Error('At least one wake keyword is required');
+    }
+
+    if (!Number.isFinite(options.cooldownMs ?? 1_500) || (options.cooldownMs ?? 1_500) < 0) {
       throw new Error('Invalid KWS cooldown');
+    }
+
     if (
       !Number.isFinite(options.threshold ?? 0.25) ||
       (options.threshold ?? 0.25) <= 0 ||
       (options.threshold ?? 0.25) > 1
-    )
+    ) {
       throw new Error('Invalid KWS threshold');
-    if (!Number.isFinite(options.score ?? 1) || (options.score ?? 1) <= 0)
-      throw new Error('Invalid KWS score');
-    const directory = options.modelPath ?? path.join(options.modelsPath, 'kws', MODEL);
-    for (const file of Object.values(FILES)) {
-      if (!isFile(path.join(directory, file)))
-        throw new Error(`Missing KWS model file: ${file}. Run createKWS() to prepare models.`);
     }
+
+    if (!Number.isFinite(options.score ?? 1) || (options.score ?? 1) <= 0) {
+      throw new Error('Invalid KWS score');
+    }
+
+    const directory = options.modelPath ?? path.join(options.modelsPath, 'kws', MODEL);
+
+    for (const file of Object.values(FILES)) {
+      if (!isFile(path.join(directory, file))) {
+        throw new Error(`Missing KWS model file: ${file}. Run createKWS() to prepare models.`);
+      }
+    }
+
     const vocabulary = new Set(
       readFileSync(path.join(directory, FILES.tokens), 'utf8')
         .split(/\r?\n/u)
         .map(line => line.split(/\s+/u)[0]!),
     );
+
     const lines = options.keywords
       .map(keyword => {
         const text = typeof keyword === 'string' ? keyword : keyword.text;
         const tokens = typeof keyword === 'string' ? keywordTokens(text) : [...keyword.tokens];
-        if (!text.trim() || /[\r\n@]/u.test(text) || !tokens.length)
+
+        if (!text.trim() || /[\r\n@]/u.test(text) || !tokens.length) {
           throw new Error('Invalid wake keyword');
+        }
+
         for (const token of tokens) {
-          if (!vocabulary.has(token) || /[\s:@#]/u.test(token))
+          if (!vocabulary.has(token) || /[\s:@#]/u.test(token)) {
             throw new Error(
               `Unknown KWS token: ${token}. Supply model-compatible tokens explicitly.`,
             );
+          }
         }
+
         return `${tokens.join(' ')} @${text}`;
       })
       .join('\n');
+
     const keywordsFile = path.join(
       directory,
       `keywords-${createHash('sha256').update(lines).digest('hex').slice(0, 16)}.txt`,
     );
-    writeFileSync(keywordsFile, lines + '\n');
+
+    writeFileSync(keywordsFile, `${lines}\n`);
+
     this.runtime = new sherpaOnnx.KeywordSpotter({
       featConfig: { sampleRate: SAMPLE_RATE, featureDim: 80 },
       modelConfig: {
@@ -110,25 +133,34 @@ export class NativeKWS {
       numTrailingBlanks: 1,
       maxActivePaths: 4,
     });
+
     this.stream = this.runtime.createStream();
   }
 
   write(chunk: ASRSegment): void {
-    if (!this.runtime || !this.stream) throw new Error('KWS is closed');
+    if (!this.runtime || !this.stream) {
+      throw new Error('KWS is closed');
+    }
+
     const samples = this.normalizer.write(chunk);
     this.startAt ??= chunk.startAt;
+
     // 小块解码防止一次输入很长的录音只取到最后一个命中。
     for (let offset = 0; offset < samples.length; offset += 1_600) {
       this.stream.acceptWaveform({
         samples: samples.subarray(offset, offset + 1_600),
         sampleRate: SAMPLE_RATE,
       });
+
       this.decode();
     }
   }
 
   flush(): void {
-    if (!this.runtime || !this.stream || !this.startAt) return;
+    if (!this.runtime || !this.stream || !this.startAt) {
+      return;
+    }
+
     this.stream.acceptWaveform({ samples: this.normalizer.flush(), sampleRate: SAMPLE_RATE });
     this.stream.acceptWaveform({ samples: new Float32Array(SAMPLE_RATE), sampleRate: SAMPLE_RATE });
     this.stream.inputFinished();
@@ -139,11 +171,15 @@ export class NativeKWS {
 
   on<K extends keyof KWSEventMap>(event: K, listener: KWSEventMap[K]): Unsubscribe {
     this.emitter.on(event, listener);
+
     return () => this.emitter.off(event, listener);
   }
 
   async close(): Promise<void> {
-    if (!this.runtime) return;
+    if (!this.runtime) {
+      return;
+    }
+
     try {
       this.flush();
     } finally {
@@ -156,12 +192,22 @@ export class NativeKWS {
     while (this.runtime!.isReady(this.stream!)) {
       this.runtime!.decode(this.stream!);
       const result = this.runtime!.getResult(this.stream!);
-      if (!result.keyword) continue;
+
+      if (!result.keyword) {
+        continue;
+      }
+
       const time =
         this.startAt!.getTime() + (result.start_time + (result.timestamps[0] ?? 0)) * 1_000;
+
       this.runtime!.reset(this.stream!);
-      if (time - this.lastWake < (this.options.cooldownMs ?? 1_500)) continue;
+
+      if (time - this.lastWake < (this.options.cooldownMs ?? 1_500)) {
+        continue;
+      }
+
       this.lastWake = time;
+
       this.emitter.emit('wake', {
         keyword: result.keyword,
         at: new Date(time),
@@ -184,8 +230,10 @@ export class KWS implements AsyncDisposable {
     return this.backend.flush();
   }
   on<K extends keyof KWSEventMap>(event: K, listener: KWSEventMap[K]): Unsubscribe {
-    if (this.backend instanceof ProcessASR)
+    if (this.backend instanceof ProcessASR) {
       return this.backend.on(event, listener as ASREventMap[K]);
+    }
+
     return this.backend.on(event, listener);
   }
   close(): Promise<void> {
@@ -200,10 +248,15 @@ export async function createKWS(
   options: KWSOptions,
   prepare: Omit<InstallModelsOptions, 'modelsPath'> = {},
 ): Promise<KWS> {
-  if (!options.modelPath) await installKWSModels({ ...prepare, modelsPath: options.modelsPath });
+  if (!options.modelPath) {
+    await installKWSModels({ ...prepare, modelsPath: options.modelsPath });
+  }
+
   const kws = new KWS(options);
+
   try {
     await kws.flush();
+
     return kws;
   } catch (error) {
     await kws.close().catch(() => {});
@@ -213,17 +266,24 @@ export async function createKWS(
 
 export async function installKWSModels(options: InstallModelsOptions): Promise<string> {
   const directory = path.join(options.modelsPath, 'kws', MODEL);
+
   const missing = Object.values(FILES).filter(
     file => options.force || !isFile(path.join(directory, file)),
   );
-  if (!missing.length) return directory;
+
+  if (!missing.length) {
+    return directory;
+  }
+
   mkdirSync(directory, { recursive: true });
   const archive = path.join(directory, 'model.tar.bz2');
+
   await installFile(
     `https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/${MODEL}.tar.bz2`,
     archive,
     options,
   );
+
   for (const file of missing) {
     // 只读取固定成员到 stdout；不允许归档路径或符号链接写入文件系统。
     const { stdout } = await promisify(execFile)('tar', ['-xOf', archive, `${MODEL}/${file}`], {
@@ -231,18 +291,25 @@ export async function installKWSModels(options: InstallModelsOptions): Promise<s
       maxBuffer: 64 * 1024 * 1024,
       windowsHide: true,
     });
-    if (!stdout.length) throw new Error(`Empty KWS model file: ${file}`);
+
+    if (!stdout.length) {
+      throw new Error(`Empty KWS model file: ${file}`);
+    }
+
     const target = path.join(directory, file);
-    await writeFile(target + '.part', stdout);
-    await rename(target + '.part', target);
+    await writeFile(`${target}.part`, stdout);
+    await rename(`${target}.part`, target);
   }
+
   return directory;
 }
 
 export function keywordTokens(text: string): string[] {
   const syllables = pinyin(text.replace(/\s/gu, ''), { type: 'array', toneSandhi: false });
+
   return syllables.flatMap(syllable => {
     const initial = syllable.match(/^(zh|ch|sh|[bpmfdtnlgkhjqxrzcsyw])/u)?.[0];
+
     return initial ? [initial, syllable.slice(initial.length)].filter(Boolean) : [syllable];
   });
 }
@@ -250,6 +317,7 @@ export function keywordTokens(text: string): string[] {
 function isFile(file: string) {
   try {
     const stat = statSync(file);
+
     return stat.isFile() && stat.size > 0;
   } catch {
     return false;

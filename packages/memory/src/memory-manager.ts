@@ -44,6 +44,7 @@ export class MemoryManager implements AsyncDisposable {
   private constructor(db: Database, options: MemoryManagerOptions) {
     this.timeZone = options.timeZone ?? 'Asia/Shanghai';
     const tokenize = options.tokenize ?? tokenizeSearchText;
+
     this.embeddingIndex = new VectorIndex(
       db,
       options.vectors,
@@ -55,13 +56,16 @@ export class MemoryManager implements AsyncDisposable {
       },
       options.onIndexError,
     );
+
     this.repository = new MemoryRepository(db, this.embeddingIndex, this.timeZone, tokenize);
     this.retrieval = new MemoryRetrieval(db, this.embeddingIndex, tokenize);
+
     this.services = {
       repository: this.repository,
       retrieval: this.retrieval,
       operate: this.operate.bind(this),
     };
+
     this.global = createGlobalMemory(this.services);
   }
 
@@ -74,6 +78,7 @@ export class MemoryManager implements AsyncDisposable {
     } catch (error) {
       throw new MemoryValidationError('timeZone 必须是有效的 IANA 时区', { cause: error });
     }
+
     const manager = new MemoryManager(options.storage.db, options);
     await manager.embeddingIndex.prepare();
     manager.embeddingIndex.enqueue();
@@ -115,12 +120,14 @@ export class MemoryManager implements AsyncDisposable {
     options: FindMemorySpacesOptions = {},
   ): Promise<MemorySpaceSourceHit[]> {
     const limit = integerOption(options.limit ?? 10, 'limit');
+
     const hits = await this.searchBySource(query, {
       mode: options.mode,
       layers: options.layers ?? ['space.long_term', 'space.daily'],
       limit: 1000,
       signal: options.signal,
     });
+
     const spaces = new Map<string, MemorySpaceSourceHit>();
 
     for (const hit of hits) {
@@ -133,6 +140,7 @@ export class MemoryManager implements AsyncDisposable {
       if (existing) {
         existing.score = Math.max(existing.score, hit.score);
         existing.matchedSources = [...new Set([...existing.matchedSources, ...hit.matchedSources])];
+
         existing.memories.push({
           id: hit.memoryId,
           revision: hit.revision,
@@ -208,6 +216,7 @@ export class MemoryManager implements AsyncDisposable {
 
     const result = Promise.resolve().then(operation);
     this.operations.add(result);
+
     void result.then(
       () => this.operations.delete(result),
       () => this.operations.delete(result),

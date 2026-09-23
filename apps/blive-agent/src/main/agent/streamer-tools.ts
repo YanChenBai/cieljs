@@ -35,10 +35,15 @@ export function createStreamerTools(options: {
       async execute({ uid, limit = 8 }, { signal }) {
         signal?.throwIfAborted();
         const streamerUid = uid ?? options.room()?.streamerUid;
-        if (!streamerUid) throw new Error('没有当前主播，请显式提供 uid');
+
+        if (!streamerUid) {
+          throw new Error('没有当前主播，请显式提供 uid');
+        }
+
         const items = await query(streamerUid, options.readInPage, limit);
         signal?.throwIfAborted();
         const details = { uid: streamerUid, source: 'public' as const, items };
+
         return { content: [{ type: 'text' as const, text: JSON.stringify(details) }], details };
       },
     }))(),

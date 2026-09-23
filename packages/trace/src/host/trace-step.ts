@@ -11,7 +11,7 @@ export function createTraceStep(
   model?: Agent['state']['model'],
 ): TraceEntry {
   const step: TraceEntry = {
-    id: 'step:' + trace.sequence,
+    id: `step:${trace.sequence}`,
     sequence: trace.sequence,
     sessionId: trace.sessionId,
     runId: trace.runId,
@@ -27,40 +27,67 @@ export function createTraceStep(
     raw: { id: trace.id, preview: trace.event.type },
     revision: trace.sequence,
   };
+
   if (trace.event.type.endsWith('_start') || trace.event.type.endsWith('_update')) {
     step.status = 'running';
     step.endedAt = undefined;
   }
+
   attachContentReferences(step, trace);
+
   // 压缩不是 Agent 事件，但同样需要一行可读的轨迹与摘要。
   if (trace.event.type === 'session_compaction') {
     step.label = '上下文压缩';
     step.text = trace.event.summary;
   }
+
   const errorPath = eventErrorPath(trace.event);
+
   if (errorPath) {
     step.status = 'error';
     step.error = { id: trace.id, path: ['event', ...errorPath], preview: '错误详情' };
   }
+
   attachDisplayMetadata(step, trace.event, tools, model);
+
   return step;
 }
 
 function eventErrorPath(event: RuntimeEvent): string[] | undefined {
-  if (event.type === 'tool_execution_end' && event.isError) return ['result'];
-  if ('message' in event && messageFailed(event.message)) return ['message'];
-  if (event.type === 'turn_end' && event.toolResults.some(messageFailed)) return ['toolResults'];
-  if (event.type === 'agent_end' && event.messages.some(messageFailed)) return ['messages'];
+  if (event.type === 'tool_execution_end' && event.isError) {
+    return ['result'];
+  }
+
+  if ('message' in event && messageFailed(event.message)) {
+    return ['message'];
+  }
+
+  if (event.type === 'turn_end' && event.toolResults.some(messageFailed)) {
+    return ['toolResults'];
+  }
+
+  if (event.type === 'agent_end' && event.messages.some(messageFailed)) {
+    return ['messages'];
+  }
 }
 
 function messageFailed(message: Extract<AgentEvent, { type: 'message_end' }>['message']) {
-  if (message.role === 'assistant') return message.stopReason === 'error';
+  if (message.role === 'assistant') {
+    return message.stopReason === 'error';
+  }
+
   return message.role === 'toolResult' && message.isError;
 }
 
 function eventKind(event: RuntimeEvent): TraceEntry['kind'] {
-  if (event.type.startsWith('tool_')) return 'tool';
-  if (event.type.startsWith('message_')) return 'message';
+  if (event.type.startsWith('tool_')) {
+    return 'tool';
+  }
+
+  if (event.type.startsWith('message_')) {
+    return 'message';
+  }
+
   return 'event';
 }
 
@@ -69,9 +96,15 @@ function attachContentReferences(step: TraceEntry, trace: TraceEvent) {
   const outputKey = ['message', 'result', 'partialResult', 'messages'].find(
     key => key in trace.event,
   );
-  if (outputKey) step.output = { id: trace.id, path: ['event', outputKey], preview: '完整内容' };
-  if ('args' in trace.event)
+
+  if (outputKey) {
+    step.output = { id: trace.id, path: ['event', outputKey], preview: '完整内容' };
+  }
+
+  if ('args' in trace.event) {
     step.input = { id: trace.id, path: ['event', 'args'], preview: '参数' };
+  }
+
   if ('message' in trace.event) {
     const content = messageContent(trace.event.message);
     step.text = content.text;
@@ -79,6 +112,7 @@ function attachContentReferences(step: TraceEntry, trace: TraceEvent) {
   }
 }
 
+// oxlint-disable-next-line eslint/complexity -- 展示元数据按不同运行时事件的可用字段渐进补齐。
 function attachDisplayMetadata(
   step: TraceEntry,
   event: RuntimeEvent,
@@ -90,6 +124,7 @@ function attachDisplayMetadata(
     const tool = tools?.[toolIndex];
     step.label = tool?.label ?? event.toolName;
     step.description = tool?.description;
+
     if (toolIndex >= 0 && tool && 'parameters' in tool) {
       step.schema = {
         id: step.raw!.id,
@@ -98,10 +133,15 @@ function attachDisplayMetadata(
       };
     }
   }
+
   if ('message' in event) {
     step.label = event.message.role;
-    if (event.message.role === 'assistant') step.label = 'Ciel';
+
+    if (event.message.role === 'assistant') {
+      step.label = 'Ciel';
+    }
   }
+
   if (model) {
     const { id, name, provider } = model;
     step.model = { id, name, provider };

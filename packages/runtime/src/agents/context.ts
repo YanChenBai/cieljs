@@ -67,6 +67,7 @@ export function createSessionContextTransformer(options: {
     const content = [renderIdentity(options.spaceId, sources), memoryContext]
       .filter((section): section is string => Boolean(section))
       .join('\n\n');
+
     const injectedContext: AgentMessage = {
       role: 'user',
       content: [{ type: 'text', text: content }],
@@ -87,6 +88,7 @@ export function createInvestigationContextTransformer(options: {
 
     const sources = options.resolveSources();
     await options.refreshSources(sources);
+
     const injectedContext: AgentMessage = {
       role: 'user',
       content: [

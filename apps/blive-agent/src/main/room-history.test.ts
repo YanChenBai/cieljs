@@ -57,10 +57,10 @@ describe('冷却登记', () => {
     const history = new RoomHistory();
     const now = 1_000 * MINUTE;
     history.record(room(1), now - 20 * MINUTE);
-    history.record(room(1), now - 1 * MINUTE);
+    history.record(room(1), now - Number(MINUTE));
 
     expect(history.cooling(now)).toEqual([
-      expect.objectContaining({ roomId: 1, leftAt: now - 1 * MINUTE }),
+      expect.objectContaining({ roomId: 1, leftAt: now - Number(MINUTE) }),
     ]);
   });
 });
@@ -92,7 +92,7 @@ describe('候选冷却过滤', () => {
 
   it('冷却期外的房间留在候选里', () => {
     const result = excludeRevisits([candidate(1), candidate(2)], {
-      cooling: [departure(9, now - 1 * MINUTE)],
+      cooling: [departure(9, now - Number(MINUTE))],
     });
 
     expect(result.candidates.map(item => item.roomId)).toEqual([1, 2]);

@@ -65,18 +65,22 @@ export default defineConfig({
       'build:unpack': {
         command: 'electron-builder --dir',
         dependsOn: ['build'],
+        cache: false,
       },
       'build:win': {
         command: 'electron-builder --win',
         dependsOn: ['build'],
+        cache: false,
       },
       'build:mac': {
         command: 'electron-builder --mac',
         dependsOn: ['build'],
+        cache: false,
       },
       'build:linux': {
         command: 'electron-builder --linux',
         dependsOn: ['build'],
+        cache: false,
       },
     },
   },

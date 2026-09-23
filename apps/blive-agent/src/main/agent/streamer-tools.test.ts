@@ -8,6 +8,7 @@ it('工具按需请求，默认主播随房间变化，显式 UID 可查询其�
   const dynamics = vi.spyOn(api, 'streamerDynamics').mockResolvedValue([]);
   const videos = vi.spyOn(api, 'streamerVideos').mockResolvedValue([]);
   const readInPage = vi.fn();
+
   let room = {
     roomId: 1,
     streamerUid: 10,
@@ -18,6 +19,7 @@ it('工具按需请求，默认主播随房间变化，显式 UID 可查询其�
     areaName: '',
     live: true,
   };
+
   const tools = createStreamerTools({ api, room: () => room, readInPage });
   expect(dynamics).not.toHaveBeenCalled();
   expect(videos).not.toHaveBeenCalled();

@@ -54,6 +54,7 @@ vi.mock('decibri', () => ({
 }));
 
 const temporaryDirectories: string[] = [];
+
 const testConfig = {
   ...defaultVoiceAgentConfig,
   mcp: {
@@ -77,6 +78,7 @@ afterEach(async () => {
       }),
     ),
   );
+
   vi.unstubAllGlobals();
 });
 
@@ -209,6 +211,7 @@ describe('createVoiceAgent', () => {
     expect(synthesizeMock).toHaveBeenCalledWith(
       expect.objectContaining({ text: '你好，我是夏尔' }),
     );
+
     expect(events.some(event => event.type === 'playback_finished')).toBe(true);
     expect(events.some(event => event.type === 'think_finished' && event.spoke)).toBe(true);
 

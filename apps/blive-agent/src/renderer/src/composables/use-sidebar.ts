@@ -7,9 +7,11 @@ export function useSidebar(side: 'left' | 'right' = 'left') {
   // 两侧面板分别为直播区域预留空间，避免缩窗后侧栏挤满整个工作区。
   const maximumWidth = side === 'left' ? 380 : 900;
   const reservedWidth = side === 'left' ? 600 : 640;
+
   const maxWidth = computed(() =>
     Math.max(260, Math.min(maximumWidth, viewportWidth.value - reservedWidth)),
   );
+
   const dragging = shallowRef(false);
 
   function resize(value: number) {
@@ -22,7 +24,9 @@ export function useSidebar(side: 'left' | 'right' = 'left') {
   }
 
   function startDrag(event: PointerEvent) {
-    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) return;
+    if (event.button !== 0 || !(event.currentTarget instanceof HTMLElement)) {
+      return;
+    }
 
     event.currentTarget.setPointerCapture(event.pointerId);
     dragging.value = true;
@@ -30,8 +34,9 @@ export function useSidebar(side: 'left' | 'right' = 'left') {
   }
 
   function moveDrag(event: PointerEvent) {
-    if (dragging.value)
+    if (dragging.value) {
       resize(side === 'left' ? event.clientX : viewportWidth.value - event.clientX);
+    }
   }
 
   function endDrag() {
@@ -39,11 +44,17 @@ export function useSidebar(side: 'left' | 'right' = 'left') {
   }
 
   function keyboardResize(event: KeyboardEvent) {
-    if (event.key === 'ArrowLeft') resize(width.value + (side === 'left' ? -16 : 16));
-    else if (event.key === 'ArrowRight') resize(width.value + (side === 'left' ? 16 : -16));
-    else if (event.key === 'Home') resize(260);
-    else if (event.key === 'End') resize(maxWidth.value);
-    else return;
+    if (event.key === 'ArrowLeft') {
+      resize(width.value + (side === 'left' ? -16 : 16));
+    } else if (event.key === 'ArrowRight') {
+      resize(width.value + (side === 'left' ? 16 : -16));
+    } else if (event.key === 'Home') {
+      resize(260);
+    } else if (event.key === 'End') {
+      resize(maxWidth.value);
+    } else {
+      return;
+    }
 
     event.preventDefault();
   }
@@ -52,6 +63,7 @@ export function useSidebar(side: 'left' | 'right' = 'left') {
     updateViewport();
     window.addEventListener('resize', updateViewport);
   });
+
   onUnmounted(() => window.removeEventListener('resize', updateViewport));
 
   return { collapsed, width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyboardResize };

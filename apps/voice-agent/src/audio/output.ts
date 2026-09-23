@@ -29,6 +29,7 @@ class DecibriAudioOutput implements AudioOutput {
     },
   ): Promise<void> {
     const decoded = decodeAudio(audio);
+
     const pcm = resampleS16le(
       decoded.pcm,
       decoded.channels,

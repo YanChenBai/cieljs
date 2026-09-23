@@ -11,6 +11,7 @@ const pageSchema = z.object({
   limit: z.number().int().min(1).max(300).default(100),
   sessionId: z.string().min(1).max(300).optional(),
 });
+
 const idSchema = z.object({ id: z.string().min(1).max(200) });
 
 export function createRunRoutes(host: TraceHost, options: TraceRouterOptions = {}) {
@@ -38,7 +39,7 @@ export function createMessageRoutes(host: TraceHost) {
   return {
     get: os
       .input(z.object({ messageId: z.string().min(1).max(200) }))
-      .handler(({ input }) => host.store.get<unknown>(input.messageId + ':output')),
+      .handler(({ input }) => host.store.get<unknown>(`${input.messageId}:output`)),
   };
 }
 
@@ -48,7 +49,9 @@ function listRecords(
   input: { cursor?: number; limit: number; runId?: string; sessionId?: string },
   options: TraceRouterOptions,
 ) {
-  if (input.sessionId && options.session && !options.session(input.sessionId)) return [];
+  if (input.sessionId && options.session && !options.session(input.sessionId)) {
+    return [];
+  }
 
   return host.store
     .list<TraceEntry>(category, {
@@ -62,6 +65,10 @@ function listRecords(
 
 async function readEntry(host: TraceHost, id: string) {
   const entry = await host.store.get<TraceEntry>(id);
-  if (!entry) throw new ORPCError('NOT_FOUND');
+
+  if (!entry) {
+    throw new ORPCError('NOT_FOUND');
+  }
+
   return entry;
 }

@@ -58,21 +58,25 @@ export class TraceStore {
 
   async sequence() {
     const table = sql.raw(this.table);
+
     const result = await this.storage.db.execute<{ n: string }>(
       sql`SELECT COALESCE(MAX(sequence), 0) AS n
           FROM ${table}
           WHERE category = 'entry'`,
     );
+
     return Number(result.rows[0]!.n);
   }
   async projectionState<T>() {
     await this.flush();
     const table = sql.raw(this.table);
+
     const result = await this.storage.db.execute<{ value: Uint8Array }>(
       sql`SELECT value FROM ${table}
           WHERE id = ${TraceStore.projectionStateId}
             AND category = 'projection_state'`,
     );
+
     const row = result.rows[0];
 
     return row ? (JSON.parse(Buffer.from(row.value).toString('utf8')) as T) : undefined;
@@ -115,31 +119,45 @@ export class TraceStore {
     this.writes.set(id, { id, category, sequence, bytes, value, runId, sessionId });
   }
   async get<T>(id: string): Promise<T | undefined> {
-    if (this.transientValues.has(id)) return this.transientValues.get(id) as T;
+    if (this.transientValues.has(id)) {
+      return this.transientValues.get(id) as T;
+    }
 
     const pending = this.writes.get(id);
-    if (pending && pending.category !== 'message_reference') return pending.value as T;
-    if (pending) return this.message<T>(pending.value);
+
+    if (pending && pending.category !== 'message_reference') {
+      return pending.value as T;
+    }
+
+    if (pending) {
+      return this.message<T>(pending.value);
+    }
 
     // 同一投影批次里其他记录尚未落盘不影响当前 ID 的旧值，避免一次 get 拆散整个事务。
     await this.pending;
     this.throwPendingError();
     const table = sql.raw(this.table);
+
     const result = await this.storage.db.execute<{ value: Uint8Array; category: string }>(
       sql`SELECT category, value FROM ${table} WHERE id = ${id}`,
     );
+
     const row = result.rows[0];
+
     if (!row) {
       const event = await this.storage.db.execute<{ record: T }>(
         sql`SELECT record FROM storage.events WHERE id = ${id}`,
       );
+
       return event.rows[0]?.record;
     }
 
     const value = deserialize(row.value);
+
     if (row.category === 'message_reference') {
       return this.message<T>(value);
     }
+
     return value as T;
   }
   async list<T>(
@@ -155,6 +173,7 @@ export class TraceStore {
   ): Promise<T[]> {
     await this.flush();
     const table = sql.raw(this.table);
+
     const result = await this.storage.db.execute<{ value: Uint8Array }>(
       sql`SELECT value FROM ${table}
           WHERE category = ${category}
@@ -165,31 +184,40 @@ export class TraceStore {
           ORDER BY sequence ${sql.raw(options.ascending ? 'ASC' : 'DESC')}
           LIMIT ${options.limit ?? 100}`,
     );
+
     const rows = options.ascending ? result.rows : result.rows.reverse();
+
     return rows.map(row => deserialize(row.value) as T);
   }
   async flush() {
     while (this.writes.size) {
       const writes = [...this.writes.values()];
       this.writes.clear();
+
       this.pending = this.pending
         .then(() =>
           this.storage.db.transaction(async tx => {
-            for (const record of writes) await this.persist(tx, record);
+            for (const record of writes) {
+              await this.persist(tx, record);
+            }
           }),
         )
         .catch(error => {
           this.error ??= error;
         });
+
       await this.pending;
     }
+
     this.throwPendingError();
   }
 
   async createRebuild() {
     await this.flush();
+
     await this.storage.db.transaction(async tx => {
       await tx.execute(sql`DROP TABLE IF EXISTS trace.records_rebuild`);
+
       await tx.execute(sql`
         CREATE TABLE trace.records_rebuild (
           id text PRIMARY KEY,
@@ -200,14 +228,17 @@ export class TraceStore {
           session_id text
         )
       `);
+
       await tx.execute(sql`
         CREATE INDEX records_rebuild_order
         ON trace.records_rebuild(category, sequence)
       `);
+
       await tx.execute(sql`
         CREATE INDEX records_rebuild_run
         ON trace.records_rebuild(run_id, category, sequence)
       `);
+
       await tx.execute(sql`
         CREATE INDEX records_rebuild_session
         ON trace.records_rebuild(session_id, category, sequence)
@@ -220,6 +251,7 @@ export class TraceStore {
   async activate(rebuilt: TraceStore) {
     await this.flush();
     await rebuilt.flush();
+
     await this.storage.db.transaction(async tx => {
       await tx.execute(sql`DROP TABLE IF EXISTS trace.records_stale`);
       await tx.execute(sql`ALTER TABLE trace.records RENAME TO records_stale`);
@@ -228,10 +260,12 @@ export class TraceStore {
       await tx.execute(sql`ALTER INDEX trace.records_rebuild_order RENAME TO records_order`);
       await tx.execute(sql`ALTER INDEX trace.records_rebuild_run RENAME TO records_run`);
       await tx.execute(sql`ALTER INDEX trace.records_rebuild_session RENAME TO records_session`);
+
       await tx.execute(sql`
         ALTER TABLE trace.records RENAME CONSTRAINT records_rebuild_pkey TO records_pkey
       `);
     });
+
     rebuilt.table = 'trace.records';
   }
 
@@ -241,6 +275,7 @@ export class TraceStore {
 
   private async persist(tx: Transaction, record: StoredRecord) {
     const table = sql.raw(this.table);
+
     await tx.execute(
       sql`INSERT INTO ${table} AS target
             (id, category, sequence, run_id, value, session_id)
@@ -270,11 +305,14 @@ export class TraceStore {
     const message = await this.storage.db.execute<{ message: T }>(
       sql`SELECT record->'event'->'message' AS message FROM storage.events WHERE id = ${eventId}`,
     );
+
     return message.rows[0]?.message;
   }
 
   private throwPendingError() {
-    if (!this.error) return;
+    if (!this.error) {
+      return;
+    }
 
     const error = this.error;
     this.error = undefined;
@@ -282,33 +320,55 @@ export class TraceStore {
   }
 }
 
+// oxlint-disable-next-line eslint/complexity -- 快照按内建容器类型递归复制，并显式处理循环引用。
 function snapshot(value: unknown, seen = new Map<object, unknown>()): unknown {
-  if (!value || typeof value !== 'object')
+  if (!value || typeof value !== 'object') {
     return typeof value === 'function' ? '[Function]' : value;
-  if (seen.has(value)) return seen.get(value);
+  }
+
+  if (seen.has(value)) {
+    return seen.get(value);
+  }
+
   if (
     value instanceof Date ||
     value instanceof Error ||
     value instanceof ArrayBuffer ||
     ArrayBuffer.isView(value)
-  )
+  ) {
     return value;
+  }
+
   if (value instanceof Map) {
     const result = new Map();
     seen.set(value, result);
-    for (const [key, item] of value) result.set(snapshot(key, seen), snapshot(item, seen));
+
+    for (const [key, item] of value) {
+      result.set(snapshot(key, seen), snapshot(item, seen));
+    }
+
     return result;
   }
+
   if (value instanceof Set) {
     const result = new Set();
     seen.set(value, result);
-    for (const item of value) result.add(snapshot(item, seen));
+
+    for (const item of value) {
+      result.add(snapshot(item, seen));
+    }
+
     return result;
   }
+
   const result: Record<string, unknown> | unknown[] = Array.isArray(value) ? [] : {};
   seen.set(value, result);
+
   for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
-    if (key === 'length' && Array.isArray(result)) continue;
+    if (key === 'length' && Array.isArray(result)) {
+      continue;
+    }
+
     Object.defineProperty(result, key, {
       value: 'value' in descriptor ? snapshot(descriptor.value, seen) : '[Getter / Setter]',
       enumerable: true,
@@ -316,5 +376,6 @@ function snapshot(value: unknown, seen = new Map<object, unknown>()): unknown {
       writable: true,
     });
   }
+
   return result;
 }

@@ -15,6 +15,7 @@ const props = defineProps<{
   traceClient: TraceClient;
   currentRoom?: InvestigationRoom;
 }>();
+
 const sidebarCollapsed = defineModel<boolean>('sidebarCollapsed', { default: false });
 
 const {
@@ -31,20 +32,31 @@ const {
   prompt,
   abort,
 } = useInvestigationChat(props.client);
+
 const { width, maxWidth, dragging, startDrag, moveDrag, endDrag, keyboardResize } =
   useInvestigationSidebar();
+
 const scroll = useTemplateRef<HTMLElement>('scroll');
 const editingTitle = shallowRef(false);
 const title = shallowRef('');
+
 const currentSessionPending = computed(() => {
   const sessionId = conversation.value?.sessionId;
+
   return sessionId ? sessionPending.value.get(sessionId) : undefined;
 });
+
 const busySessionIds = computed<ReadonlySet<string>>(() => new Set(sessionPending.value.keys()));
 const composerRunning = computed(() => Boolean(currentSessionPending.value));
+
 const composerDisabled = computed(() => {
-  if (!conversation.value) return true;
-  if (pending.value) return true;
+  if (!conversation.value) {
+    return true;
+  }
+
+  if (pending.value) {
+    return true;
+  }
 
   return currentSessionPending.value === 'abort';
 });
@@ -60,7 +72,10 @@ function startTitleEdit() {
 
 function saveTitle() {
   editingTitle.value = false;
-  if (title.value.trim()) void rename(title.value);
+
+  if (title.value.trim()) {
+    void rename(title.value);
+  }
 }
 
 function cancelTitleEdit() {
@@ -69,7 +84,10 @@ function cancelTitleEdit() {
 
 function jumpToBottom() {
   const element = scroll.value;
-  if (!element) return;
+
+  if (!element) {
+    return;
+  }
 
   element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
 }

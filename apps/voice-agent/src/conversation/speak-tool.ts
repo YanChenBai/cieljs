@@ -90,6 +90,11 @@ export interface SpeakToolOptions {
   onAecReference?: (pcm: Buffer) => void;
 }
 
+const speechInstructionsSchema = Type.String({
+  maxLength: 1_000,
+  description: '这一句话的语气、情绪或节奏；缺省时使用全局 TTS 配置。',
+});
+
 export const createSpeakTool = defineTool(
   Type.Object({
     text: Type.String({
@@ -97,12 +102,7 @@ export const createSpeakTool = defineTool(
       maxLength: 4_000,
       description: '要朗读的最终口语文本，不含 Markdown、列表、网址或舞台说明。',
     }),
-    instructions: Type.Optional(
-      Type.String({
-        maxLength: 1_000,
-        description: '这一句话的语气、情绪或节奏；缺省时使用全局 TTS 配置。',
-      }),
-    ),
+    instructions: Type.Optional(speechInstructionsSchema),
   }),
   (options: SpeakToolOptions) => ({
     name: 'speak',
@@ -170,10 +170,12 @@ async function executeSpeak(
   const startedAt = new Date();
 
   options.emit({ type: 'playback_started', device: options.outputDevice });
+
   await options.output.play(audio, {
     device: options.outputDevice,
     onAecReference: options.onAecReference,
   });
+
   const endedAt = new Date();
 
   options.emit({ type: 'playback_finished', durationMs: endedAt.getTime() - startedAt.getTime() });

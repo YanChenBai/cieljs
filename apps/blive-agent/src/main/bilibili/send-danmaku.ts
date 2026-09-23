@@ -55,16 +55,18 @@ function createPageSendScript(content: string) {
   })()`;
 }
 
+const danmakuResponseSchema = Type.Object({
+  code: Type.Number(),
+  data: Type.Optional(Type.Any()),
+  message: Type.Optional(Type.String()),
+  msg: Type.Optional(Type.String()),
+});
+
 export async function sendDanmaku(contents: WebContents, roomId: number, content: string) {
   const response = await executePage(
     contents,
     createSendDanmakuScript(roomId, content),
-    Type.Object({
-      code: Type.Number(),
-      data: Type.Optional(Type.Any()),
-      message: Type.Optional(Type.String()),
-      msg: Type.Optional(Type.String()),
-    }),
+    danmakuResponseSchema,
   );
 
   const message = response.message || response.msg || '';

@@ -32,8 +32,11 @@ export class LiveStatusMonitor {
     clearTimeout(this.timer);
   }
 
+  // oxlint-disable-next-line eslint/complexity -- 状态检查集中处理页面、媒体与直播状态的互斥结果。
   private async check() {
-    if (this.checking || this.controller.signal.aborted) return;
+    if (this.checking || this.controller.signal.aborted) {
+      return;
+    }
 
     this.checking = true;
     clearTimeout(this.timer);
@@ -45,15 +48,19 @@ export class LiveStatusMonitor {
 
       // 退出通知可能在页面查询期间到达；此时补一次 API 核实，不能信任旧的播放状态。
       const needsMediaVerification = this.mediaFailure && !hadMediaFailure;
+
       if (!this.controller.signal.aborted && needsMediaVerification) {
         status = await this.options.readStatus(this.controller.signal, 'media_exit');
       }
 
-      if (this.controller.signal.aborted) return;
+      if (this.controller.signal.aborted) {
+        return;
+      }
 
       if (status === 'offline') {
         this.close();
         this.options.onOffline();
+
         return;
       }
 
@@ -62,7 +69,9 @@ export class LiveStatusMonitor {
         this.options.onMediaFailure(this.mediaFailure);
       }
     } catch (cause) {
-      if (this.controller.signal.aborted) return;
+      if (this.controller.signal.aborted) {
+        return;
+      }
 
       const error = cause instanceof Error ? cause : new Error(String(cause));
 

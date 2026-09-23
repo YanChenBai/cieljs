@@ -21,6 +21,7 @@ class XiaomiTextToSpeech implements TextToSpeech {
 
   constructor(private readonly options: XiaomiTextToSpeechOptions) {}
 
+  // oxlint-disable-next-line eslint/complexity -- 外部响应的可选链校验会被计入复杂度，但流程保持线性。
   async synthesize(request: SpeechSynthesisRequest): Promise<SpeechAudio> {
     if (this.closed) {
       throw new Error('TTS 已关闭');
@@ -58,6 +59,7 @@ class XiaomiTextToSpeech implements TextToSpeech {
     const payload = (await response.json()) as {
       choices?: { message?: { audio?: { data?: unknown } } }[];
     };
+
     const base64 = payload.choices?.[0]?.message?.audio?.data;
 
     if (typeof base64 !== 'string' || base64.length === 0) {

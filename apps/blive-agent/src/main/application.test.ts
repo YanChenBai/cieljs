@@ -18,35 +18,44 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@cieljs/storage', () => ({ Storage: { open: mocks.openStorage } }));
+
 vi.mock('@cieljs/trace/host', () => ({
   TraceHost: { open: mocks.openTrace },
   traceStorage: {},
   createTraceRouter: () => ({}),
 }));
+
 vi.mock('@cieljs/mcp', () => ({ createMcp: mocks.createMcp }));
 vi.mock('@cieljs/memory', () => ({ memoryStorage: {} }));
+
 vi.mock('@cieljs/session', () => ({
   sessionStorage: {},
   SessionManager: { open: mocks.openSessions },
 }));
+
 vi.mock('@cieljs/vector', () => ({ vectorStorage: {} }));
+
 vi.mock('./config.ts', () => ({
   watchDataDirectory: () => '/watch-test',
   resolveWatchConfig: mocks.resolveConfig,
   resolveWatchModel: () => ({ model: { id: 'model' } }),
 }));
+
 vi.mock('./hearing-settings.ts', () => ({
   readHearingModel: () => 'sensevoice-small',
   saveHearingModel: vi.fn(),
 }));
+
 vi.mock('./routes/setup.ts', () => ({ createSetupRoutes: () => ({}) }));
 vi.mock('./routes/window.ts', () => ({ createWindowRoutes: () => ({}) }));
 vi.mock('./routes/recording.ts', () => ({ createRecordingRoutes: () => ({}) }));
+
 vi.mock('./bilibili/api.ts', () => ({
   BilibiliApi: class {
     areas = async () => [];
   },
 }));
+
 vi.mock('./bilibili/live-page.ts', () => ({
   LivePage: class {
     account = mocks.account;
@@ -55,12 +64,14 @@ vi.mock('./bilibili/live-page.ts', () => ({
     }
   },
 }));
+
 vi.mock('./runtime.ts', () => ({ createBliveAgent: mocks.createRuntime }));
 
 import { createWatchApplication } from './application.ts';
 
 const window = {} as BrowserWindow;
 let application: Awaited<ReturnType<typeof createWatchApplication>> | undefined;
+
 function resource(name: string) {
   return {
     [Symbol.asyncDispose]: async () => {
@@ -78,6 +89,7 @@ beforeEach(() => {
   mocks.openSessions.mockResolvedValue(resource('sessions'));
   mocks.createMcp.mockResolvedValue(resource('mcp'));
   mocks.resolveConfig.mockReturnValue({ ai: {}, wake: false });
+
   mocks.createRuntime.mockReturnValue({
     status: 'idle',
     start: mocks.start,
@@ -106,14 +118,17 @@ it('账号和快照无需 AI 配置，首次观看只创建一次运行时，关
   await client.watch.start({ mode: { type: 'follow', roomId: 123 } });
   await client.watch.start({ mode: { type: 'follow', roomId: 456 } });
   expect(mocks.createRuntime).toHaveBeenCalledOnce();
+
   expect(mocks.createRuntime.mock.calls[0]![0].perception.asr).toEqual({
     model: 'sensevoice-small',
     bufferSeconds: 30,
     vad: { minSilenceDuration: 0.2, maxSpeechDuration: 5 },
   });
+
   const closing = application.close();
   expect(application.close()).toBe(closing);
   await closing;
+
   expect(mocks.order).toEqual([
     'unsubscribe',
     'runtime',
@@ -123,7 +138,9 @@ it('账号和快照无需 AI 配置，首次观看只创建一次运行时，关
     'trace',
     'storage',
   ]);
+
   expect(vi.getTimerCount()).toBe(0);
+
   await expect(client.watch.start({ mode: { type: 'follow', roomId: 123 } })).rejects.toThrow(
     '已关闭',
   );

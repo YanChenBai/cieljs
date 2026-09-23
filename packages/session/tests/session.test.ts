@@ -19,11 +19,14 @@ const user = (content: string, timestamp = 1): AgentMessage => ({
 });
 
 const storages: Storage[] = [];
+
 async function openStorage() {
   const storage = await Storage.open({ dataDir: 'memory://', modules: [sessionStorage] });
   storages.push(storage);
+
   return storage;
 }
+
 let manager: SessionManager;
 let space: SessionSpace;
 
@@ -34,7 +37,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await manager.close();
-  for (const storage of storages.splice(0)) await storage.close();
+
+  for (const storage of storages.splice(0)) {
+    await storage.close();
+  }
 });
 
 describe('SessionManager', () => {
@@ -48,9 +54,11 @@ describe('SessionManager', () => {
     expect(await old.getLatestCompaction()).toBeNull();
     expect(await old.context()).toEqual([]);
     await old.rebuildIndexes();
+
     expect(await current.search('stalehandlemarker', { mode: 'full_text' })).toMatchObject([
       { message: { id: message.id } },
     ]);
+
     expect(await current.getLatestCompaction()).toMatchObject({ summary: '其他空间的摘要' });
   });
 
@@ -58,12 +66,15 @@ describe('SessionManager', () => {
     const sources = ['今天在直播间讨论中文分词和向量检索的实现方案'];
     const local = manager.space('source-tokens');
     const session = await local.session({ sources });
+
     expect(await local.findSessionsBySource('中文 向量', { mode: 'text' })).toMatchObject([
       { session: { id: session.id }, matchedSources: sources },
     ]);
+
     await session.update({ sources: ['今天研究数据库事务和持久化的具体方案'] });
     await session.rebuildIndexes();
     expect(await local.findSessionsBySource('中文 向量', { mode: 'text' })).toEqual([]);
+
     expect(await local.findSessionsBySource('数据库 持久化', { mode: 'text' })).toMatchObject([
       { session: { id: session.id } },
     ]);
@@ -71,11 +82,13 @@ describe('SessionManager', () => {
 
   test('通过显式 API 管理 Session 与 sources', async () => {
     const id = crypto.randomUUID();
+
     const session = await space.session({
       id,
       title: ' 初始标题 ',
       sources: [' room:42 ', 'ROOM:42', 'project:ciel'],
     });
+
     await session.appendMessage(user('session api marker'));
 
     expect(await session.getInfo()).toMatchObject({
@@ -85,6 +98,7 @@ describe('SessionManager', () => {
       sources: ['room:42', 'project:ciel'],
       messageCount: 1,
     });
+
     expect((await space.getSession(id))?.id).toBe(id);
     expect((await space.list()).some(item => item.id === id)).toBe(true);
 
@@ -108,9 +122,11 @@ describe('SessionManager', () => {
     const searchHits = await manager.searchAll('globalsearchuniquemarker', {
       mode: 'full_text',
     });
+
     expect(new Set(searchHits.map(hit => hit.message.sessionId))).toEqual(
       new Set([first.id, second.id]),
     );
+
     expect(new Set(searchHits.map(hit => hit.spaceId))).toEqual(new Set(['room:42', 'room:100']));
   });
 
@@ -124,9 +140,11 @@ describe('SessionManager', () => {
 
     expect(await roomB.getSession(first.id)).toBeNull();
     expect((await roomA.list()).map(item => item.id)).toEqual([first.id]);
+
     expect(
       (await roomA.search('space-isolation-marker')).map(hit => hit.message.sessionId),
     ).toEqual([first.id]);
+
     expect((await roomA.findSessionsBySource('主播')).map(hit => hit.session.id)).toEqual([
       first.id,
     ]);
@@ -138,10 +156,12 @@ describe('SessionManager', () => {
     const hits = await session.search('aggregate', { mode: 'trigram' });
 
     expect(hits).toHaveLength(1);
+
     expect(hits[0]).toMatchObject({
       message: { id: message.id, sessionId: session.id },
       matches: ['trigram'],
     });
+
     expect(hits[0]).not.toHaveProperty('chunkId');
   });
 
@@ -155,6 +175,7 @@ describe('SessionManager', () => {
       const privateSession = await globalManager
         .space('global-query')
         .session({ sources: ['agent:global-query'] });
+
       await privateSession.appendMessage(user('private query history'));
 
       expect(await globalManager.list()).toHaveLength(1);
@@ -170,6 +191,7 @@ describe('Session Agent tools', () => {
     const current = await space.session({ sources: ['agent:global-query'] });
     const target = await manager.space('room:carol').session({ sources: ['user:carol'] });
     const message = await target.appendMessage(user('carol private context'));
+
     const tools = sessionTools({
       session: current,
       space,
@@ -184,9 +206,11 @@ describe('Session Agent tools', () => {
       'search_discovered_session_messages',
       'read_discovered_session_messages',
     ]);
+
     expect(tools.some(tool => tool.name === 'list_sessions')).toBe(false);
 
     const searchFound = tools.find(tool => tool.name === 'search_discovered_session_messages')!;
+
     await expect(
       searchFound.execute(
         'search-before-discovery',
@@ -197,25 +221,31 @@ describe('Session Agent tools', () => {
 
     const find = tools.find(tool => tool.name === 'find_sessions_by_source')!;
     await find.execute('find', { query: 'carol' }, undefined);
+
     const result = await searchFound.execute(
       'search-after-discovery',
       { sessionId: target.id, query: 'carol private' },
       undefined,
     );
+
     expect(result.details).toMatchObject({
       sessionId: target.id,
       hits: [{ message: { id: message.id } }],
     });
+
     const read = tools.find(tool => tool.name === 'read_discovered_session_messages')!;
+
     expect(
       (await read.execute('read-discovered', { sessionId: target.id, messageId: message.id }))
         .details,
     ).toMatchObject({ messages: [{ id: message.id }] });
+
     expect(find.description).toContain('全部空间');
   });
 
   test('all 只增加全局搜索与定点读取，不增加枚举工具', async () => {
     const current = await space.session();
+
     const names = sessionTools({
       session: current,
       space,
@@ -231,6 +261,7 @@ describe('Session Agent tools', () => {
   test('Agent 可以更新并持久化当前 Session 标题', async () => {
     const current = await space.session();
     let updatedTitle: string | undefined;
+
     const titleTool = sessionTools({
       session: current,
       space,
@@ -271,6 +302,7 @@ describe('Session Agent tools', () => {
 
 test('压缩保留原始消息并向 context 注入累计摘要', async () => {
   const session = await space.session();
+
   for (let index = 0; index < 3; index++) {
     await session.appendMessage(user(`message ${index}`, index));
   }
@@ -283,11 +315,12 @@ test('压缩保留原始消息并向 context 注入累计摘要', async () => {
   });
 
   expect(await session.getMessages()).toHaveLength(3);
+
+  const summaryText = expect.stringContaining('summary');
+  const summaryBlock = expect.objectContaining({ text: summaryText });
+
   expect(await session.context()).toEqual([
-    expect.objectContaining({
-      role: 'user',
-      content: [expect.objectContaining({ text: expect.stringContaining('summary') })],
-    }),
+    expect.objectContaining({ role: 'user', content: [summaryBlock] }),
     expect.objectContaining({ content: 'message 2' }),
   ]);
 });
@@ -300,6 +333,7 @@ test('压缩把累计摘要写入事实流水，供 Trace 等消费者回放', a
     const session = await local.space('room:compaction-event').session();
     await session.appendMessage(user('first', 1));
     await session.appendMessage(user('second', 2));
+
     await session.compact({
       contextWindow: 32000,
       keepRecentMessages: 1,
@@ -308,6 +342,7 @@ test('压缩把累计摘要写入事实流水，供 Trace 等消费者回放', a
     });
 
     const events = (await storage.journal.read(0)).map(record => record.event);
+
     // 摘要 13 字符 ≈ 4 tokens，保留的 "second" 6 字符 ≈ 2 tokens。
     expect(events.at(-1)).toMatchObject({
       type: 'session_compaction',
@@ -329,6 +364,7 @@ test('关闭后拒绝新操作', async () => {
     storage: await openStorage(),
     namespace: 'test',
   });
+
   await localManager.close();
   await expect(localManager.list()).rejects.toBeInstanceOf(SessionClosedError);
 });

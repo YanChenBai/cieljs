@@ -17,7 +17,10 @@ const textarea = useTemplateRef<HTMLTextAreaElement>('textarea');
 
 function resize() {
   const element = textarea.value;
-  if (!element) return;
+
+  if (!element) {
+    return;
+  }
 
   element.style.height = 'auto';
   element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
@@ -26,7 +29,10 @@ function resize() {
 
 function submit() {
   const value = content.value.trim();
-  if (!value || props.disabled || props.running) return;
+
+  if (!value || props.disabled || props.running) {
+    return;
+  }
 
   content.value = '';
   emit('submit', value);
@@ -34,7 +40,9 @@ function submit() {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) {
+    return;
+  }
 
   event.preventDefault();
   submit();

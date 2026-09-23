@@ -21,18 +21,25 @@ it('实时订阅持续收到新消息和步骤，后台处理失败时明确报�
   const storage = await Storage.open({ dataDir: 'memory://', modules: [traceStorage] });
   const host = await TraceHost.open({ storage });
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+
   try {
     const client = createRouterClient(createTraceRouter(host));
     const updates = await client.updates();
     await updates.next();
     const next = updates.next();
+
     await host.agentListener('live')({
       type: 'message_end',
       message: { role: 'user', content: '新消息', timestamp: Date.now() },
     });
+
     await host.flushRecords();
     const update = await next;
-    if (update.done) throw new Error('实时订阅提前结束');
+
+    if (update.done) {
+      throw new Error('实时订阅提前结束');
+    }
+
     expect(update.value.entries.some(entry => entry.name === 'user')).toBe(true);
     expect(update.value.steps.some(step => step.name === 'message_end')).toBe(true);
 
@@ -52,14 +59,19 @@ it('实时订阅持续收到新消息和步骤，后台处理失败时明确报�
 async function openHost(capacity?: number, directory = 'memory://') {
   const storage = await Storage.open({ dataDir: directory, modules: [traceStorage] });
   const host = await TraceHost.open({ storage, capacity });
+
   cleanup.push(async () => {
     await host.close();
     await storage.close();
   });
+
   return host;
 }
+
 afterEach(async () => {
-  for (const close of cleanup.splice(0).reverse()) await close();
+  for (const close of cleanup.splice(0).reverse()) {
+    await close();
+  }
 });
 
 it('运行日志的消息输出、工具输入输出和原始事件均可通过详情接口读取', async () => {
@@ -68,12 +80,14 @@ it('运行日志的消息输出、工具输入输出和原始事件均可通过�
   const message = { role: 'user' as const, content: '查看房间', timestamp: 0 };
   await receive({ type: 'message_start', message });
   await receive({ type: 'message_end', message });
+
   await receive({
     type: 'tool_execution_start',
     toolCallId: 'call',
     toolName: 'search',
     args: { query: '直播' },
   });
+
   await receive({
     type: 'tool_execution_end',
     toolCallId: 'call',
@@ -81,6 +95,7 @@ it('运行日志的消息输出、工具输入输出和原始事件均可通过�
     result: { hits: [] },
     isError: false,
   });
+
   await host.flushRecords();
 
   const client = createRouterClient(createTraceRouter(host));
@@ -88,9 +103,11 @@ it('运行日志的消息输出、工具输入输出和原始事件均可通过�
   expect(await client.values.get(steps[1]!.output!)).toEqual(message);
   expect(await client.values.get(steps[2]!.input!)).toEqual({ query: '直播' });
   expect(await client.values.get(steps[3]!.output!)).toEqual({ hits: [] });
+
   expect(await client.values.get(steps[3]!.raw!)).toMatchObject({
     event: { type: 'tool_execution_end' },
   });
+
   const entries = await host.store.list<TraceEntry>('entry');
   expect(entries.filter(entry => entry.kind === 'message')).toHaveLength(1);
 });
@@ -99,21 +116,25 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
   const host = await openHost();
   cleanup.push(() => host.close());
   const receive = host.agentListener('session');
+
   const message = {
     role: 'user' as const,
     content: [{ type: 'text' as const, text: 'x'.repeat(20000) }],
     timestamp: 0,
   };
+
   receive({ type: 'agent_start' });
   receive({ type: 'turn_start' });
   receive({ type: 'message_start', message });
   receive({ type: 'message_end', message });
+
   receive({
     type: 'tool_execution_start',
     toolCallId: 'call-1',
     toolName: 'search',
     args: { text: 'hello' },
   });
+
   receive({
     type: 'tool_execution_end',
     toolCallId: 'call-1',
@@ -121,6 +142,7 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
     result: { content: [{ type: 'text', text: 'result' }] },
     isError: false,
   });
+
   receive({ type: 'turn_end', message, toolResults: [] });
   receive({ type: 'turn_start' });
   receive({ type: 'message_start', message });
@@ -130,6 +152,7 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
   message.content = [];
   await host.flushRecords();
   const events = await host.storage.journal.read();
+
   expect(events.map(item => item.event.type)).toEqual([
     'agent_start',
     'turn_start',
@@ -144,15 +167,18 @@ it('完整保存多轮事件、稳定消息 ID 和 toolCallId，快照不随原�
     'turn_end',
     'agent_end',
   ]);
+
   expect(new Set(events.map(item => item.runId)).size).toBe(1);
   expect(events[2]!.messageId).toBe(events[3]!.messageId);
   expect(events[2]!.turnId).not.toBe(events[8]!.turnId);
   expect(events[4]!.toolCallId).toBe('call-1');
   const entries = await host.store.list<TraceEntry>('entry');
   expect(entries.find(entry => entry.kind === 'message')!.text).toHaveLength(20000);
+
   expect(await host.store.get(`${events[2]!.messageId}:output`)).toMatchObject({
     content: [{ text: 'x'.repeat(20000) }],
   });
+
   const controller = new AbortController();
   const stream = host.events(events[10]!.sequence, controller.signal);
   expect((await stream.next()).value?.event.type).toBe('agent_end');
@@ -178,6 +204,7 @@ it('轮次号按 Agent 运行分配：同一 run 的多轮共用一个号，新 
 
   const steps = await host.store.list<TraceEntry>('step', { sessionId: 'runs' });
   const numbers = new Map<string, Set<number | undefined>>();
+
   for (const step of steps) {
     const seen = numbers.get(step.runId!) ?? new Set<number | undefined>();
     seen.add(step.turnNumber);
@@ -221,10 +248,12 @@ it('重放保留消息与宿主记录的顺序，随后新增消息使用更大�
   const reopened = await TraceHost.open({ storage: host.storage });
   cleanup.push(() => reopened.close());
   expect(await reopened.store.list('entry')).toEqual(before);
+
   await reopened.agentListener('replay')({
     type: 'message_end',
     message: { ...message, content: '第二条' },
   });
+
   await reopened.flushRecords();
   const after = await reopened.store.list<TraceEntry>('entry');
   expect(after.slice(0, -1)).toEqual(before);
@@ -233,6 +262,7 @@ it('重放保留消息与宿主记录的顺序，随后新增消息使用更大�
 
 it('后台重放不阻塞 open()，追平后条目与用量与阻塞重放一致', async () => {
   const host = await openHost();
+
   await host.agentListener('live')({
     type: 'message_end',
     message: {
@@ -253,6 +283,7 @@ it('后台重放不阻塞 open()，追平后条目与用量与阻塞重放一致
       },
     },
   });
+
   await host.flushRecords();
   const before = await host.store.list<TraceEntry>('entry');
   await host.close();
@@ -262,6 +293,7 @@ it('后台重放不阻塞 open()，追平后条目与用量与阻塞重放一致
   cleanup.push(() => reopened.close());
   await reopened.flushRecords();
   expect(await reopened.store.list('entry')).toEqual(before);
+
   expect(reopened.usage().total).toEqual({
     input: 120,
     output: 20,
@@ -273,16 +305,20 @@ it('后台重放不阻塞 open()，追平后条目与用量与阻塞重放一致
 
 it('重放内容未变化时不重写已有投影', async () => {
   const host = await openHost();
+
   await host.agentListener('replay')({
     type: 'message_end',
     message: { role: 'user', content: '保持不变', timestamp: 1 },
   });
+
   await host.flushRecords();
 
   const before = await host.storage.db.execute<{ xmin: string }>(
     sql`SELECT xmin::text AS xmin FROM trace.records WHERE id = 'step:1'`,
   );
+
   await host.close();
+
   const state = await host.storage.db.execute<{ head: string }>(sql`
     SELECT encode(substring(value FROM 1 FOR 1), 'hex') AS head
     FROM trace.records
@@ -292,6 +328,7 @@ it('重放内容未变化时不重写已有投影', async () => {
   const read = vi.spyOn(host.storage.journal, 'read');
   const reopened = await TraceHost.open({ storage: host.storage });
   cleanup.push(() => reopened.close());
+
   const after = await host.storage.db.execute<{ xmin: string }>(
     sql`SELECT xmin::text AS xmin FROM trace.records WHERE id = 'step:1'`,
   );
@@ -306,33 +343,41 @@ it('投影批次失败时记录和游标在同一事务回滚', async () => {
   const host = await TraceHost.open({ storage });
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   let constraintExists = false;
+
   try {
     await storage.db.execute(sql`
       ALTER TABLE trace.records
       ADD CONSTRAINT reject_projection_state CHECK (category <> 'projection_state')
     `);
+
     constraintExists = true;
+
     await host.agentListener('atomic')({
       type: 'message_end',
       message: { role: 'user', content: '事务回滚', timestamp: 1 },
     });
+
     await expect(host.flushRecords()).rejects.toThrow();
 
     const projected = await storage.db.execute<{ count: string }>(sql`
       SELECT COUNT(*) AS count FROM trace.records WHERE category IN ('step', 'entry')
     `);
+
     expect(Number(projected.rows[0]!.count)).toBe(0);
 
     await storage.db.execute(sql`
       ALTER TABLE trace.records DROP CONSTRAINT reject_projection_state
     `);
+
     constraintExists = false;
     await host.close().catch(() => {});
 
     const recovered = await TraceHost.open({ storage });
+
     expect(await recovered.store.list<TraceEntry>('entry')).toMatchObject([
       { sessionId: 'atomic', text: '事务回滚' },
     ]);
+
     await recovered.close();
   } finally {
     if (constraintExists) {
@@ -340,6 +385,7 @@ it('投影批次失败时记录和游标在同一事务回滚', async () => {
         ALTER TABLE trace.records DROP CONSTRAINT reject_projection_state
       `);
     }
+
     await host.close().catch(() => {});
     await storage.close();
     log.mockRestore();
@@ -349,29 +395,38 @@ it('投影批次失败时记录和游标在同一事务回滚', async () => {
 it('投影状态损坏时保留旧数据，后台重建后原子切换世代', async () => {
   const storage = await Storage.open({ dataDir: 'memory://', modules: [traceStorage] });
   const original = await TraceHost.open({ storage });
+
   await original.agentListener('rebuild')({
     type: 'message_end',
     message: { role: 'user', content: '仍可读取', timestamp: 1 },
   });
+
   await original.flushRecords();
   await original.close();
+
   await storage.db.execute(sql`
     UPDATE trace.records SET value = ${Buffer.from('{invalid')}
     WHERE category = 'projection_state'
   `);
 
   let releaseRead!: () => void;
+
   const waitForRead = new Promise<void>(resolve => {
     releaseRead = resolve;
   });
+
   const originalRead = storage.journal.read.bind(storage.journal);
   const read = vi.spyOn(storage.journal, 'read');
+
   read.mockImplementationOnce(async (...args) => {
     await waitForRead;
+
     return originalRead(...args);
   });
+
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
   const rebuilt = await TraceHost.open({ storage, awaitReplay: false });
+
   try {
     expect(await rebuilt.store.list<TraceEntry>('entry')).toHaveLength(1);
 
@@ -381,7 +436,9 @@ it('投影状态损坏时保留旧数据，后台重建后原子切换世代', a
     const tables = await storage.db.execute<{ rebuild: string | null }>(sql`
       SELECT to_regclass('trace.records_rebuild')::text AS rebuild
     `);
+
     expect(tables.rows).toEqual([{ rebuild: null }]);
+
     expect(await rebuilt.store.list<TraceEntry>('entry')).toMatchObject([
       { sessionId: 'rebuild', text: '仍可读取' },
     ]);
@@ -396,22 +453,27 @@ it('投影状态损坏时保留旧数据，后台重建后原子切换世代', a
 it('两万条已投影历史从持久化游标启动，不重新扫描旧事件', async () => {
   const storage = await Storage.open({ dataDir: 'memory://', modules: [traceStorage] });
   const original = await TraceHost.open({ storage });
+
   await original.agentListener('large-history')({
     type: 'message_end',
     message: { role: 'user', content: '基准事件', timestamp: 1 },
   });
+
   await original.flushRecords();
   await original.close();
 
   const state = await storage.db.execute<{ value: Uint8Array }>(sql`
     SELECT value FROM trace.records WHERE category = 'projection_state'
   `);
+
   const projection = JSON.parse(Buffer.from(state.rows[0]!.value).toString('utf8'));
   projection.cursor = 20_000;
+
   await storage.db.execute(sql`
     UPDATE trace.records SET value = ${Buffer.from(JSON.stringify(projection))}
     WHERE category = 'projection_state'
   `);
+
   await storage.db.execute(sql`
     INSERT INTO storage.events (id, sequence, session_id, record)
     OVERRIDING SYSTEM VALUE
@@ -436,6 +498,7 @@ it('两万条已投影历史从持久化游标启动，不重新扫描旧事件'
   const startedAt = performance.now();
   const reopened = await TraceHost.open({ storage });
   const elapsed = performance.now() - startedAt;
+
   try {
     expect(read).toHaveBeenCalledWith(20_000);
     expect(elapsed).toBeLessThan(1_000);
@@ -470,16 +533,20 @@ it('oRPC MessagePort 可读取完整内容和取消更新订阅', async () => {
   const router = createTraceRouter(host);
   const handler = new RPCHandler(router);
   const channel = new MessageChannel();
+
   cleanup.push(() => {
     channel.port1.close();
     channel.port2.close();
   });
+
   handler.upgrade(channel.port1);
   channel.port1.start();
   channel.port2.start();
+
   const client: RouterClient<typeof router> = createTraceClient(
     new RPCLink({ port: channel.port2 }),
   );
+
   host.record('hello', '完整输出');
   const entries = await client.entries.list({ limit: 10 });
   expect(await client.values.get({ id: entries[0]!.output!.id })).toBe('完整输出');
@@ -505,6 +572,7 @@ it('宿主关闭会结束等待中的更新订阅', async () => {
 it('缺少工具 start 的 update 仍实时分发原始事件但不持久化', async () => {
   const host = await openHost();
   cleanup.push(() => host.close());
+
   host.agentListener('late')({
     type: 'tool_execution_update',
     toolCallId: 'unknown',
@@ -512,6 +580,7 @@ it('缺少工具 start 的 update 仍实时分发原始事件但不持久化', a
     args: {},
     partialResult: { text: '部分结果' },
   });
+
   await host.flushRecords();
   const events = await host.storage.journal.read();
   expect(events).toHaveLength(1);

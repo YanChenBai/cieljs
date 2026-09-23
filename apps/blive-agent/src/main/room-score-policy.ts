@@ -14,6 +14,7 @@ export class RoomScorePolicy {
   evaluate(evaluation: RoomEvaluation): RoomSwitchDecision {
     if (evaluation.score >= 60) {
       this.reset();
+
       return { shouldSwitch: false };
     }
 

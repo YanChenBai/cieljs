@@ -113,6 +113,7 @@ async function readAround(
     Math.max(1, target.seq - Math.min(before, maxReadMessages)),
     target.seq + Math.min(after, maxReadMessages),
   );
+
   signal?.throwIfAborted();
 
   return sessionResult({ spaceId: session.spaceId, sessionId: session.id, messageId, messages });

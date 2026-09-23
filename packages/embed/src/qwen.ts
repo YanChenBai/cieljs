@@ -96,10 +96,7 @@ export function qwen(options: QwenEmbeddingOptions): ResolvedEmbeddingProvider {
       return vectors;
     }
 
-    const res = vectors.map(vector => truncateAndNormalize(vector, dimensions));
-    console.log(res);
-
-    return res;
+    return vectors.map(vector => truncateAndNormalize(vector, dimensions));
   };
 
   return resolveEmbeddingProvider({

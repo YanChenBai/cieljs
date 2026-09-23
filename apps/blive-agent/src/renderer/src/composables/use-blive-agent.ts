@@ -19,6 +19,7 @@ function describeError(message: string) {
   if (message.includes('content_filter')) {
     return '模型服务因内容过滤拒绝了本次请求（content_filter），本轮未完成。已暂停自动分析，请停止观看后检查输入内容或模型配置。';
   }
+
   return message;
 }
 
@@ -37,21 +38,25 @@ export function useBliveAgent() {
   const requestedRoomId = shallowRef<number>();
   const videoProgress = shallowRef<Extract<WatchEvent, { type: 'video_progress' }>>();
   const subtitle = shallowRef('');
+
   const subtitleTimer = useTimer(
     () => {
       subtitle.value = '';
     },
     { duration: 8_000 },
   );
+
   const active = computed(() => !['idle', 'closed'].includes(state.value.status));
 
   let disposed = false;
+
   const setupTimer = useTimer(
     () => {
       void refreshSetup();
     },
     { duration: 1_000 },
   );
+
   onUnmounted(() => {
     disposed = true;
   });
@@ -63,15 +68,24 @@ export function useBliveAgent() {
         watchBridge.configuration(),
         watchBridge.hearingModels(),
       ]);
-      if (disposed) return;
+
+      if (disposed) {
+        return;
+      }
+
       configuration.value = config;
       hearingModels.value = models;
     } catch (cause) {
-      if (!disposed) error.value = cause instanceof Error ? cause.message : String(cause);
+      if (!disposed) {
+        error.value = cause instanceof Error ? cause.message : String(cause);
+      }
     } finally {
-      if (!disposed) setupTimer.start();
+      if (!disposed) {
+        setupTimer.start();
+      }
     }
   }
+
   onMounted(() => {
     void refreshSetup();
   });
@@ -88,6 +102,7 @@ export function useBliveAgent() {
       subtitle.value = event.content;
       subtitleTimer.start();
     }
+
     if (
       event.type === 'room_closed' ||
       (event.type === 'status' && ['idle', 'closed'].includes(event.status))
@@ -95,30 +110,51 @@ export function useBliveAgent() {
       subtitleTimer.stop();
       subtitle.value = '';
     }
-    if (event.type === 'video_progress') videoProgress.value = event;
-    if (event.type === 'status' && ['idle', 'closed'].includes(event.status))
-      videoProgress.value = undefined;
-    if (event.type === 'room_requested') requestedRoomId.value = event.roomId;
-    const text = describeWatchEvent(event);
-    if (text) appendEvent(text);
 
-    if (event.type === 'status') state.value = { ...state.value, status: event.status };
+    if (event.type === 'video_progress') {
+      videoProgress.value = event;
+    }
+
+    if (event.type === 'status' && ['idle', 'closed'].includes(event.status)) {
+      videoProgress.value = undefined;
+    }
+
+    if (event.type === 'room_requested') {
+      requestedRoomId.value = event.roomId;
+    }
+
+    const text = describeWatchEvent(event);
+
+    if (text) {
+      appendEvent(text);
+    }
+
+    if (event.type === 'status') {
+      state.value = { ...state.value, status: event.status };
+    }
+
     if (event.type === 'room_opened') {
       state.value = { ...state.value, room: event.room };
       activeSessionId.value = event.sessionId;
     }
+
     if (event.type === 'room_closed') {
       state.value = { ...state.value, room: undefined };
       activeSessionId.value = undefined;
     }
-    if (event.type === 'error') error.value = describeError(event.message);
+
+    if (event.type === 'error') {
+      error.value = describeError(event.message);
+    }
   }
 
   const unsubscribe = watchBridge.onEvent(receive);
   onUnmounted(unsubscribe);
 
   async function run(name: string, action: () => Promise<unknown>) {
-    if (pending.value && name !== 'stop') return;
+    if (pending.value && name !== 'stop') {
+      return;
+    }
 
     pending.value = name;
     error.value = '';
@@ -128,7 +164,9 @@ export function useBliveAgent() {
     } catch (cause) {
       error.value = describeError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (pending.value === name) pending.value = '';
+      if (pending.value === name) {
+        pending.value = '';
+      }
     }
   }
 
@@ -156,10 +194,14 @@ export function useBliveAgent() {
         watchBridge.configuration(),
         watchBridge.hearingModels(),
       ]);
+
       configuration.value = loadedConfiguration;
       hearingModels.value = loadedModels;
       areas.value = await watchBridge.areas();
-      if (ready.value) await refreshAccount();
+
+      if (ready.value) {
+        await refreshAccount();
+      }
     }),
   );
 

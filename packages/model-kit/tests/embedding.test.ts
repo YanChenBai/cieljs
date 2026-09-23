@@ -28,6 +28,7 @@ describe('Embedding Provider', () => {
   test('优先使用 Provider 的单文本入口', async () => {
     const embed = vi.fn(async () => [0, 1]);
     const embedBatch = vi.fn(async () => [[1, 0]]);
+
     const resolved = resolveEmbeddingProvider({
       model: 'test/model',
       dimensions: 2,
@@ -46,9 +47,11 @@ describe('Embedding Provider', () => {
     expect(() => resolveEmbeddingProvider({ model: ' ', dimensions: 1, embedBatch })).toThrow(
       '模型标识不能为空',
     );
+
     expect(() =>
       resolveEmbeddingProvider({ model: 'test/model', dimensions: 0, embedBatch }),
     ).toThrow('维数必须是 1 到 16000 的整数');
+
     expect(() =>
       resolveEmbeddingProvider({
         model: 'test/model',

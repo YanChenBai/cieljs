@@ -25,6 +25,7 @@ test('解析原始特殊 token，不制造置信度或事件时间区间', () =>
     emotion: '',
     event: '',
   });
+
   expect(result).toEqual({
     content: '你好',
     language: 'zh',

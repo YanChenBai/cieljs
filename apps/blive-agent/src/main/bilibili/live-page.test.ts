@@ -14,6 +14,7 @@ it.each([
   ['complete', '/', false],
 ])('页面状态 %s、路径 %s 的就绪判断不依赖播放器全局变量', async (readyState, pathname, ready) => {
   const page = new LivePage();
+
   page.attach({
     isDestroyed: () => false,
     getURL: () => `https://live.bilibili.com${pathname}`,
@@ -33,6 +34,7 @@ it.each([
 
 it('短房号跳转仍识别真实房间 ID', async () => {
   const page = new LivePage();
+
   page.attach({
     isDestroyed: () => false,
     getURL: () => 'https://live.bilibili.com/52030',
@@ -50,6 +52,7 @@ it('短房号跳转仍识别真实房间 ID', async () => {
         }),
       ),
   } as unknown as WebContents);
+
   await expect(page.readiness()).resolves.toMatchObject({ ready: true, roomId: 21696950 });
 });
 
@@ -61,6 +64,7 @@ it.each([
   [undefined, null],
 ])('读取播放器 liveStatus=%s', async (status, expected) => {
   const page = new LivePage();
+
   page.attach({
     isDestroyed: () => false,
     getURL: () => 'https://live.bilibili.com/123',
@@ -72,6 +76,7 @@ it.each([
         }),
       ),
   } as unknown as WebContents);
+
   await expect(page.liveStatus()).resolves.toBe(expected);
 });
 
@@ -80,16 +85,19 @@ function createPageFixture() {
     BilibiliLive: { UID: 0 },
     livePlayer: undefined as { setFullscreenStatus: (status: number) => void } | undefined,
   };
+
   const fetch = vi.fn().mockResolvedValue({
     json: async () => ({
       code: 0,
       data: { isLogin: true, mid: 42, uname: '测试账号', face: '' },
     }),
   });
+
   const addClass = vi.fn();
   const openLogin = vi.fn();
   const loadURL = vi.fn().mockResolvedValue(undefined);
   const page = new LivePage();
+
   page.attach({
     isDestroyed: () => false,
     getURL: () => 'https://live.bilibili.com/123',
@@ -184,6 +192,7 @@ it('开发者工具只开在已绑定的直播 guest 上', () => {
   expect(() => page.openDevTools()).toThrow('直播页面尚未绑定');
 
   const openDevTools = vi.fn();
+
   page.attach({
     isDestroyed: () => false,
     getURL: () => 'https://live.bilibili.com/123',

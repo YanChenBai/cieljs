@@ -124,6 +124,7 @@ class VoiceAgentRuntime implements VoiceAgent {
       const dataDir = resolve(this.options.dataDir ?? join(homedir(), '.ciel'));
 
       this.tts = this.options.tts ?? this.createDefaultTts();
+
       this.perception =
         this.options.perception ??
         createPerception({
@@ -133,18 +134,22 @@ class VoiceAgentRuntime implements VoiceAgent {
           },
           retentionMs: config.perception.retentionMs,
         });
+
       this.input = this.options.input ?? createAudioInput(config.audio.input);
+
       this.output =
         this.options.output ?? createAudioOutput({ sampleRate: config.audio.input.sampleRate });
 
       if (!this.options.input) {
         await assertInputDevice(this.input, config.audio.input.device, config.audio.input.channels);
       }
+
       if (!this.options.output) {
         await assertOutputDevice(this.output, config.audio.output.device);
       }
 
       const speak = new SpeakController();
+
       const speakTool = createSpeakTool({
         controller: speak,
         tts: this.tts,
@@ -162,6 +167,7 @@ class VoiceAgentRuntime implements VoiceAgent {
         dataDir: join(dataDir, 'storage'),
         modules: [sessionStorage, memoryStorage, vectorStorage],
       });
+
       if (config.embedding) {
         this.vectors = new VectorService({
           storage: this.storage,
@@ -287,6 +293,7 @@ class VoiceAgentRuntime implements VoiceAgent {
       speaker: event.result?.speaker,
       content: event.result?.content,
     });
+
     this.schedulerInstance.handleSpeechEnd(event.at);
   }
 
@@ -313,6 +320,7 @@ class VoiceAgentRuntime implements VoiceAgent {
     }
   }
 
+  // oxlint-disable-next-line eslint/complexity -- 可选资源必须逐项关闭，持久层还要求嵌套 finally 保证顺序。
   private async dispose(): Promise<void> {
     this.unsubscribeSpeechEnd?.();
     this.unsubscribeSpeechEnd = undefined;
@@ -327,6 +335,7 @@ class VoiceAgentRuntime implements VoiceAgent {
     await this.output?.close();
     await this.tts?.close();
     await this.session?.close();
+
     try {
       await this.ciel?.close();
     } finally {

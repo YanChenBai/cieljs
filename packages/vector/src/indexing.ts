@@ -26,14 +26,17 @@ export class VectorIndex {
     if (!this.provider) {
       return;
     }
+
     const rows = await this.db
       .select({ id: this.source.id })
       .from(this.source.table)
       .where(this.source.condition?.(sessionId));
+
     await this.db.transaction(async tx => {
       for (let start = 0; start < rows.length; start += 500) {
         const ids = rows.slice(start, start + 500).map(row => String(row.id));
         await this.addPending(tx, ids);
+
         await tx
           .update(vectorEntries)
           .set({ status: 'pending', cacheKey: null, error: null })
@@ -45,6 +48,7 @@ export class VectorIndex {
             ),
           );
       }
+
       // 清理被业务删除或重新切块的关联，不删除其他业务仍可复用的缓存。
       await tx
         .delete(vectorEntries)
@@ -61,6 +65,7 @@ export class VectorIndex {
     if (!this.provider || !ids.length) {
       return;
     }
+
     await tx
       .insert(vectorEntries)
       .values(
@@ -78,6 +83,7 @@ export class VectorIndex {
     if (!this.provider) {
       return;
     }
+
     this.indexing = this.indexing
       .then(() => this.indexPending())
       .catch(error => this.reportError(error));
@@ -95,6 +101,7 @@ export class VectorIndex {
 
   async flush() {
     let pending: Promise<void>;
+
     do {
       pending = this.indexing;
       await pending;
@@ -117,21 +124,28 @@ export class VectorIndex {
 
   async status() {
     const result = { pending: 0, ready: 0, failed: 0 };
+
     if (!this.provider) {
       return result;
     }
+
     const rows = await this.db
       .select({ status: vectorEntries.status, count: sql<number>`count(*)::integer` })
       .from(vectorEntries)
       .where(this.condition())
       .groupBy(vectorEntries.status);
-    for (const row of rows) result[row.status] = row.count;
+
+    for (const row of rows) {
+      result[row.status] = row.count;
+    }
+
     return result;
   }
 
   reportError(error: unknown) {
     if (!this.onError) {
       console.warn(`[vector:${this.source.namespace}] 索引或检索失败`, error);
+
       return;
     }
 
@@ -150,6 +164,7 @@ export class VectorIndex {
   }
   private async indexPending() {
     const provider = this.provider!;
+
     while (true) {
       const rows = await this.db
         .select({ id: this.source.id, content: this.source.content })
@@ -158,16 +173,25 @@ export class VectorIndex {
         .where(and(this.condition(), eq(vectorEntries.status, 'pending')))
         .orderBy(asc(this.source.id))
         .limit(provider.batchSize);
+
       if (!rows.length) {
         return;
       }
+
       try {
         await provider.embedBatch(
           rows.map(row => String(row.content)),
           { purpose: 'document' },
         );
+
         await this.db.transaction(async tx => {
           for (const row of rows) {
+            const condition = and(
+              this.condition(),
+              eq(vectorEntries.chunkId, String(row.id)),
+              eq(vectorEntries.status, 'pending'),
+            );
+
             await tx
               .update(vectorEntries)
               .set({
@@ -175,29 +199,23 @@ export class VectorIndex {
                 status: 'ready',
                 error: null,
               })
-              .where(
-                and(
-                  this.condition(),
-                  eq(vectorEntries.chunkId, String(row.id)),
-                  eq(vectorEntries.status, 'pending'),
-                ),
-              );
+              .where(condition);
           }
         });
       } catch (error) {
+        const chunkIds = rows.map(row => String(row.id));
+
+        const condition = and(
+          this.condition(),
+          inArray(vectorEntries.chunkId, chunkIds),
+          eq(vectorEntries.status, 'pending'),
+        );
+
         await this.db
           .update(vectorEntries)
           .set({ status: 'failed', cacheKey: null, error: String(error) })
-          .where(
-            and(
-              this.condition(),
-              inArray(
-                vectorEntries.chunkId,
-                rows.map(row => String(row.id)),
-              ),
-              eq(vectorEntries.status, 'pending'),
-            ),
-          );
+          .where(condition);
+
         this.reportError(error);
       }
     }

@@ -20,6 +20,7 @@ const exploring = computed(() => decision.value.action === 'explore');
 
 const confidence = computed(() => {
   const value = decision.value.confidence;
+
   return typeof value === 'number' ? `${Math.round(value * 100)}%` : '';
 });
 

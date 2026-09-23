@@ -18,6 +18,7 @@ const props = defineProps<{
 const { entries, steps, error, hasOlder, loadingOlder, older, selectSession } = useConsole(
   props.client,
 );
+
 const query = shallowRef('');
 
 let indexed: Map<string, ToolCallRecord> | undefined;
@@ -26,7 +27,9 @@ const toolCalls = computed(() => (indexed = indexToolCalls(entries.value, indexe
 watch(
   () => props.sessionId,
   sessionId => {
-    if (sessionId) void selectSession(sessionId);
+    if (sessionId) {
+      void selectSession(sessionId);
+    }
   },
   { immediate: true },
 );

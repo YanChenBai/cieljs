@@ -20,12 +20,17 @@ export function indexToolCalls(
 
   for (const entry of entries) {
     const toolCallId = entry.toolCallId;
-    if (!toolCallId) continue;
+
+    if (!toolCallId) {
+      continue;
+    }
 
     const record = calls.get(toolCallId) ?? {};
+
     // 同一次调用的事件按 sequence 到达，后到的覆盖先到的，保留最新的修订。
-    if (entry.kind === 'tool') calls.set(toolCallId, { ...record, call: entry });
-    else if (entry.kind === 'message' && entry.name === 'toolResult') {
+    if (entry.kind === 'tool') {
+      calls.set(toolCallId, { ...record, call: entry });
+    } else if (entry.kind === 'message' && entry.name === 'toolResult') {
       calls.set(toolCallId, { ...record, result: entry });
     }
   }
@@ -46,17 +51,25 @@ export function conversationEntries(
   const ids = new Set(entries.map(entry => entry.id));
 
   return entries.filter(entry => {
-    if (entry.kind !== 'message') return false;
-    if (entry.name !== 'toolResult' || !entry.toolCallId) return true;
+    if (entry.kind !== 'message') {
+      return false;
+    }
+
+    if (entry.name !== 'toolResult' || !entry.toolCallId) {
+      return true;
+    }
 
     const messageId = calls.get(entry.toolCallId)?.call?.messageId;
+
     return !messageId || !ids.has(messageId);
   });
 }
 
 /** 工具条目优先；只有 toolResult 消息时视为执行完成。 */
 export function toolCallStatus(record?: ToolCallRecord): 'running' | 'completed' | 'error' {
-  if (record?.call) return record.call.status;
+  if (record?.call) {
+    return record.call.status;
+  }
 
   return record?.result ? 'completed' : 'running';
 }
@@ -71,22 +84,38 @@ export function toolResultEntry(record?: ToolCallRecord): TraceEntry | undefined
  * 否则取整个结果——执行失败时 details 为空对象，回落到含错误文本的 content。
  */
 export function toolResultPayload(result: unknown): unknown {
-  if (!result || typeof result !== 'object' || !('details' in result)) return result;
+  if (!result || typeof result !== 'object' || !('details' in result)) {
+    return result;
+  }
 
   const { details } = result as { details?: unknown };
-  if (details === null || details === undefined) return result;
-  if (typeof details === 'object' && !Object.keys(details).length) return result;
+
+  if (details === null || details === undefined) {
+    return result;
+  }
+
+  if (typeof details === 'object' && !Object.keys(details).length) {
+    return result;
+  }
 
   return details;
 }
 
 /** 文本型工具结果：结果本身就是文本，或是 `{ content: [{ type: 'text', text }] }` 的消息形状。 */
 export function toolResultText(result: unknown): string | undefined {
-  if (typeof result === 'string') return result.trim() || undefined;
-  if (!result || typeof result !== 'object' || !('content' in result)) return undefined;
+  if (typeof result === 'string') {
+    return result.trim() || undefined;
+  }
+
+  if (!result || typeof result !== 'object' || !('content' in result)) {
+    return undefined;
+  }
 
   const { content } = result as { content?: unknown };
-  if (!Array.isArray(content)) return undefined;
+
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
 
   const text = content
     .map(block => (block as { type?: string; text?: unknown }) ?? {})
@@ -102,11 +131,16 @@ function sameCalls(
   previous: ReadonlyMap<string, ToolCallRecord> | undefined,
   next: ReadonlyMap<string, ToolCallRecord>,
 ) {
-  if (!previous || previous.size !== next.size) return false;
+  if (!previous || previous.size !== next.size) {
+    return false;
+  }
 
   for (const [id, record] of next) {
     const before = previous.get(id);
-    if (!before || before.call !== record.call || before.result !== record.result) return false;
+
+    if (!before || before.call !== record.call || before.result !== record.result) {
+      return false;
+    }
   }
 
   return true;

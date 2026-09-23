@@ -8,6 +8,7 @@ test('image sources keep independent sampling and difference state', async () =>
   const frames: StoredPerceptionFrame[] = [];
   const errors: Error[] = [];
   let sequence = 0;
+
   const stream = new PerceptionImageStream({
     differenceThreshold: 0.03,
     sampleIntervalMs: 1_000,
@@ -15,6 +16,7 @@ test('image sources keep independent sampling and difference state', async () =>
     onFrame: frame => frames.push(frame),
     onError: error => errors.push(error),
   });
+
   const dark = await solidImage(0);
   const light = await solidImage(255);
 
@@ -24,6 +26,7 @@ test('image sources keep independent sampling and difference state', async () =>
   await stream.write({ data: light, at: new Date(2_000), source: 'screen' });
 
   expect(errors).toEqual([]);
+
   expect(frames.map(({ source, at }) => [source, at.getTime()])).toEqual([
     ['screen', 1_000],
     ['camera', 1_500],
@@ -34,6 +37,7 @@ test('image sources keep independent sampling and difference state', async () =>
 test('unchanged candidates do not replace the accepted-frame difference baseline', async () => {
   const frames: StoredPerceptionFrame[] = [];
   let sequence = 0;
+
   const stream = new PerceptionImageStream({
     differenceThreshold: 0.1,
     sampleIntervalMs: 0,

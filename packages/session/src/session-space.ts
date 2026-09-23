@@ -31,11 +31,13 @@ export function createSessionSpace(services: SessionServices, spaceId: string): 
     session: (options = {}) =>
       services.operate(async () => {
         const info = await services.repository.open(selector, options);
+
         return new Session(services, info.id, info.spaceId);
       }),
     getSession: id =>
       services.operate(async () => {
         const info = await services.repository.getInfo({ ...selector, sessionId: id });
+
         return info ? new Session(services, info.id, info.spaceId) : null;
       }),
     list: options => services.operate(() => services.repository.list(selector, options)),
