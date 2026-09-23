@@ -97,7 +97,7 @@ export function useBliveAgent() {
     ].slice(-60);
   }
 
-  function receive(event: WatchBridgeEvent) {
+  function receiveSubtitle(event: WatchBridgeEvent) {
     if (event.type === 'asr_subtitle') {
       subtitle.value = event.content;
       subtitleTimer.start();
@@ -110,6 +110,10 @@ export function useBliveAgent() {
       subtitleTimer.stop();
       subtitle.value = '';
     }
+  }
+
+  function receive(event: WatchBridgeEvent) {
+    receiveSubtitle(event);
 
     if (event.type === 'video_progress') {
       videoProgress.value = event;

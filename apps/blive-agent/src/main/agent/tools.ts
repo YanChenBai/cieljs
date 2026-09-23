@@ -24,6 +24,7 @@ export class DanmakuRunGate {
 
   async send<T>(action: () => Promise<T>): Promise<T> {
     const remaining = 1_000 - (Date.now() - this.lastSentAt);
+
     if (remaining > 0) {
       await new Promise(resolve => setTimeout(resolve, remaining));
     }

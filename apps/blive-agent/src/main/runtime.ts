@@ -806,6 +806,7 @@ class BliveAgentRuntime implements BliveAgent {
       }
 
       this.visit.history.push({ content: event.content, sentAt: Date.now() });
+
       if (this.visit.history.length > 10) {
         this.visit.history.shift();
       }

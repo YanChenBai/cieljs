@@ -61,7 +61,7 @@ catalog:
 
 catalogs:
   pi:
-    typebox: 1.3.7
+    typebox: 1.3.27
 
 catalogMode: prefer
 

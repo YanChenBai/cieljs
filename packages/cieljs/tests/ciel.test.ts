@@ -163,9 +163,14 @@ describe('defineCiel', () => {
     await session.agent.prompt('当前直播间怎么样？');
 
     expect(contexts, session.agent.state.errorMessage).toHaveLength(1);
-    expect(contexts[0]?.systemPrompt).toBe('你是 Ciel。');
-    expect(JSON.stringify(contexts[0]?.messages[0])).toContain('room:2000');
-    expect(JSON.stringify(contexts[0]?.messages[0])).not.toContain('room:1000');
+    const systemMessage = contexts[0]?.messages.find(message => message.role === 'system');
+
+    expect(systemMessage).toMatchObject({ role: 'system', content: '你是 Ciel。' });
+
+    const sessionContext = contexts[0]?.messages.find(message => message.role === 'user');
+
+    expect(JSON.stringify(sessionContext)).toContain('room:2000');
+    expect(JSON.stringify(sessionContext)).not.toContain('room:1000');
 
     const firstInvestigation = await ciel.investigate({
       sessionId: 'investigation:1',

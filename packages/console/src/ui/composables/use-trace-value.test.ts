@@ -8,6 +8,7 @@ import { useTraceValue } from './use-trace-value.ts';
 it('首次读取挂起时随修订重试，后续修订继续读取最新内容', async () => {
   const reference = { id: 'message:output', preview: '完整内容' };
   const entry = shallowRef({ id: 'message', revision: 1, output: reference } as TraceEntry);
+
   const get = vi
     .fn()
     .mockImplementationOnce(
@@ -20,8 +21,10 @@ it('首次读取挂起时随修订重试，后续修订继续读取最新内容'
     )
     .mockResolvedValueOnce({ content: '已读取' })
     .mockResolvedValueOnce({ content: '更新内容' });
+
   const client = { values: { get } } as unknown as TraceClient;
   const scope = effectScope();
+
   const state = scope.run(() =>
     useTraceValue(
       () => client,
@@ -47,18 +50,22 @@ it('首次读取挂起时随修订重试，后续修订继续读取最新内容'
 
 it('首次请求超时后自动重试一次，不让消息永久停在读取中', async () => {
   vi.useFakeTimers();
+
   try {
     const entry = {
       id: 'message',
       revision: 1,
       output: { id: 'output', preview: '内容' },
     } as TraceEntry;
+
     const get = vi
       .fn()
       .mockImplementationOnce(() => new Promise(() => {}))
       .mockResolvedValue({ content: '重试成功' });
+
     const client = { values: { get } } as unknown as TraceClient;
     const scope = effectScope();
+
     const state = scope.run(() =>
       useTraceValue(
         () => client,
