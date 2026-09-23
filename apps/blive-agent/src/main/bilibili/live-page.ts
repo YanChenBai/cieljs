@@ -15,7 +15,7 @@ import {
   READ_READINESS_SCRIPT,
   READ_LIVE_STATUS_SCRIPT,
 } from './page-scripts.ts';
-import { sendDanmaku } from './send-danmaku.ts';
+import { sendDanmakuFromPage } from './send-danmaku.ts';
 import { waitForPage } from './wait-for-page.ts';
 
 export type LivePageReadiness = Static<typeof LivePageReadinessSchema>;
@@ -192,7 +192,7 @@ export class LivePage {
 
     if (generation !== this.generation) throw new Error('检查发送目标期间直播间已切换');
 
-    const result = await sendDanmaku(contents, roomId, content);
+    const result = await sendDanmakuFromPage(contents, content);
     if (generation !== this.generation) {
       throw new Error('发送期间直播间已切换，发送结果不再属于当前访问');
     }

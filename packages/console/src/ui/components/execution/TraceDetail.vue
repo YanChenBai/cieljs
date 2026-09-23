@@ -100,11 +100,12 @@ function elapsed() {
       </div>
       <p v-if="error" class="dt-error">{{ error }}</p>
       <Tabs.Panel value="overview" class="dt-detail-body">
-        <Disclosure v-if="entry.status === 'error'" title="错误详情" class="dt-failure">
+        <section v-if="entry.status === 'error'" class="dt-error-detail">
+          <strong>错误详情</strong>
           <p v-if="loading" class="dt-empty">加载中…</p>
-          <JsonView v-else-if="value !== undefined" :value="value" />
+          <JsonView v-else-if="value !== undefined" :value="value" plain />
           <p v-else class="dt-error">执行失败，请查看输出或原始事件。</p>
-        </Disclosure>
+        </section>
         <Disclosure :title="isTool ? '工具调用' : 'Agent 轨迹'">
           <dl>
             <dt>名称</dt>
@@ -225,3 +226,14 @@ function elapsed() {
     </Tabs.Root>
   </div>
 </template>
+
+<style scoped>
+.dt-error-detail {
+  padding: 12px;
+}
+
+.dt-error-detail > strong {
+  color: #ffadb9;
+  font-size: 12px;
+}
+</style>

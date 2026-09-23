@@ -34,9 +34,10 @@ export function createRoomContext(input: {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - input.startedAt) / 1_000));
   const danmakuHistory = input.history.length
     ? input.history
+        .slice(-10)
         .map(item => `- ${new Date(item.sentAt).toISOString()} ${item.content}`)
         .join('\n')
-    : '（尚未真实发送弹幕）';
+    : '（尚未提交弹幕）';
   const recordingSource =
     input.mode.type === 'recording'
       ? `\n- 录播来源：${input.mode.source.type === 'url' ? input.mode.source.url : input.mode.source.path}`
@@ -54,7 +55,7 @@ export function createRoomContext(input: {
 - 当前允许切换：${input.canSwitch ? '是' : '否'}
 ${recordingSource}
 
-${input.mode.type === 'recording' ? '' : `# 当前访问已真实发送的弹幕\n\n${danmakuHistory}`}
+${input.mode.type === 'recording' ? '' : `# 当前访问已提交到页面的弹幕（最近 10 条）\n\n${danmakuHistory}`}
 `.trim();
 }
 

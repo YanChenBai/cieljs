@@ -279,6 +279,21 @@ describe('观看生命周期', () => {
       expect.any(String),
     );
   });
+  it('直播 ASR 结果作为字幕事件发送，空转写不显示', async () => {
+    const { asrOn } = setup();
+    const events: unknown[] = [];
+    runtime.onEvent(event => events.push(event));
+    await runtime.start({ mode: { type: 'follow', roomId: 123 } });
+
+    const calls = asrOn.mock.calls as unknown as [string, (result: ASRResult) => void][];
+    const receive = calls.find(([event]) => event === 'result')![1];
+    receive({ content: '  大家晚上好  ', startAt: new Date(), endAt: new Date() });
+    receive({ content: ' ', startAt: new Date(), endAt: new Date() });
+
+    expect(events.filter(event => (event as { type: string }).type === 'asr_subtitle')).toEqual([
+      { type: 'asr_subtitle', content: '大家晚上好' },
+    ]);
+  });
   it('观看时切换听觉模型沿用当前感知实例', async () => {
     const { setModel, perceptionClose } = setup();
     await runtime.start({ mode: { type: 'follow', roomId: 123 } });

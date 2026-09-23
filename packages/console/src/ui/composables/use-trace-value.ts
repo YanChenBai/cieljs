@@ -3,6 +3,30 @@ import type { TraceEntry } from '@cieljs/trace/protocol';
 import { shallowRef, watch } from 'vue';
 
 export type TraceSection = 'input' | 'output' | 'raw' | 'error' | 'schema';
+const READ_TIMEOUT_MS = 5_000;
+
+function readValue(
+  client: TraceClient,
+  reference: NonNullable<TraceEntry['output']>,
+  signal: AbortSignal,
+) {
+  signal.throwIfAborted();
+  const request = new AbortController();
+  const abort = () => request.abort(signal.reason);
+  signal.addEventListener('abort', abort, { once: true });
+  const timer = setTimeout(() => request.abort(new Error('读取内容超时')), READ_TIMEOUT_MS);
+  const cancelled = new Promise<never>((_resolve, reject) => {
+    request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true });
+  });
+
+  return Promise.race([
+    client.values.get(reference, { signal: request.signal }),
+    cancelled,
+  ]).finally(() => {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', abort);
+  });
+}
 
 /** 仅加载当前查看的内容；切换记录或版本时取消旧请求，避免旧响应覆盖新选择。 */
 export function useTraceValue(
@@ -41,7 +65,13 @@ export function useTraceValue(
       loading.value = true;
 
       try {
-        const result = await nextClient.values.get(reference, { signal: controller.signal });
+        let result: unknown;
+        try {
+          result = await readValue(nextClient, reference, controller.signal);
+        } catch (cause) {
+          if (!(cause instanceof Error && cause.message === '读取内容超时')) throw cause;
+          result = await readValue(nextClient, reference, controller.signal);
+        }
         if (!controller.signal.aborted) value.value = result;
       } catch (cause) {
         if (!controller.signal.aborted) error.value = String(cause);

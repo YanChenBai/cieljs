@@ -435,7 +435,6 @@ class BliveAgentRuntime implements BliveAgent {
         periodicObservationMs: this.options.periodicObservationMs ?? 30_000,
         thinkTimeoutMs: this.options.thinkTimeoutMs,
         canSwitch: () => this.canSwitch(startedAt),
-        beforeRun: () => this.danmakuGate.beginRun(),
         afterRun: () => this.inspectDecision(generation, signal),
         emit: event => this.emit(event),
       });
@@ -507,7 +506,6 @@ class BliveAgentRuntime implements BliveAgent {
         periodicObservationMs: this.options.periodicObservationMs ?? 30_000,
         thinkTimeoutMs: this.options.thinkTimeoutMs,
         canSwitch: () => false,
-        beforeRun: () => undefined,
         afterRun: () => undefined,
         emit: event => this.emit(event),
       });
@@ -727,11 +725,12 @@ class BliveAgentRuntime implements BliveAgent {
   }
 
   private recordDanmakuEvent(event: WatchEvent): void {
-    if (event.type === 'danmaku_delivered') {
+    if (event.type === 'danmaku_submitted') {
       if (this.visit?.room.roomId !== event.roomId) {
         return;
       }
       this.visit.history.push({ content: event.content, sentAt: Date.now() });
+      if (this.visit.history.length > 10) this.visit.history.shift();
     }
 
     this.emit(event);

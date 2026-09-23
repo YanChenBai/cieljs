@@ -39,3 +39,20 @@ it('弹幕正文仍受 40 字符硬上限约束', () => {
     Value.Check(parameters, { action: 'send', content: '好'.repeat(41), reason: '理由' }),
   ).toBe(false);
 });
+
+it('同一轮允许多次发送，间隔至少一秒', async () => {
+  vi.useFakeTimers();
+  try {
+    const gate = new DanmakuRunGate();
+    const send = vi.fn().mockResolvedValue(undefined);
+    await gate.send(send);
+    const second = gate.send(send);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(send).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await second;
+    expect(send).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});

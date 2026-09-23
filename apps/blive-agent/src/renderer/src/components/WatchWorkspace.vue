@@ -45,6 +45,7 @@ const {
   ready,
   requestedRoomId,
   videoProgress,
+  subtitle,
   active,
   attached,
   start,
@@ -303,7 +304,20 @@ const videoProgressLabel = computed(() => {
               "
             />
           </div>
-          <LiveRoomWebview @ready="attached" @error="error = $event" />
+          <div class="relative min-h-0 flex-1">
+            <LiveRoomWebview @ready="attached" @error="error = $event" />
+            <div
+              v-if="subtitle"
+              class="pointer-events-none absolute inset-x-4 bottom-5 flex justify-center"
+              aria-live="polite"
+            >
+              <p
+                class="max-w-[90%] rounded-md bg-black/75 px-4 py-2 text-center text-base leading-relaxed text-white [text-shadow:0_1px_2px_#000]"
+              >
+                {{ subtitle }}
+              </p>
+            </div>
+          </div>
         </section>
         <div
           v-show="!right.collapsed.value"

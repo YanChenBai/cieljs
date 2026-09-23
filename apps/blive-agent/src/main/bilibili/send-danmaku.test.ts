@@ -1,7 +1,7 @@
 import type { WebContents } from 'electron';
 import { expect, it, vi } from 'vite-plus/test';
 
-import { sendDanmaku } from './send-danmaku.ts';
+import { sendDanmaku, sendDanmakuFromPage } from './send-danmaku.ts';
 
 function page(result: unknown, url = 'https://live.bilibili.com/123') {
   const executeJavaScript = vi.fn().mockResolvedValue(result);
@@ -25,6 +25,22 @@ it('直接提交直播站发送接口，只有 code=0 确认成功', async () =>
   expect(code).toContain("body.set('roomid', '123')");
   expect(code).toContain('bili_jct');
   expect(code).toContain('晚上好');
+});
+
+it('页面发送路径使用原生 setter、input 事件和发送按钮，并保留旧接口', async () => {
+  const { contents, executeJavaScript } = page({
+    accepted: true,
+    code: 0,
+    message: '已点击页面发送按钮',
+    riskControl: false,
+  });
+  await expect(sendDanmakuFromPage(contents, '晚上好')).resolves.toMatchObject({ accepted: true });
+  const script = executeJavaScript.mock.calls[0]![0] as string;
+  expect(script).toContain("Object.getOwnPropertyDescriptor(prototype, 'value')");
+  expect(script).toContain("new InputEvent('input'");
+  expect(script).toContain('requestAnimationFrame');
+  expect(script).toContain('button.click()');
+  expect(script).not.toContain('/msg/send');
 });
 
 // 真实影子风控响应：code 为 0，data 里还有看似正常的发送回执，唯一信号是 message/msg 为 "f"。

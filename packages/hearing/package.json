@@ -29,8 +29,8 @@
   },
   "devDependencies": {
     "@oxc-node/cli": "catalog:",
-    "@types/node": "^26.4.0",
-    "bumpp": "^12.2.2",
+    "@types/node": "^26.6.2",
+    "bumpp": "^12.3.0",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:"

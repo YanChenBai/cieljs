@@ -8,7 +8,7 @@ import type { LivePage } from '../bilibili/live-page.ts';
 export type DanmakuToolResult =
   | { status: 'deferred'; reason: string }
   | { status: 'simulated'; content: string }
-  | { status: 'delivered'; content: string; roomId: number };
+  | { status: 'submitted'; content: string; roomId: number };
 
 export interface DanmakuToolContext {
   delivery: () => DanmakuDelivery;
@@ -20,18 +20,17 @@ export interface DanmakuToolContext {
 }
 
 export class DanmakuRunGate {
-  private called = false;
+  private lastSentAt = -Infinity;
 
-  beginRun(): void {
-    this.called = false;
-  }
+  async send<T>(action: () => Promise<T>): Promise<T> {
+    const remaining = 1_000 - (Date.now() - this.lastSentAt);
+    if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
 
-  claim(): void {
-    if (this.called) {
-      throw new Error('本轮已经调用过 send_danmaku');
+    try {
+      return await action();
+    } finally {
+      this.lastSentAt = Date.now();
     }
-
-    this.called = true;
   }
 }
 
@@ -46,7 +45,7 @@ export const createDanmakuTool = defineTool(
   (context: DanmakuToolContext, gate: DanmakuRunGate) => ({
     name: 'send_danmaku',
     label: '发送弹幕',
-    description: '选择发送一条自然弹幕或暂缓互动；每轮最多调用一次。',
+    description: '选择发送一条自然弹幕或暂缓互动；同一轮可以多次调用，发送间隔至少约 1 秒。',
     executionMode: 'sequential',
     execute: params => executeDanmaku(params, context, gate),
   }),
@@ -57,8 +56,6 @@ async function executeDanmaku(
   context: DanmakuToolContext,
   gate: DanmakuRunGate,
 ) {
-  gate.claim();
-
   if (params.action === 'defer') {
     context.emit({ type: 'danmaku_deferred', reason: params.reason });
     return toolResult({ status: 'deferred', reason: params.reason });
@@ -66,7 +63,7 @@ async function executeDanmaku(
 
   const { room, content } = prepareDanmaku(context, params.content);
 
-  return toolResult(await deliverDanmaku(context, room, content));
+  return toolResult(await gate.send(() => deliverDanmaku(context, room, content)));
 }
 
 async function deliverDanmaku(context: DanmakuToolContext, room: RoomInfo, content: string) {
@@ -84,9 +81,9 @@ async function deliverDanmaku(context: DanmakuToolContext, room: RoomInfo, conte
     throw new Error(`${prefix}：${reason}`);
   }
 
-  context.emit({ type: 'danmaku_delivered', content, roomId: room.roomId });
+  context.emit({ type: 'danmaku_submitted', content, roomId: room.roomId });
 
-  return { status: 'delivered' as const, content, roomId: room.roomId };
+  return { status: 'submitted' as const, content, roomId: room.roomId };
 }
 
 /** 校验当前访问的发送权限和历史，模拟与真实发送共用同一套约束。 */

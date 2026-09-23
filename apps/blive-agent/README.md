@@ -351,7 +351,7 @@ schema validated
       ↓
 action = defer ──▶ emit danmaku_deferred → return { status: 'deferred', reason }
       ↓ send
-gate: at most one send_danmaku call per run
+send interval: about 1 second between calls, with multiple sends allowed per run
       ↓
 canSend(): status is watching and the run signal is not aborted
       ↓
@@ -361,24 +361,23 @@ delivery = simulate ──▶ emit danmaku_simulated → return { status: 'simul
       ↓ live
 LivePage.sendDanmaku(content): readiness must report the same roomId, generation unchanged
       ↓
-POST https://api.live.bilibili.com/msg/send from the page
+set the page input, dispatch an input event, then click the refreshed send button
       ↓
-accepted = code === 0 && !riskControl
+accepted = page send button clicked (not server delivery confirmation)
       ↓
-emit danmaku_delivered + append to the visit's delivered history
+emit danmaku_submitted + retain the 10 most recent submissions for this visit
 ```
 
-- **`delivered` is the only status that means anything was sent.** `deferred` and `simulated` never claim delivery, and only `delivered` is written into the visit history that the prompt shows as "已真实发送的弹幕".
+- **`submitted` only means the page send button was clicked.** `deferred` and `simulated` do not submit; room context retains the 10 most recent submissions.
 - Deduplication normalizes case and strips whitespace, punctuation and symbols, so a near-identical rewrite of something already sent in this visit is rejected.
-- The page script submits the site's own send API with the page's cookies and `Referer`, reading `csrf` from the readable `bili_jct` cookie. Form fields: `msg`, `roomid`, `csrf_token`, `csrf`, `bubble=0`, `color=16777215`, `fontsize=25`, `mode=1`, `rnd`.
-- **Risk control is treated as a rejection.** `code === 0` is not enough: messages equal to `f`, or containing 风控 / 风险 / 频繁 / 系统繁忙 / 稍后再试 / 安全校验 / 验证码 / 人机验证, raise an error and are never retried.
+- The page script follows blm2's native input setter, `input` event, and send button path. The previous API submission function remains available, but the current tool does not call it. The button path cannot observe the site's send receipt or risk control response.
 - The tool result is a discriminated union the agent can rely on:
 
 ```ts
 type DanmakuToolResult =
   | { status: 'deferred'; reason: string }
   | { status: 'simulated'; content: string }
-  | { status: 'delivered'; content: string; roomId: number };
+  | { status: 'submitted'; content: string; roomId: number };
 ```
 
 Prompt-side rules that shape the text: short spoken Chinese, ideally 4–14 characters with a hard cap of 40; use the streamer's nickname when natural; at most one whitelisted emoji tag per message, and a bare `[喝彩]` when someone is singing or just finished. The whitelist currently in [prompts/modes.ts](src/main/prompts/modes.ts):
@@ -480,7 +479,7 @@ apps/blive-agent/
       user-agent.ts                shared desktop Chrome User-Agent
       agent/
         ciel.ts                    defineCiel: model, prompts, tools, investigation prompt
-        tools.ts                   send_danmaku + per-run gate
+        tools.ts                   send_danmaku + send interval
         decisions.ts               RoomSelection / RoomDecision schemas and parsing
         exploration.ts             candidate query, cooldown filter, investigation call
         room-session.ts            room space, dated session, sources
@@ -556,7 +555,7 @@ The app has no `scripts` field in its `package.json`; every runnable task lives 
 
 These are inherited from the design work and are still true of the code as written.
 
-Delivery cannot be proven end to end. The best available signal is `code === 0 && !riskControl` from the page's own send API, and a response can look accepted while never appearing on stream — "delivered" means the site did not reject it, not that viewers saw it. A real send still has to be verified by hand with a test account. Asking for `live` delivery has no confirmation dialog either: the design left that open (`AlertDialog` or not), so there is only a hint next to the checkbox and the internal default stays `simulate`. The emoji whitelist is prompt-only as well, because nothing in the code validates emoji tags before the request; whether every listed tag is still accepted has to be re-checked against the real page.
+Delivery cannot be proven end to end. The current page button path confirms only that the button was clicked; it cannot observe the site's send receipt, and the message may never appear on stream. A real send still has to be verified by hand with a test account. Asking for `live` delivery has no confirmation dialog either: the design left that open (`AlertDialog` or not), so there is only a hint next to the checkbox and the internal default stays `simulate`. The emoji whitelist is prompt-only as well, because nothing in the code validates emoji tags before the request; whether every listed tag is still accepted has to be re-checked against the real page.
 
 The Electron hardening is conservative but not complete. The navigation allowlist accepts any `https://*.bilibili.com` page, where the design wanted a minimal per-page allowlist covering login, home and livestream pages. No guest permission-request handler is installed, so the code leans on the sandbox, that allowlist and `setWindowOpenHandler` instead. And the `<webview>` sets `allowpopups` even though the design asked to leave it off, mitigated by denying every popup and turning a room-shaped URL into a `room_requested` event.
 

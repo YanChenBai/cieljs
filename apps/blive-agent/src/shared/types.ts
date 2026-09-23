@@ -109,6 +109,7 @@ export type WatchEvent =
   | { type: 'room_evaluated'; score: number; confidence: number; action: 'stay' | 'explore' }
   | { type: 'danmaku_deferred'; reason: string }
   | { type: 'danmaku_simulated'; content: string }
-  | { type: 'danmaku_delivered'; content: string; roomId: number }
+  | { type: 'danmaku_submitted'; content: string; roomId: number }
+  | { type: 'asr_subtitle'; content: string }
   | { type: 'recording_finished'; roomId: number }
   | { type: 'error'; stage: string; error: Error };

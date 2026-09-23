@@ -351,7 +351,7 @@ schema validated
       ↓
 action = defer ──▶ emit danmaku_deferred → return { status: 'deferred', reason }
       ↓ send
-gate：每轮最多一次 send_danmaku
+发送间隔：两次 send_danmaku 至少相隔约 1 秒，可在同一轮多次发送
       ↓
 canSend()：状态是 watching，且本轮 signal 没被中止
       ↓
@@ -361,24 +361,23 @@ delivery = simulate ──▶ emit danmaku_simulated → return { status: 'simul
       ↓ live
 LivePage.sendDanmaku(content)：readiness 必须是同一个 roomId，generation 未变
       ↓
-由页面 POST https://api.live.bilibili.com/msg/send
+设置页面弹幕输入框，派发 input 事件，等待按钮刷新后点击发送
       ↓
-accepted = code === 0 && !riskControl
+accepted = 页面发送按钮已点击（不代表站点确认送达）
       ↓
-emit danmaku_delivered + 记入本次访问的已发送历史
+emit danmaku_submitted + 记入本次访问最近 10 条提交历史
 ```
 
-- **只有 `delivered` 代表发出去了。** `deferred` 和 `simulated` 都不会假装送达，也只有 `delivered` 会写进「已真实发送的弹幕」那段上下文。
+- **`submitted` 只代表页面发送按钮已点击。** `deferred` 和 `simulated` 不会提交；房间上下文只保留最近 10 条提交记录。
 - 去重会统一大小写并去掉空白、标点和符号，所以同一瞬间的近义改写会被拒绝。
-- 页面脚本直接调站点自己的发送接口，Cookie 和 `Referer` 由浏览器带上，`csrf` 取自页面可读的 `bili_jct`。表单字段：`msg`、`roomid`、`csrf_token`、`csrf`、`bubble=0`、`color=16777215`、`fontsize=25`、`mode=1`、`rnd`。
-- **风控按拒绝处理。** 光看 `code === 0` 不够：等于 `f`，或含「风控 / 风险 / 频繁 / 系统繁忙 / 稍后再试 / 安全校验 / 验证码 / 人机验证」的响应都会报错，并且不会重试。
+- 页面脚本沿用 blm2 的原生输入值 setter、`input` 事件和发送按钮路径；旧的接口提交函数仍保留，但当前工具不调用它。页面按钮路径无法取得站点的发送回执或风控响应。
 - 工具返回是 Agent 可以依赖的可辨识联合：
 
 ```ts
 type DanmakuToolResult =
   | { status: 'deferred'; reason: string }
   | { status: 'simulated'; content: string }
-  | { status: 'delivered'; content: string; roomId: number };
+  | { status: 'submitted'; content: string; roomId: number };
 ```
 
 提示词侧约束表达：「简短、口语、有现场感的中文」，优先 4～14 个字，硬上限 40 字符；称呼自然时用主播昵称；每条最多一个白名单表情，唱歌或刚唱完允许纯 `[喝彩]`。当前白名单在 [prompts/modes.ts](src/main/prompts/modes.ts)：
@@ -480,7 +479,7 @@ apps/blive-agent/
       user-agent.ts                全局共用的桌面 Chrome User-Agent
       agent/
         ciel.ts                    defineCiel：模型、提示词、工具、调查提示词
-        tools.ts                   send_danmaku 与每轮闸门
+        tools.ts                   send_danmaku 与发送间隔
         decisions.ts               RoomSelection / RoomDecision schema 与解析
         exploration.ts             候选查询、冷却过滤、调查调用
         room-session.ts            房间 space、按日期的 session、来源
@@ -556,7 +555,7 @@ vp run @cieljs/blive-agent#build         # 构建 main、preload 与 renderer
 
 以下都来自设计阶段，并且在当前代码里依然成立。
 
-送达无法端到端证明。能拿到的最好信号是页面发送接口返回的 `code === 0 && !riskControl`，而响应看起来成功、弹幕却没有出现在直播里是可能的——所以 `delivered` 的含义是「站点没有拒绝」，不是「观众看到了」，真实发送必须用测试账号手工验证。界面上的 `live` 也没有二次确认弹窗：设计文档把这件事留着未定（是否用 `AlertDialog`），所以现在只在复选框旁给一段提示，内部默认仍然是 `simulate`。表情白名单同样只存在于提示词里，代码不校验弹幕中的表情标签，非法标签是在站点侧失败；列表里每个标签是否仍被接受，需要回到真实页面复核。
+送达无法端到端证明。当前页面按钮路径只确认按钮已点击，拿不到站点发送回执；弹幕可能未出现在直播里，真实发送必须用测试账号手工验证。界面上的 `live` 也没有二次确认弹窗：设计文档把这件事留着未定（是否用 `AlertDialog`），所以现在只在复选框旁给一段提示，内部默认仍然是 `simulate`。表情白名单同样只存在于提示词里，代码不校验弹幕中的表情标签，非法标签是在站点侧失败；列表里每个标签是否仍被接受，需要回到真实页面复核。
 
 Electron 侧的加固偏保守，但还不完整。导航白名单接受任意 `https://*.bilibili.com` 页面，而设计文档想要的是登录、主页和直播页的最小域名白名单。guest 权限请求处理器没有安装，现在的依靠是沙箱、白名单和 `setWindowOpenHandler`。`<webview>` 实际设置了 `allowpopups`，与设计文档「不设」的约束相反，实践上靠拒绝所有弹窗、并把形如房间号的 URL 转成 `room_requested` 事件来缓解。
 

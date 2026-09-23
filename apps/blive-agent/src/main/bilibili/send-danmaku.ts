@@ -14,6 +14,47 @@ const RISK_CONTROL_KEYWORDS = [
   '人机验证',
 ];
 
+/** 走直播页输入框和发送按钮；旧的接口发送函数保留供需要服务端回执的调用方使用。 */
+export async function sendDanmakuFromPage(contents: WebContents, content: string) {
+  return executePage(
+    contents,
+    createPageSendScript(content),
+    Type.Object({
+      accepted: Type.Boolean(),
+      code: Type.Number(),
+      message: Type.String(),
+      riskControl: Type.Boolean(),
+    }),
+  );
+}
+
+function createPageSendScript(content: string) {
+  return `(async () => {
+    const input = document.querySelector('#control-panel-ctnr-box textarea, #control-panel-ctnr-box input[type="text"]');
+    const editable = document.querySelector('#control-panel-ctnr-box [contenteditable="true"]');
+    if (!input && !editable) throw new Error('找不到弹幕输入框');
+
+    const message = ${JSON.stringify(content)};
+    const inputEvent = new InputEvent('input', { bubbles: true, cancelable: true, data: message, inputType: 'insertText' });
+    if (input) {
+      const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+      if (!setter) throw new Error('无法设置弹幕输入框');
+      setter.call(input, message);
+      input.dispatchEvent(inputEvent);
+    } else {
+      editable.textContent = message;
+      editable.dispatchEvent(inputEvent);
+    }
+
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    const button = document.querySelector('#control-panel-ctnr-box .send-btn-wrapper button.send-btn, #control-panel-ctnr-box .send-btn-wrapper button, #control-panel-ctnr-box button.send-btn, #control-panel-ctnr-box .bl-button--primary');
+    if (!button || button.disabled) throw new Error('弹幕发送按钮不可用');
+    button.click();
+    return { accepted: true, code: 0, message: '已点击页面发送按钮', riskControl: false };
+  })()`;
+}
+
 export async function sendDanmaku(contents: WebContents, roomId: number, content: string) {
   const response = await executePage(
     contents,

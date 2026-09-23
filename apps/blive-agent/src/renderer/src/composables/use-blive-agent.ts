@@ -36,6 +36,13 @@ export function useBliveAgent() {
   const ready = shallowRef(false);
   const requestedRoomId = shallowRef<number>();
   const videoProgress = shallowRef<Extract<WatchEvent, { type: 'video_progress' }>>();
+  const subtitle = shallowRef('');
+  const subtitleTimer = useTimer(
+    () => {
+      subtitle.value = '';
+    },
+    { duration: 8_000 },
+  );
   const active = computed(() => !['idle', 'closed'].includes(state.value.status));
 
   let disposed = false;
@@ -77,6 +84,17 @@ export function useBliveAgent() {
   }
 
   function receive(event: WatchBridgeEvent) {
+    if (event.type === 'asr_subtitle') {
+      subtitle.value = event.content;
+      subtitleTimer.start();
+    }
+    if (
+      event.type === 'room_closed' ||
+      (event.type === 'status' && ['idle', 'closed'].includes(event.status))
+    ) {
+      subtitleTimer.stop();
+      subtitle.value = '';
+    }
     if (event.type === 'video_progress') videoProgress.value = event;
     if (event.type === 'status' && ['idle', 'closed'].includes(event.status))
       videoProgress.value = undefined;
@@ -158,6 +176,7 @@ export function useBliveAgent() {
     ready,
     requestedRoomId,
     videoProgress,
+    subtitle,
     active,
     attached,
     start: (options: StartWatchOptions) => run('start', () => watchBridge.start(options)),

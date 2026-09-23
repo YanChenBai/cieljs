@@ -26,7 +26,6 @@ interface RoomVisitOptions {
   periodicObservationMs: number;
   thinkTimeoutMs?: number;
   canSwitch: () => boolean;
-  beforeRun: () => void;
   afterRun: () => Promise<void> | void;
   emit: (event: WatchEvent) => void;
 }
@@ -65,7 +64,6 @@ export class RoomVisit {
           }) + (wake ? createWakeContext(wake) : ''),
         timestamp: Date.now(),
       }),
-      beforeRun: options.beforeRun,
       afterRun: options.afterRun,
       onRunStarted: triggerCount => options.emit({ type: 'thought_started', triggerCount }),
       onRunFinished: durationMs => options.emit({ type: 'thought_finished', durationMs }),
@@ -91,23 +89,23 @@ export class RoomVisit {
     this.unsubscribePerceptionError = this.options.perception.on('error', error =>
       this.options.emit({ type: 'error', stage: 'perception', error }),
     );
+    this.unsubscribeTranscript = this.options.perception.asr.on('result', result => {
+      const content = result.content.trim();
+      if (content) this.options.emit({ type: 'asr_subtitle', content });
+      if (this.options.mode.type !== 'recording') return;
+
+      const events = result.events?.map(event => event.type).join('、');
+      const details = [content, result.speaker, events ? `声音事件（模型识别）：${events}` : '']
+        .filter(Boolean)
+        .join('\n');
+      if (!details) return;
+      const seconds = Math.max(0, (result.startAt.getTime() - this.startedAt) / 1_000);
+      const timestamp = `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60)
+        .toString()
+        .padStart(2, '0')}`;
+      this.options.trace?.recordMessage(`视频语音 · ${timestamp}`, details, this.session.id);
+    });
     if (this.options.mode.type === 'recording') {
-      this.unsubscribeTranscript = this.options.perception.asr.on('result', result => {
-        const events = result.events?.map(event => event.type).join('、');
-        const content = [
-          result.content,
-          result.speaker,
-          events ? `声音事件（模型识别）：${events}` : '',
-        ]
-          .filter(Boolean)
-          .join('\n');
-        if (!content) return;
-        const seconds = Math.max(0, (result.startAt.getTime() - this.startedAt) / 1_000);
-        const timestamp = `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60)
-          .toString()
-          .padStart(2, '0')}`;
-        this.options.trace?.recordMessage(`视频语音 · ${timestamp}`, content, this.session.id);
-      });
       this.options.media.start();
       return;
     }

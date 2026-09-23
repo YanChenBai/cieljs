@@ -6,7 +6,7 @@ const props = defineProps<ToolRendererProps>();
 
 /** 工具结果是联合类型，这里只按状态取文案，字段缺失时统一回落到「已返回」。 */
 const Outcome: Record<string, string> = {
-  delivered: '已发送',
+  submitted: '已提交到页面',
   simulated: '模拟发送',
   deferred: '已暂缓',
 };

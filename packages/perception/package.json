@@ -21,11 +21,11 @@
   "dependencies": {
     "@cieljs/hearing": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
-    "sharp": "^0.34.5"
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
-    "bumpp": "^11.1.0",
+    "@types/node": "^26.6.2",
+    "bumpp": "^12.3.0",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
