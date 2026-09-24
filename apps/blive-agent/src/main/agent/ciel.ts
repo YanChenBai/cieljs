@@ -1,8 +1,7 @@
-import type { McpTools } from '@cieljs/mcp';
-import type { Storage } from '@cieljs/storage';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
-import { defineCiel } from 'cieljs';
+import { Ciel, type CielData } from 'cieljs';
+import type { McpTools } from 'cieljs/mcp';
 
 import type { WatchMode } from '../../shared/types.ts';
 import { createSystemPrompt } from '../prompts/index.ts';
@@ -11,7 +10,7 @@ const EXPLORATION_SYSTEM_PROMPT = `你负责从宿主提供的真实 Bilibili �
 
 /** 共享数据库由宿主维护；工具闭包由宿主维护当前房间和发送权限。 */
 export function createWatchCiel(options: {
-  storage: Storage;
+  data: CielData;
   model: Model<Api>;
   apiKey?: string;
   mode: WatchMode;
@@ -19,7 +18,7 @@ export function createWatchCiel(options: {
   danmakuTool?: AgentTool;
   streamerTools?: AgentTool[];
 }) {
-  return defineCiel({
+  return new Ciel({
     model: options.model,
     apiKey: options.apiKey,
     systemPrompt: createSystemPrompt(options.mode),
@@ -27,7 +26,7 @@ export function createWatchCiel(options: {
       ...(options.danmakuTool ? [options.danmakuTool] : []),
       ...(options.streamerTools ?? []),
     ],
-    storage: options.storage,
+    data: options.data,
     investigation: {
       systemPrompt: EXPLORATION_SYSTEM_PROMPT,
     },

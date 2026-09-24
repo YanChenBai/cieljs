@@ -61,7 +61,7 @@ test('逆序关闭且失败不阻断其他客户端，重复调用共享 Promise
   expect(mcp[Symbol.asyncDispose]()).toBe(closing);
   await expect(closing).rejects.toBe(failure);
   expect(close.mock.calls).toEqual([['ciel:second'], ['ciel:first']]);
-  expect(mcp.servers.size).toBe(0);
+  expect(mcp.serverNames).toEqual([]);
 });
 
 test('第二个服务启动失败时回收全部客户端，并保留清理错误', async () => {

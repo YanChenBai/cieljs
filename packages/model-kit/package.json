@@ -11,8 +11,12 @@
     "./models": "./dist/models/index.mjs",
     "./package.json": "./package.json"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "check": "vp check"
+    "check": "vp check",
+    "prepublishOnly": "vp run build"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "catalog:"

@@ -2,12 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Perception } from '@cieljs/perception';
 import {
   fauxAssistantMessage,
   fauxToolCall,
   registerFauxProvider,
 } from '@earendil-works/pi-ai/compat';
+import type { Perception } from 'cieljs/perception';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 
 import type { AudioInput, AudioOutput } from '../src/audio/types.ts';
@@ -26,9 +26,9 @@ const { qwen } = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock('@cieljs/embed', () => ({ qwen }));
+vi.mock('cieljs/embed', () => ({ qwen }));
 
-vi.mock('@cieljs/perception', () => ({
+vi.mock('cieljs/perception', () => ({
   createPerception: () => {
     throw new Error('createPerception 不应在测试中被调用');
   },

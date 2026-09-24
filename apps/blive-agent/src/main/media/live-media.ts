@@ -1,8 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { Readable } from 'node:stream';
 
-import type { KWS } from '@cieljs/hearing';
-import type { Perception } from '@cieljs/perception';
+import type { KWS } from 'cieljs/hearing';
+import type { Perception } from 'cieljs/perception';
 
 import { browserUserAgent } from '../user-agent.ts';
 

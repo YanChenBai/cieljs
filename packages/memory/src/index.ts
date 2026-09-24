@@ -16,7 +16,7 @@ export type {
   EmbeddingOptions,
   EmbeddingProvider,
   FindMemorySpacesOptions,
-  ForgetMemoryOptions,
+  ArchiveMemoryOptions,
   LongTermRememberInput,
   MemoryEntry,
   MemoryEntryFor,

@@ -1,137 +1,97 @@
-import { Storage } from '@cieljs/storage';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { Runtime } from '@cieljs/runtime';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
-import { afterAll } from 'vite-plus/test';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 
-import { defineCiel } from '../src/index.ts';
+import { Ciel, openCielData, type CielData } from '../src/index.ts';
 
-const { opened, closed, failOpening, failClosing } = vi.hoisted(() => ({
-  opened: [] as string[],
-  closed: [] as string[],
-  failOpening: vi.fn((_name: string) => {}),
-  failClosing: vi.fn(async (_name: string) => {}),
-}));
+const dataInstances: CielData[] = [];
 
-function resource(name: string) {
-  opened.push(name);
-  failOpening(name);
+afterEach(async () => {
+  vi.restoreAllMocks();
 
-  return {
-    async [Symbol.asyncDispose]() {
-      closed.push(name);
-      await failClosing(name);
-    },
-  };
-}
-
-vi.mock('@cieljs/session', () => ({
-  SessionManager: { open: async (options: { namespace: string }) => resource(options.namespace) },
-}));
-
-vi.mock('@cieljs/memory', () => ({
-  MemoryManager: { open: async () => resource('memory') },
-}));
-
-const faux = registerFauxProvider();
-
-const options = {
-  model: faux.getModel(),
-  systemPrompt: 'test',
-  storage: await Storage.open({ dataDir: 'memory://' }),
-  mcp: { tools: [] },
-};
-
-afterEach(() => {
-  opened.length = 0;
-  closed.length = 0;
-  failOpening.mockReset();
-  failClosing.mockReset();
+  for (const data of dataInstances.splice(0)) {
+    await data.close();
+  }
 });
 
-test('成功启动转移资源所有权，关闭失败仍逆序释放全部资源', async () => {
-  const ciel = defineCiel(options);
-  await ciel.start();
-  expect(closed).toEqual([]);
-  const failure = new Error('investigation close');
+test('关闭 Ciel 后复用同一个数据层启动新实例', async () => {
+  const data = await openCielData({ dataDir: 'memory://', timeZone: 'Asia/Shanghai' });
+  dataInstances.push(data);
 
-  failClosing.mockImplementation(async name => {
-    if (name === 'memory') {
-      throw failure;
-    }
-  });
+  const faux = registerFauxProvider();
 
-  const closing = ciel.close();
-  expect(ciel.close()).toBe(closing);
-  expect(ciel[Symbol.asyncDispose]()).toBe(closing);
-  await expect(closing).rejects.toMatchObject({ errors: [failure] });
-  expect(closed).toEqual(['memory', 'investigation', 'session']);
-  expect(ciel.status).toBe('closed');
+  try {
+    const first = new Ciel({ data, model: faux.getModel(), systemPrompt: 'first' });
+    await first.start();
+    await first.close();
+
+    expect(data.isClosed).toBe(false);
+    expect(data.sessions.space('room')).toBeDefined();
+
+    const second = new Ciel({ data, model: faux.getModel(), systemPrompt: 'second' });
+    await second.start();
+    expect(second.status).toBe('running');
+    await second.close();
+  } finally {
+    faux.unregister();
+  }
 });
 
-test.each(['session', 'investigation', 'memory'])(
-  '%s 启动失败回收此前资源，之后允许重试',
-  async name => {
-    const failure = new Error('open');
+test('运行层启动失败后数据层仍可复用', async () => {
+  const data = await openCielData({ dataDir: 'memory://', timeZone: 'Asia/Shanghai' });
+  dataInstances.push(data);
 
-    failOpening.mockImplementation(value => {
-      if (value === name) {
-        throw failure;
-      }
-    });
+  const faux = registerFauxProvider();
+  const failure = new Error('runtime start');
+  const start = vi.spyOn(Runtime.prototype, 'start').mockRejectedValueOnce(failure);
 
-    const ciel = defineCiel(options);
+  try {
+    const ciel = new Ciel({ data, model: faux.getModel(), systemPrompt: 'test' });
+
     await expect(ciel.start()).rejects.toBe(failure);
-    expect(closed).toEqual(opened.slice(0, -1).reverse());
     expect(ciel.status).toBe('idle');
-    failOpening.mockReset();
+    expect(data.isClosed).toBe(false);
+
+    start.mockRestore();
     await ciel.start();
     await ciel.close();
-  },
-);
-
-test('启动错误与回滚错误均保留，其他资源继续回收', async () => {
-  const openingError = new Error('memory open');
-  const closingError = new Error('memory close');
-
-  failOpening.mockImplementation(name => {
-    if (name === 'memory') {
-      throw openingError;
-    }
-  });
-
-  failClosing.mockImplementation(async name => {
-    if (name === 'investigation') {
-      throw closingError;
-    }
-  });
-
-  const ciel = defineCiel(options);
-
-  await expect(ciel.start()).rejects.toMatchObject({
-    name: 'SuppressedError',
-    error: closingError,
-    suppressed: openingError,
-  });
-
-  expect(closed).toEqual(['investigation', 'session']);
-  await ciel.close();
+  } finally {
+    faux.unregister();
+  }
 });
 
-afterAll(() => options.storage.close());
+test('数据层关闭后拒绝启动新 Ciel', async () => {
+  const data = await openCielData({ dataDir: 'memory://', timeZone: 'Asia/Shanghai' });
+  dataInstances.push(data);
+  await data.close();
 
-test('启动失败与关闭并发时仍进入终态', async () => {
-  failOpening.mockImplementation(name => {
-    if (name === 'memory') {
-      throw new Error('memory open');
-    }
-  });
+  const faux = registerFauxProvider();
 
-  const ciel = defineCiel(options);
-  const starting = ciel.start();
-  const failure = expect(starting).rejects.toThrow('memory open');
-  const closing = ciel.close();
-  await failure;
-  await closing;
-  expect(ciel.status).toBe('closed');
-  await expect(ciel.start()).rejects.toThrow('关闭');
+  try {
+    const ciel = new Ciel({ data, model: faux.getModel(), systemPrompt: 'test' });
+    await expect(ciel.start()).rejects.toThrow('CielData 已关闭');
+    await ciel.close();
+  } finally {
+    faux.unregister();
+  }
+});
+
+test('数据层初始化失败后释放数据库，允许从同一目录重新打开', async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), 'ciel-data-rollback-'));
+
+  try {
+    await expect(openCielData({ dataDir, timeZone: 'Invalid/Zone' })).rejects.toThrow('timeZone');
+
+    const data = await openCielData({ dataDir, timeZone: 'Asia/Shanghai' });
+    dataInstances.push(data);
+
+    expect(data.sessions.space('room')).toBeDefined();
+    await data.close();
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
 });

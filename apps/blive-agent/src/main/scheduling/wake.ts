@@ -1,4 +1,4 @@
-import type { WakeEvent } from '@cieljs/hearing';
+import type { WakeEvent } from 'cieljs/hearing';
 
 export interface WatchWakeOptions {
   keywords: readonly string[];

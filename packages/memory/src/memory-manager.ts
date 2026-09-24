@@ -42,7 +42,7 @@ export class MemoryManager implements AsyncDisposable {
   private closing: Promise<void> | undefined;
 
   private constructor(db: Database, options: MemoryManagerOptions) {
-    this.timeZone = options.timeZone ?? 'Asia/Shanghai';
+    this.timeZone = options.timeZone;
     const tokenize = options.tokenize ?? tokenizeSearchText;
 
     this.embeddingIndex = new VectorIndex(
@@ -71,7 +71,7 @@ export class MemoryManager implements AsyncDisposable {
 
   static async open(options: MemoryManagerOptions): Promise<MemoryManager> {
     options.storage.require(memoryStorage);
-    const timeZone = options.timeZone ?? 'Asia/Shanghai';
+    const timeZone = options.timeZone;
 
     try {
       new Intl.DateTimeFormat('en', { timeZone });
@@ -96,7 +96,7 @@ export class MemoryManager implements AsyncDisposable {
     return createSpaceMemory(this.services, spaceId);
   }
 
-  getAny(id: string, options?: MemoryReadOptions): Promise<MemoryEntry | null> {
+  getAcrossSpaces(id: string, options?: MemoryReadOptions): Promise<MemoryEntry | null> {
     return this.operate(() => this.repository.get({ layers: [...ALL_LAYERS] }, id, options));
   }
 

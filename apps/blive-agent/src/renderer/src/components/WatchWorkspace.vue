@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { CielConsole, type MessageRenderers, type ToolRenderers } from '@cieljs/console';
 import {
   ArrowUp,
   ExternalLink,
@@ -13,11 +12,12 @@ import {
   X,
 } from '@lucide/vue';
 import { Button } from '@vuetify/v0/components';
+import { CielConsole, type MessageRenderers, type ToolRenderers } from 'cieljs/console';
 import { computed, ref } from 'vue';
 
 import type { StartWatchOptions } from '../../../shared/types.ts';
 
-import '@cieljs/console/style.css';
+import 'cieljs/console/style.css';
 import { useBliveAgent } from '../composables/use-blive-agent.ts';
 import { useSidebar } from '../composables/use-sidebar.ts';
 import { rpc, watchBridge } from '../rpc.ts';

@@ -115,7 +115,7 @@ export function sessionTools(options: SessionToolsOptions): AgentTool[] {
 }
 
 async function requireAnySession(manager: SessionManager, sessionId: string) {
-  const session = await manager.getAnySession(sessionId);
+  const session = await manager.getSessionAcrossSpaces(sessionId);
 
   if (!session) {
     throw new SessionAccessError('Session 不存在或当前工具无权访问');

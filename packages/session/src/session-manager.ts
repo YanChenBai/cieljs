@@ -90,7 +90,7 @@ export class SessionManager implements AsyncDisposable {
     return createSessionSpace(this.services, spaceId);
   }
 
-  getAnySession(id: string): Promise<Session | null> {
+  getSessionAcrossSpaces(id: string): Promise<Session | null> {
     return this.operate(async () => {
       const info = await this.repository.getInfo({ namespace: this.namespace, sessionId: id });
 

@@ -76,7 +76,7 @@ describe('分层与 revision', () => {
       expect.arrayContaining([longTerm.id, daily.id]),
     );
 
-    expect(await manager.getAny(global.id)).toMatchObject({ layer: 'global.long_term' });
+    expect(await manager.getAcrossSpaces(global.id)).toMatchObject({ layer: 'global.long_term' });
   });
 
   test('更新创建完整快照并保留旧来源', async () => {
@@ -113,7 +113,7 @@ describe('分层与 revision', () => {
     const space = manager.space(spaceId);
     const memory = await space.daily.remember({ content: '需要遗忘' });
 
-    await space.forget(memory.id, { expectedRevision: 1 });
+    await space.archive(memory.id, { expectedRevision: 1 });
 
     expect(await space.get(memory.id)).toBeNull();
 
@@ -129,7 +129,7 @@ describe('内容和来源搜索', () => {
   test('归档正文支持显式检索，重建后仍保留且默认不可见', async () => {
     const space = manager.space('archived-search');
     const memory = await space.longTerm.remember({ content: 'archived pineapple' });
-    await space.forget(memory.id, { expectedRevision: 1 });
+    await space.archive(memory.id, { expectedRevision: 1 });
     await manager.flushIndexes();
 
     for (const mode of ['full_text', 'trigram', 'vector', 'hybrid'] as const) {
@@ -431,7 +431,11 @@ test('本地数据库可重复打开并保留 revision', async () => {
 
   try {
     persistentStorage = await Storage.open({ dataDir, modules: [memoryStorage] });
-    persistent = await MemoryManager.open({ storage: persistentStorage });
+
+    persistent = await MemoryManager.open({
+      storage: persistentStorage,
+      timeZone: 'Asia/Shanghai',
+    });
 
     const original = await persistent.space('persistent').longTerm.remember({
       content: '持久化旧版本',
@@ -447,7 +451,11 @@ test('本地数据库可重复打开并保留 revision', async () => {
     await persistentStorage.close();
 
     persistentStorage = await Storage.open({ dataDir, modules: [memoryStorage] });
-    persistent = await MemoryManager.open({ storage: persistentStorage });
+
+    persistent = await MemoryManager.open({
+      storage: persistentStorage,
+      timeZone: 'Asia/Shanghai',
+    });
 
     expect(await persistent.space('persistent').get(original.id)).toMatchObject({
       content: '持久化新版本',

@@ -1,15 +1,11 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { qwen } from '@cieljs/embed';
-import { createMcp, type Mcp } from '@cieljs/mcp';
-import { memoryStorage } from '@cieljs/memory';
-import { createPerception, type Perception, type SpeechEndEvent } from '@cieljs/perception';
-import { sessionStorage } from '@cieljs/session';
-import { Storage } from '@cieljs/storage';
-import { VectorService, vectorStorage } from '@cieljs/vector';
 import type { Api, Model } from '@earendil-works/pi-ai';
-import { defineCiel, type Ciel, type CielSession } from 'cieljs';
+import { Ciel, openCielData, type CielData, type CielSession } from 'cieljs';
+import { qwen } from 'cieljs/embed';
+import { createMcp, type Mcp } from 'cieljs/mcp';
+import { createPerception, type Perception, type SpeechEndEvent } from 'cieljs/perception';
 
 import { createAudioInput } from './audio/input.ts';
 import { AudioNormalizer } from './audio/normalizer.ts';
@@ -60,8 +56,7 @@ class VoiceAgentRuntime implements VoiceAgent {
   private readonly listeners = new Set<(event: VoiceAgentEvent) => void>();
   private readonly selfEcho = new SelfEchoFilter();
 
-  private storage?: Storage;
-  private vectors?: VectorService;
+  private data?: CielData;
   private ciel?: Ciel;
   private mcp?: Mcp;
   private session?: CielSession;
@@ -163,21 +158,19 @@ class VoiceAgentRuntime implements VoiceAgent {
         onAecReference: pcm => this.input?.pushAecReference(pcm),
       });
 
-      this.storage = await Storage.open({
+      this.data = await openCielData({
         dataDir: join(dataDir, 'storage'),
-        modules: [sessionStorage, memoryStorage, vectorStorage],
+        timeZone: 'Asia/Shanghai',
+        vector: config.embedding
+          ? {
+              provider: qwen(config.embedding),
+              providerId: 'qwen',
+              revision: '1',
+              granularity: 'chunk',
+              inputConfig: 'qwen-default',
+            }
+          : undefined,
       });
-
-      if (config.embedding) {
-        this.vectors = new VectorService({
-          storage: this.storage,
-          provider: qwen(config.embedding),
-          providerId: 'qwen',
-          revision: '1',
-          granularity: 'chunk',
-          inputConfig: 'qwen-default',
-        });
-      }
 
       if (config.mcp.enabled && !this.mcp) {
         this.mcp = await createMcp({
@@ -187,11 +180,10 @@ class VoiceAgentRuntime implements VoiceAgent {
         });
       }
 
-      this.ciel = defineCiel({
+      this.ciel = new Ciel({
         model: this.options.model,
         systemPrompt: VOICE_AGENT_SYSTEM_PROMPT,
-        storage: this.storage,
-        vectors: this.vectors,
+        data: this.data,
         tools: [speakTool],
         mcp: this.mcp,
       });
@@ -339,11 +331,7 @@ class VoiceAgentRuntime implements VoiceAgent {
     try {
       await this.ciel?.close();
     } finally {
-      try {
-        await this.vectors?.close();
-      } finally {
-        await this.storage?.close();
-      }
+      await this.data?.close();
     }
 
     this.schedulerInstance = undefined;

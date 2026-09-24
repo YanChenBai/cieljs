@@ -61,7 +61,7 @@ export interface UpdateMemoryInput {
   sources?: MemorySource[];
 }
 
-export interface ForgetMemoryOptions {
+export interface ArchiveMemoryOptions {
   expectedRevision: number;
 }
 
@@ -178,7 +178,7 @@ export interface MemorySpaceSourceHit {
 
 export interface MemoryManagerOptions {
   storage: Storage;
-  timeZone?: string;
+  timeZone: string;
   vectors?: VectorService;
   tokenize?: (text: string) => string[];
   onIndexError?: (error: unknown) => void;

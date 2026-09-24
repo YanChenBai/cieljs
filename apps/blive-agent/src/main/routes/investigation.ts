@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
-import type { McpTools } from '@cieljs/mcp';
-import type { SessionInfo, SessionManager } from '@cieljs/session';
-import type { Storage } from '@cieljs/storage';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { completeSimple } from '@earendil-works/pi-ai/compat';
 import { os } from '@orpc/server';
-import { defineCiel, type Ciel, type InvestigationTarget } from 'cieljs';
+import { Ciel, type CielData, type InvestigationTarget } from 'cieljs';
+import type { McpTools } from 'cieljs/mcp';
+import type { SessionInfo, SessionManager } from 'cieljs/session';
+import type { Storage } from 'cieljs/storage';
 import * as z from 'zod';
 
 import type { RoomInfo } from '../../shared/types.ts';
@@ -42,6 +42,7 @@ interface InvestigationUpdate {
 
 export function createInvestigationRoutes(options: {
   storage: Storage;
+  data: CielData;
   sessions: SessionManager;
   resolveModel: () => { model: Model<Api>; apiKey?: string };
   mcp?: McpTools;
@@ -59,10 +60,10 @@ export function createInvestigationRoutes(options: {
     starting ??= (async () => {
       const ai = options.resolveModel();
 
-      const instance = defineCiel({
+      const instance = new Ciel({
         model: ai.model,
         apiKey: ai.apiKey,
-        storage: options.storage,
+        data: options.data,
         systemPrompt: INVESTIGATION_SYSTEM_PROMPT,
         investigation: {
           systemPrompt: INVESTIGATION_SYSTEM_PROMPT,
@@ -189,7 +190,7 @@ export function createInvestigationRoutes(options: {
   };
 
   const persistTitle = async (sessionId: string, title: string) => {
-    const session = await options.sessions.getAnySession(sessionId);
+    const session = await options.sessions.getSessionAcrossSpaces(sessionId);
 
     if (!session) {
       throw new Error('Investigation Session 不存在');
@@ -202,7 +203,7 @@ export function createInvestigationRoutes(options: {
     let conversation = conversations.get(sessionId);
 
     if (!conversation) {
-      const session = await options.sessions.getAnySession(sessionId);
+      const session = await options.sessions.getSessionAcrossSpaces(sessionId);
       conversation = session ? restoreConversation(await session.getInfo()) : undefined;
 
       if (conversation) {
@@ -295,7 +296,7 @@ export function createInvestigationRoutes(options: {
 
     const spaceId = conversation.target.type === 'global' ? 'global' : conversation.target.spaceId;
 
-    await options.sessions.space(spaceId).session({
+    await options.sessions.space(spaceId).openSession({
       id: sessionId,
       title: conversation.title,
       sources: conversation.sources,
@@ -322,7 +323,7 @@ export function createInvestigationRoutes(options: {
       throw new Error('Investigation 正在回答，请先停止回答');
     }
 
-    const session = await options.sessions.getAnySession(input.sessionId);
+    const session = await options.sessions.getSessionAcrossSpaces(input.sessionId);
 
     if (!session || !input.sessionId.startsWith('investigation:')) {
       throw new Error('Investigation 会话不存在');

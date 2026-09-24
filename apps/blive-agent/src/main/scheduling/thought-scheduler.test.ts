@@ -1,6 +1,6 @@
-import type { WakeEvent } from '@cieljs/hearing';
-import type { Perception } from '@cieljs/perception';
 import type { Agent } from '@earendil-works/pi-agent-core';
+import type { WakeEvent } from 'cieljs/hearing';
+import type { Perception } from 'cieljs/perception';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { ThoughtScheduler } from './thought-scheduler.ts';

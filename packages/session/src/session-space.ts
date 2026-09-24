@@ -13,7 +13,7 @@ import type {
 export interface SessionSpace {
   readonly spaceId: string;
 
-  session(options?: SessionOptions): Promise<Session>;
+  openSession(options?: SessionOptions): Promise<Session>;
   getSession(id: string): Promise<Session | null>;
   list(options?: SessionListOptions): Promise<SessionInfo[]>;
   search(query: string, options?: SessionSearchOptions): Promise<SessionSearchHit[]>;
@@ -28,7 +28,7 @@ export function createSessionSpace(services: SessionServices, spaceId: string): 
 
   return {
     spaceId,
-    session: (options = {}) =>
+    openSession: (options = {}) =>
       services.operate(async () => {
         const info = await services.repository.open(selector, options);
 

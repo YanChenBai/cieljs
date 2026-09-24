@@ -38,7 +38,7 @@ export function createInvestigationTools(options: InvestigationToolOptions): Age
         sources,
         remember: canWrite,
         update: canWrite,
-        forget: canWrite,
+        archive: canWrite,
       }),
       ...tools,
     ];
@@ -54,7 +54,7 @@ export function createInvestigationTools(options: InvestigationToolOptions): Age
       rememberDaily: canWrite,
       rememberLongTerm: canWrite,
       update: canWrite,
-      forget: canWrite,
+      archive: canWrite,
     }),
     ...tools,
   ];

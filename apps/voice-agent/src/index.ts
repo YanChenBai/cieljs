@@ -1,5 +1,5 @@
-import { models } from '@cieljs/model-kit/models';
 import type { Api, Model } from '@earendil-works/pi-ai';
+import { models } from 'cieljs/model-kit/models';
 
 export { defaultVoiceAgentConfig, defineVoiceAgentConfig } from './config.ts';
 export type {

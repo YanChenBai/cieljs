@@ -56,7 +56,7 @@ export const createReadSessionTool = defineTool(
       let session;
 
       if (options.target.type === 'global' || options.crossSpace) {
-        session = await options.sessionManager.getAnySession(sessionId);
+        session = await options.sessionManager.getSessionAcrossSpaces(sessionId);
       } else {
         session = await sessionSpace.getSession(sessionId);
       }

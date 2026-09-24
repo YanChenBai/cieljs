@@ -119,8 +119,7 @@ export interface McpTools {
 }
 
 export interface McpRuntime extends McpTools, AsyncDisposable {
-  readonly servers: ReadonlyMap<string, McpServer>;
-  readonly tools: AgentTool[];
+  readonly serverNames: readonly string[];
 
   close(): Promise<void>;
 }

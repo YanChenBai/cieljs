@@ -1,16 +1,16 @@
 {
   "name": "@cieljs/mcp",
   "version": "0.0.0",
-  "description": "A starter for creating a TypeScript package.",
-  "homepage": "https://github.com/author/library#readme",
+  "description": "MCP stdio client and agent tool integration for Ciel.",
+  "homepage": "https://github.com/YanChenBai/cile-core-refactor#readme",
   "bugs": {
-    "url": "https://github.com/author/library/issues"
+    "url": "https://github.com/YanChenBai/cile-core-refactor/issues"
   },
   "license": "MIT",
-  "author": "Author Name <author.name@mail.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/author/library.git"
+    "url": "git+https://github.com/YanChenBai/cile-core-refactor.git",
+    "directory": "packages/mcp"
   },
   "files": [
     "dist"

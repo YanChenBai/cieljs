@@ -15,14 +15,21 @@ import type {
 } from './types.ts';
 
 export class Mcp implements McpRuntime, AsyncDisposable {
-  readonly servers = new Map<string, McpServer>();
-
-  readonly tools: AgentTool[] = [];
+  private readonly servers = new Map<string, McpServer>();
+  private readonly toolList: AgentTool[] = [];
 
   private readonly disposables = new AsyncDisposableStack();
   private closing: Promise<void> | undefined;
 
   private constructor(private readonly cwd: string) {}
+
+  get serverNames(): readonly string[] {
+    return [...this.servers.keys()];
+  }
+
+  get tools(): readonly AgentTool[] {
+    return this.toolList;
+  }
 
   static async open(options: McpOptions): Promise<Mcp> {
     const loaded = await loadMcpConfig(options);
@@ -47,7 +54,7 @@ export class Mcp implements McpRuntime, AsyncDisposable {
 
   private async closeResources(): Promise<void> {
     this.servers.clear();
-    this.tools.length = 0;
+    this.toolList.length = 0;
 
     await this.disposables.disposeAsync();
   }
@@ -61,7 +68,7 @@ export class Mcp implements McpRuntime, AsyncDisposable {
       await this.connectServer(name, config);
     }
 
-    assertUniqueToolNames(this.tools);
+    assertUniqueToolNames(this.toolList);
   }
 
   private async connectServer(name: string, config: McpServerConfig): Promise<void> {
@@ -100,7 +107,7 @@ export class Mcp implements McpRuntime, AsyncDisposable {
         continue;
       }
 
-      this.tools.push(createAgentTool(server, tool));
+      this.toolList.push(createAgentTool(server, tool));
     }
   }
 }

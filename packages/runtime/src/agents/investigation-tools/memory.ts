@@ -55,7 +55,7 @@ export const createReadMemoryTool = defineTool(
       let memory;
 
       if (options.target.type === 'global') {
-        memory = await options.memoryManager.getAny(id);
+        memory = await options.memoryManager.getAcrossSpaces(id);
       } else {
         const store = layer === 'global' ? options.memoryManager.global : memorySpace;
         memory = await store.get(id);

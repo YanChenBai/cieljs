@@ -1,12 +1,10 @@
 import { join } from 'node:path';
 
-import { createMcp } from '@cieljs/mcp';
-import { memoryStorage } from '@cieljs/memory';
-import { SessionManager, sessionStorage } from '@cieljs/session';
-import { Storage } from '@cieljs/storage';
-import { createTraceRouter, TraceHost, traceStorage, type TraceRouter } from '@cieljs/trace/host';
-import { vectorStorage } from '@cieljs/vector';
 import { os } from '@orpc/server';
+import { openCielData } from 'cieljs';
+import { createMcp } from 'cieljs/mcp';
+import { createTraceRouter, TraceHost, traceStorage, type TraceRouter } from 'cieljs/trace/host';
+import { vectorStorage } from 'cieljs/vector';
 import type { BrowserWindow } from 'electron';
 import * as z from 'zod';
 
@@ -52,12 +50,15 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
   await using resources = new AsyncDisposableStack();
   const dataDirectory = watchDataDirectory();
 
-  const storage = resources.use(
-    await Storage.open({
+  const data = resources.use(
+    await openCielData({
       dataDir: join(dataDirectory, 'storage'),
-      modules: [sessionStorage, memoryStorage, vectorStorage, traceStorage],
+      timeZone: 'Asia/Shanghai',
+      modules: [vectorStorage, traceStorage],
     }),
   );
+
+  const { storage } = data;
 
   // PGlite 没有后台 checkpointer：不推进 checkpoint 的话，进程被强杀后下次启动要重放
   // 上个 checkpoint 之后的全部 WAL，随会话数只增不减。
@@ -83,10 +84,6 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
   // 历史重放留给后台：它随会话数增长，不能排在窗口显示前面。
   const trace = resources.use(await TraceHost.open({ storage, awaitReplay: false }));
 
-  const investigationSessions = resources.use(
-    await SessionManager.open({ storage, namespace: 'investigation' }),
-  );
-
   const mcp = resources.use(
     await createMcp({
       cwd: dataDirectory,
@@ -105,7 +102,8 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
 
   const investigation = createInvestigationRoutes({
     storage,
-    sessions: investigationSessions,
+    data,
+    sessions: data.investigations,
     mcp,
     api,
     resolveModel: () => resolveWatchModel(resolveWatchConfig()),
@@ -134,6 +132,7 @@ export async function createWatchApplication(mainWindow: BrowserWindow) {
       api,
       trace,
       storage,
+      data,
       dataDir: dataDirectory,
       ffmpegPath: config.ffmpegPath,
       thinkingLevel: config.ai.thinkingLevel,

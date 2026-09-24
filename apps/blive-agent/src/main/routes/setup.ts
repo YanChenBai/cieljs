@@ -1,3 +1,4 @@
+import { os } from '@orpc/server';
 import {
   checkConfiguration,
   installModels,
@@ -5,8 +6,7 @@ import {
   DEFAULT_ASR_MODEL,
   type ASRModelId,
   type ModelInstallProgress,
-} from '@cieljs/hearing';
-import { os } from '@orpc/server';
+} from 'cieljs/hearing';
 import * as z from 'zod';
 
 import { watchConfigurationStatus } from '../config.ts';

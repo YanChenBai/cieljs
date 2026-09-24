@@ -1,4 +1,4 @@
-import { prompt } from '@cieljs/agent-kit';
+import { prompt } from 'cieljs/agent-kit';
 
 import type { WatchMode } from '../../shared/types.ts';
 import { BILIBILI_EMOJI_TAGS } from './modes.ts';

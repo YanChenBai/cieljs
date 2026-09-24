@@ -24,7 +24,7 @@ export interface UpdateToolOptions {
 export interface ArchiveToolOptions {
   name: string;
   label: string;
-  memory: Pick<SpaceMemory, 'forget'> | GlobalLongTermMemory;
+  memory: Pick<SpaceMemory, 'archive'> | GlobalLongTermMemory;
 }
 
 export interface ReadToolOptions {

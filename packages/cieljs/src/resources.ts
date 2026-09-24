@@ -1,50 +1,90 @@
-import { MemoryManager } from '@cieljs/memory';
-import { SessionManager } from '@cieljs/session';
+import { MemoryManager, memoryStorage } from '@cieljs/memory';
+import { SessionManager, sessionStorage } from '@cieljs/session';
+import { Storage, type StorageModule } from '@cieljs/storage';
+import { VectorService, vectorStorage, type VectorOptions } from '@cieljs/vector';
 
-import type { DefineCielOptions } from './types.ts';
+import type { CielDataOptions } from './types.ts';
 
-export class CielResources implements AsyncDisposable {
+export class CielData implements AsyncDisposable {
+  private closing?: Promise<void>;
+
   private constructor(
     private readonly disposables: AsyncDisposableStack,
-    readonly sessionManager: SessionManager,
-    readonly investigationManager: SessionManager,
-    readonly memoryManager: MemoryManager,
+    readonly storage: Storage,
+    readonly sessions: SessionManager,
+    readonly investigations: SessionManager,
+    readonly memories: MemoryManager,
+    readonly vectors?: VectorService,
   ) {}
 
-  static async open(options: DefineCielOptions): Promise<CielResources> {
-    await using disposables = new AsyncDisposableStack();
+  static async open(options: CielDataOptions): Promise<CielData> {
+    const sessionNamespace = options.session?.namespace ?? 'session';
+    const investigationNamespace = options.investigation?.namespace ?? 'investigation';
 
-    const sessionManager = disposables.use(
+    if (sessionNamespace === investigationNamespace) {
+      throw new TypeError('Session 与 Investigation namespace 不能相同');
+    }
+
+    await using disposables = new AsyncDisposableStack();
+    const modules: StorageModule[] = [sessionStorage, memoryStorage];
+
+    if (options.vector) {
+      modules.push(vectorStorage);
+    }
+
+    modules.push(...(options.modules ?? []));
+
+    const storage = disposables.use(await Storage.open({ dataDir: options.dataDir, modules }));
+
+    const vectors = options.vector
+      ? disposables.use(new VectorService({ ...options.vector, storage } satisfies VectorOptions))
+      : undefined;
+
+    const sessions = disposables.use(
       await SessionManager.open({
         ...options.session,
-        storage: options.storage,
-        namespace: 'session',
-        vectors: options.vectors,
+        storage,
+        namespace: sessionNamespace,
+        vectors,
       }),
     );
 
-    const investigationManager = disposables.use(
-      await SessionManager.open({ storage: options.storage, namespace: 'investigation' }),
+    const investigations = disposables.use(
+      await SessionManager.open({
+        ...options.investigation,
+        storage,
+        namespace: investigationNamespace,
+        vectors,
+      }),
     );
 
-    const memoryManager = disposables.use(
+    const memories = disposables.use(
       await MemoryManager.open({
         ...options.memory,
-        storage: options.storage,
-        vectors: options.vectors,
+        timeZone: options.timeZone,
+        storage,
+        vectors,
       }),
     );
 
-    // 全部初始化成功后转移所有权；中途失败由局部栈逆序回收。
-    return new CielResources(
-      disposables.move(),
-      sessionManager,
-      investigationManager,
-      memoryManager,
-    );
+    return new CielData(disposables.move(), storage, sessions, investigations, memories, vectors);
+  }
+
+  get isClosed(): boolean {
+    return this.closing !== undefined;
+  }
+
+  close(): Promise<void> {
+    this.closing ??= this.disposables.disposeAsync();
+
+    return this.closing;
   }
 
   [Symbol.asyncDispose](): Promise<void> {
-    return this.disposables.disposeAsync();
+    return this.close();
   }
+}
+
+export function openCielData(options: CielDataOptions): Promise<CielData> {
+  return CielData.open(options);
 }

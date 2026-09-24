@@ -3,16 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { defineTool } from '@cieljs/agent-kit';
-import { memoryStorage } from '@cieljs/memory';
-import { sessionStorage } from '@cieljs/session';
-import { Storage } from '@cieljs/storage';
-import { VectorService, vectorStorage } from '@cieljs/vector';
 import type { Context } from '@earendil-works/pi-ai';
 import { fauxAssistantMessage, registerFauxProvider } from '@earendil-works/pi-ai/compat';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 
-import { defineCiel } from '../src/index.ts';
+import { Ciel, openCielData, type CielData } from '../src/index.ts';
 
 const { qwen } = vi.hoisted(() => ({
   qwen: vi.fn((_options?: unknown) => ({
@@ -27,25 +23,34 @@ const { qwen } = vi.hoisted(() => ({
 const closeMcp = vi.fn(async () => {});
 
 const temporaryDirectories: string[] = [];
-const storages: Storage[] = [];
+const dataInstances: CielData[] = [];
 
-async function createStorage() {
+async function createData(withVectors = false) {
   const root = await mkdtemp(join(tmpdir(), 'ciel-core-'));
   temporaryDirectories.push(root);
 
-  const storage = await Storage.open({
+  const data = await openCielData({
     dataDir: root,
-    modules: [sessionStorage, memoryStorage, vectorStorage],
+    timeZone: 'Asia/Shanghai',
+    vector: withVectors
+      ? {
+          provider: qwen(),
+          providerId: 'test',
+          revision: '1',
+          granularity: 'chunk',
+          inputConfig: 'raw',
+        }
+      : undefined,
   });
 
-  storages.push(storage);
+  dataInstances.push(data);
 
-  return { storage };
+  return data;
 }
 
 afterEach(async () => {
-  for (const storage of storages.splice(0)) {
-    await storage.close();
+  for (const data of dataInstances.splice(0)) {
+    await data.close();
   }
 
   await Promise.all(
@@ -61,9 +66,9 @@ afterEach(async () => {
   closeMcp.mockClear();
 });
 
-describe('defineCiel', () => {
+describe('Ciel', () => {
   test('借用共享 MCP，关闭一个 runtime 不影响另一个', async () => {
-    const storage = await createStorage();
+    const data = await createData(true);
     const faux = registerFauxProvider();
 
     const tool = defineTool(Type.Object({}), () => ({
@@ -79,18 +84,10 @@ describe('defineCiel', () => {
       [Symbol.asyncDispose]: closeMcp,
     };
 
-    const ciel = defineCiel({
+    const ciel = new Ciel({
       model: faux.getModel(),
       systemPrompt: 'Ciel',
-      ...storage,
-      vectors: new VectorService({
-        storage: storage.storage,
-        provider: qwen(),
-        providerId: 'test',
-        revision: '1',
-        granularity: 'chunk',
-        inputConfig: 'raw',
-      }),
+      data,
       mcp,
     });
 
@@ -101,7 +98,7 @@ describe('defineCiel', () => {
     const session = await ciel.session({ spaceId: 'test' });
     expect(session.agent.state.tools.some(candidate => candidate.name === 'mcp_search')).toBe(true);
 
-    const second = defineCiel({ model: faux.getModel(), systemPrompt: 'second', ...storage, mcp });
+    const second = new Ciel({ model: faux.getModel(), systemPrompt: 'second', data, mcp });
     await second.start();
     await session.close();
     await ciel.close();
@@ -115,7 +112,7 @@ describe('defineCiel', () => {
   }, 20_000);
 
   test('运行普通 Session，并隔离和续接 Investigation Session', async () => {
-    const storage = await createStorage();
+    const data = await createData();
     const faux = registerFauxProvider();
     const contexts: Context[] = [];
 
@@ -139,10 +136,10 @@ describe('defineCiel', () => {
 
     let roomId = 'room:1000';
 
-    const ciel = defineCiel({
+    const ciel = new Ciel({
       model: faux.getModel(),
       systemPrompt: '你是 Ciel。',
-      ...storage,
+      data,
     });
 
     const firstStart = ciel.start();

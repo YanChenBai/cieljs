@@ -1,13 +1,13 @@
-import { Storage } from '@cieljs/storage';
+import { Storage } from 'cieljs/storage';
 import { afterAll } from 'vite-plus/test';
 const storage = await Storage.open({ dataDir: 'memory://' });
 afterAll(() => storage.close());
-import type { ASRResult, WakeEvent } from '@cieljs/hearing';
-import { createPerception, type Perception, type PerceptionOptions } from '@cieljs/perception';
-import type { TraceHost } from '@cieljs/trace/host';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { registerFauxProvider } from '@earendil-works/pi-ai/compat';
-import type { DefineCielOptions, OpenSessionOptions } from 'cieljs';
+import type { CielData, CielOptions, OpenSessionOptions } from 'cieljs';
+import type { ASRResult, WakeEvent } from 'cieljs/hearing';
+import { createPerception, type Perception, type PerceptionOptions } from 'cieljs/perception';
+import type { TraceHost } from 'cieljs/trace/host';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import type { Account } from '../shared/types.ts';
@@ -24,7 +24,7 @@ import {
 import { loadVoiceprints } from './voiceprints.ts';
 
 const mocks = vi.hoisted(() => ({
-  defineCiel: vi.fn<(options: DefineCielOptions) => void>(),
+  constructCiel: vi.fn<(options: CielOptions) => void>(),
   start: vi.fn(),
   close: vi.fn(),
   session: vi.fn(),
@@ -39,17 +39,19 @@ const mocks = vi.hoisted(() => ({
   kwsWrite: vi.fn(),
 }));
 
-vi.mock('@cieljs/hearing', () => ({ createKWS: mocks.createKWS }));
+vi.mock('cieljs/hearing', () => ({ createKWS: mocks.createKWS }));
 
 vi.mock('cieljs', () => ({
-  defineCiel: (options: DefineCielOptions) => {
-    mocks.defineCiel(options);
+  Ciel: class {
+    constructor(options: CielOptions) {
+      mocks.constructCiel(options);
 
-    return mocks;
+      return mocks;
+    }
   },
 }));
 
-vi.mock('@cieljs/perception', () => ({ createPerception: vi.fn() }));
+vi.mock('cieljs/perception', () => ({ createPerception: vi.fn() }));
 vi.mock('./config.ts', () => ({ watchDataDirectory: () => '/blive-agent-test' }));
 vi.mock('./voiceprints.ts', () => ({ loadVoiceprints: vi.fn(() => []) }));
 vi.mock('./bilibili/api.ts', () => ({ BilibiliApi: class {} }));
@@ -147,6 +149,7 @@ function setup(
     dataDir: 'C:\\blive-agent',
     trace,
     storage,
+    data: { storage } as CielData,
     model: faux.getModel(),
     livePage: page as unknown as LivePage,
     api: api as unknown as BilibiliApi,
@@ -198,7 +201,7 @@ describe('直播关键词唤醒', () => {
     expect(page.sendDanmaku).not.toHaveBeenCalled();
     expect(prompt).toHaveBeenCalledOnce();
 
-    const tool = mocks.defineCiel.mock.calls[0]![0].tools!.find(
+    const tool = mocks.constructCiel.mock.calls[0]![0].tools!.find(
       tool => tool.name === 'send_danmaku',
     )!;
 
@@ -280,7 +283,7 @@ describe('观看生命周期', () => {
     expect(api.streamerDynamics).not.toHaveBeenCalled();
     expect(api.streamerVideos).not.toHaveBeenCalled();
 
-    expect(mocks.defineCiel.mock.calls[0]?.[0].tools?.map(tool => tool.name)).toEqual(
+    expect(mocks.constructCiel.mock.calls[0]?.[0].tools?.map(tool => tool.name)).toEqual(
       expect.arrayContaining(['get_streamer_dynamics', 'get_streamer_videos']),
     );
   });

@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "description": "Streaming ASR, VAD, speaker recognition, and voiceprint tooling for Ciel.",
   "license": "MIT",
+  "bin": {
+    "hearing": "./dist/ciel.mjs"
+  },
   "files": [
     "dist"
   ],

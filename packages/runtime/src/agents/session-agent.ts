@@ -61,7 +61,7 @@ export async function createRuntimeSessionAgent(options: {
   const memorySpace = options.memoryManager.space(options.spaceId);
   const initialSources = options.resolveSources();
 
-  const session = await sessionSpace.session({
+  const session = await sessionSpace.openSession({
     id: options.sessionId,
     sources: initialSources,
   });
@@ -165,7 +165,7 @@ export async function createRuntimeSessionAgent(options: {
   });
 
   const unsubscribe = agent.subscribe(async event => {
-    await session.record(event, {
+    await session.recordEvent(event, {
       tools,
       model: options.model,
       session: { title: sessionInfo.title, sources: sessionInfo.sources },

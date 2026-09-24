@@ -36,7 +36,7 @@ export async function runInvestigation(options: {
   const investigationSpace = options.investigationManager.space(targetSpaceId);
   const initialSources = options.resolveSources();
 
-  const session = await investigationSpace.session({
+  const session = await investigationSpace.openSession({
     id: options.sessionId,
     sources: initialSources,
   });
@@ -100,7 +100,7 @@ export async function runInvestigation(options: {
   const messages: AgentMessage[] = [];
 
   const unsubscribe = agent.subscribe(async event => {
-    await session.record(event, {
+    await session.recordEvent(event, {
       tools,
       model: options.model,
       session: { title: sessionInfo.title, sources: sessionInfo.sources },

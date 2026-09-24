@@ -1,4 +1,4 @@
-import { defineTool } from '@cieljs/agent-kit';
+import { defineTool } from 'cieljs/agent-kit';
 import { Type } from 'typebox';
 
 import type { RoomInfo } from '../../shared/types.ts';

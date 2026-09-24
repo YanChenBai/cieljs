@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { cp } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
-import { models } from '@cieljs/model-kit/models';
+import { models } from 'cieljs/model-kit/models';
 import { app } from 'electron';
 import * as z from 'zod';
 
@@ -155,22 +154,6 @@ export async function migrateWatchResources() {
       if (existsSync(source)) {
         await copyMissingResources(source, join(root, name));
       }
-    }
-  }
-
-  if (app.isPackaged) {
-    return;
-  }
-
-  const require = createRequire(import.meta.url);
-  const packageRoot = resolve(dirname(require.resolve('@cieljs/perception')), '../../hearing');
-
-  for (const name of ['models', 'voiceprints']) {
-    const source = join(packageRoot, name);
-    const target = join(root, name);
-
-    if (existsSync(source)) {
-      await copyMissingResources(source, target);
     }
   }
 }

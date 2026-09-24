@@ -118,7 +118,7 @@ export const archiveMemoryTool = defineTool(
     description: `${label}：使用记忆 ID 和最新 revision（作为 expectedRevision），归档错误、过时或不应继续使用的记录。归档后不再出现在默认搜索和读取中，但历史仍保留；这不是物理删除。仅可操作工具名称指定范围的记忆。`,
     execute: async (params, { signal }) => {
       signal?.throwIfAborted();
-      await memory.forget(params.id, { expectedRevision: params.expectedRevision });
+      await memory.archive(params.id, { expectedRevision: params.expectedRevision });
 
       return memoryResult({ id: params.id, archived: true });
     },

@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { InvestigationChat, type InvestigationClient } from '@cieljs/investigation';
 import { PanelLeftClose, PanelLeftOpen } from '@lucide/vue';
 import { Button } from '@vuetify/v0/components';
+import { InvestigationChat, type InvestigationClient } from 'cieljs/investigation';
 import { onMounted, onUnmounted, shallowRef } from 'vue';
 
 import type { RoomInfo } from '../../../shared/types.ts';
 import { rpc, watchBridge } from '../rpc.ts';
 
-import '@cieljs/console/style.css';
-import '@cieljs/investigation/style.css';
+import 'cieljs/console/style.css';
+import 'cieljs/investigation/style.css';
 
 const currentRoom = shallowRef<RoomInfo>();
 const sidebarCollapsed = shallowRef(false);

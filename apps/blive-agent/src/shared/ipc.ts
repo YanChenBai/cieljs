@@ -1,4 +1,4 @@
-import type { ASRModelId } from '@cieljs/hearing';
+import type { ASRModelId } from 'cieljs/hearing';
 
 import type {
   Account,

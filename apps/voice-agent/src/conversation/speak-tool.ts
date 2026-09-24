@@ -1,5 +1,5 @@
-import { defineTool } from '@cieljs/agent-kit';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import { defineTool } from 'cieljs/agent-kit';
 import { Type } from 'typebox';
 
 import type { AudioOutput, DeviceSelector } from '../audio/types.ts';

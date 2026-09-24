@@ -1,5 +1,3 @@
-// packages/embedding/src/qwen.ts
-
 import {
   resolveEmbeddingProvider,
   type EmbeddingOptions,
@@ -15,24 +13,34 @@ export const QWEN_EMBEDDING_SOURCE = 'onnx-community/Qwen3-Embedding-0.6B-ONNX';
 
 const huggingFacePrefix = `https://huggingface.co/${QWEN_EMBEDDING_SOURCE}/resolve/main/`;
 const modelScopePrefix = `https://modelscope.cn/models/${QWEN_EMBEDDING_SOURCE}/resolve/master/`;
-const fetchModelFile = env.fetch;
+let fetchInstalled = false;
 
-// 仅重定向当前模型，保留 Transformers.js 的缓存键和其他模型的下载行为。
-env.fetch = (input, init) => {
-  const url = input.toString();
-
-  if (!url.startsWith(huggingFacePrefix)) {
-    return fetchModelFile(input, init);
+function installModelFetch(): void {
+  if (fetchInstalled) {
+    return;
   }
 
-  const headers = new Headers(init?.headers);
-  headers.delete('authorization');
+  const fetchModelFile = env.fetch;
 
-  return fetchModelFile(modelScopePrefix + url.slice(huggingFacePrefix.length), {
-    ...init,
-    headers,
-  });
-};
+  // 仅重定向当前模型；导入包时不修改 Transformers.js 的全局下载函数。
+  env.fetch = (input, init) => {
+    const url = input.toString();
+
+    if (!url.startsWith(huggingFacePrefix)) {
+      return fetchModelFile(input, init);
+    }
+
+    const headers = new Headers(init?.headers);
+    headers.delete('authorization');
+
+    return fetchModelFile(modelScopePrefix + url.slice(huggingFacePrefix.length), {
+      ...init,
+      headers,
+    });
+  };
+
+  fetchInstalled = true;
+}
 
 export const QWEN_EMBEDDING_DIMENSIONS = 1024;
 
@@ -49,12 +57,15 @@ export function qwen(options: QwenEmbeddingOptions): ResolvedEmbeddingProvider {
 
   assertDimensions(dimensions);
 
-  const loadExtractor = () =>
-    pipeline('feature-extraction', QWEN_EMBEDDING_SOURCE, {
+  const loadExtractor = () => {
+    installModelFetch();
+
+    return pipeline('feature-extraction', QWEN_EMBEDDING_SOURCE, {
       cache_dir: options.cacheDir,
       dtype,
       device: options.device,
     });
+  };
 
   let extractorPromise: ReturnType<typeof loadExtractor> | undefined;
 

@@ -1,13 +1,14 @@
 import { join } from 'node:path';
 
-import { createKWS, type ASRModelId, type ASROptions, type KWS } from '@cieljs/hearing';
-import type { McpTools } from '@cieljs/mcp';
-import { createPerception, type PerceptionOptions } from '@cieljs/perception';
-import type { Storage } from '@cieljs/storage';
-import type { TraceHost } from '@cieljs/trace/host';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { Ciel, CielSession } from 'cieljs';
+import type { CielData } from 'cieljs';
+import { createKWS, type ASRModelId, type ASROptions, type KWS } from 'cieljs/hearing';
+import type { McpTools } from 'cieljs/mcp';
+import { createPerception, type PerceptionOptions } from 'cieljs/perception';
+import type { Storage } from 'cieljs/storage';
+import type { TraceHost } from 'cieljs/trace/host';
 
 import type {
   Account,
@@ -39,6 +40,7 @@ export type { WatchWakeOptions } from './scheduling/wake.ts';
 export interface BliveAgentOptions {
   mcp?: McpTools;
   storage: Storage;
+  data: CielData;
   trace?: TraceHost;
   model: Model<Api>;
   apiKey?: string;
@@ -329,7 +331,7 @@ class BliveAgentRuntime implements BliveAgent {
     }
 
     return createWatchCiel({
-      storage: this.options.storage,
+      data: this.options.data,
       model: this.options.model,
       apiKey: this.options.apiKey,
       mode,

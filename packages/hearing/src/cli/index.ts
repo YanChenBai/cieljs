@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { installModel } from './model.ts';
 import { createVoiceprint } from './voiceprint.ts';
 
@@ -47,7 +49,7 @@ async function main(): Promise<void> {
 function printHelp(): void {
   process.stdout.write(
     [
-      'Usage: vp run @cieljs/hearing#dev -- <command> [options]',
+      'Usage: hearing <command> [options]',
       '',
       'Commands:',
       '  install-model  Install speech models',

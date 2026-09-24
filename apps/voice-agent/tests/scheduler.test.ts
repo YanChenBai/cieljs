@@ -1,5 +1,5 @@
-import type { Perception, PerceptionSnapshot } from '@cieljs/perception';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { Perception, PerceptionSnapshot } from 'cieljs/perception';
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 
 import { ConversationScheduler, type VoiceAgentEvent } from '../src/conversation/scheduler.ts';

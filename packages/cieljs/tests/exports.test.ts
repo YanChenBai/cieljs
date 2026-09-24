@@ -9,11 +9,12 @@ import { createTraceRouter } from 'cieljs/trace/host';
 import { VectorService, vectorStorage } from 'cieljs/vector';
 import { expect, test } from 'vite-plus/test';
 
-import { defineCiel } from '../src/index.ts';
+import { Ciel, openCielData } from '../src/index.ts';
 
 // 子路径是同级包的逐字再导出：这里既验证导出形态，也验证 exports 映射能被真实解析。
 test('子路径再导出与同级包保持同一实现', async () => {
-  expect(defineCiel).toBeTypeOf('function');
+  expect(Ciel).toBeTypeOf('function');
+  expect(openCielData).toBeTypeOf('function');
   expect(defineTool).toBeTypeOf('function');
   expect(createMcp).toBeTypeOf('function');
   expect(createTraceRouter).toBeTypeOf('function');

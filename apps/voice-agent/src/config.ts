@@ -1,8 +1,8 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import type { QwenEmbeddingOptions } from '@cieljs/embed';
-import type { SpeakerProfile } from '@cieljs/perception';
+import type { QwenEmbeddingOptions } from 'cieljs/embed';
+import type { SpeakerProfile } from 'cieljs/perception';
 
 import type { DeviceSelector } from './audio/types.ts';
 

@@ -271,42 +271,6 @@ importers:
 
   apps/blive-agent:
     dependencies:
-      '@cieljs/agent-kit':
-        specifier: workspace:*
-        version: link:../../packages/agent-kit
-      '@cieljs/console':
-        specifier: workspace:*
-        version: link:../../packages/console
-      '@cieljs/hearing':
-        specifier: workspace:*
-        version: link:../../packages/hearing
-      '@cieljs/investigation':
-        specifier: workspace:*
-        version: link:../../packages/investigation
-      '@cieljs/mcp':
-        specifier: workspace:*
-        version: link:../../packages/mcp
-      '@cieljs/memory':
-        specifier: workspace:*
-        version: link:../../packages/memory
-      '@cieljs/model-kit':
-        specifier: workspace:*
-        version: link:../../packages/model-kit
-      '@cieljs/perception':
-        specifier: workspace:*
-        version: link:../../packages/perception
-      '@cieljs/session':
-        specifier: workspace:*
-        version: link:../../packages/session
-      '@cieljs/storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
-      '@cieljs/trace':
-        specifier: workspace:*
-        version: link:../../packages/trace
-      '@cieljs/vector':
-        specifier: workspace:*
-        version: link:../../packages/vector
       '@earendil-works/pi-agent-core':
         specifier: 'catalog:'
         version: 0.87.0(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.5)
@@ -377,33 +341,6 @@ importers:
 
   apps/voice-agent:
     dependencies:
-      '@cieljs/agent-kit':
-        specifier: workspace:*
-        version: link:../../packages/agent-kit
-      '@cieljs/embed':
-        specifier: workspace:*
-        version: link:../../packages/embed
-      '@cieljs/mcp':
-        specifier: workspace:*
-        version: link:../../packages/mcp
-      '@cieljs/memory':
-        specifier: workspace:*
-        version: link:../../packages/memory
-      '@cieljs/model-kit':
-        specifier: workspace:*
-        version: link:../../packages/model-kit
-      '@cieljs/perception':
-        specifier: workspace:*
-        version: link:../../packages/perception
-      '@cieljs/session':
-        specifier: workspace:*
-        version: link:../../packages/session
-      '@cieljs/storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
-      '@cieljs/vector':
-        specifier: workspace:*
-        version: link:../../packages/vector
       '@earendil-works/pi-agent-core':
         specifier: 'catalog:'
         version: 0.87.0(supports-color@7.2.0)(ws@8.21.3)(zod@4.5.4)

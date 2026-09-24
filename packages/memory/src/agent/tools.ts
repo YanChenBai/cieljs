@@ -59,7 +59,7 @@ export function memoryTools(options: MemoryToolsOptions): AgentTool[] {
     );
   }
 
-  if (options.forget !== false) {
+  if (options.archive !== false) {
     tools.push(
       archiveMemoryTool({
         name: 'archive_current_space_memory',
@@ -116,7 +116,7 @@ export function globalMemoryTools(options: GlobalMemoryToolsOptions): AgentTool[
     );
   }
 
-  if (options.forget !== false) {
+  if (options.archive !== false) {
     tools.push(
       archiveMemoryTool({
         name: 'archive_global_memory',

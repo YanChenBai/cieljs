@@ -22,15 +22,6 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
-    "@cieljs/agent-kit": "workspace:*",
-    "@cieljs/embed": "workspace:*",
-    "@cieljs/mcp": "workspace:*",
-    "@cieljs/memory": "workspace:*",
-    "@cieljs/model-kit": "workspace:*",
-    "@cieljs/perception": "workspace:*",
-    "@cieljs/session": "workspace:*",
-    "@cieljs/storage": "workspace:*",
-    "@cieljs/vector": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "cieljs": "workspace:*",

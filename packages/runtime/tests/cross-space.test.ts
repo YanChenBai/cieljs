@@ -17,13 +17,13 @@ test('跨 Space 读取需要授权，读取不会扩大房间写入权限', asyn
   const root = await mkdtemp(join(tmpdir(), 'ciel-cross-space-'));
   const storage = await Storage.open({ dataDir: root, modules: [sessionStorage, memoryStorage] });
   const sessions = await SessionManager.open({ storage, namespace: 'session' });
-  const memory = await MemoryManager.open({ storage });
+  const memory = await MemoryManager.open({ storage, timeZone: 'Asia/Shanghai' });
   const faux = registerFauxProvider();
 
   try {
     const other = await sessions
       .space('room:2')
-      .session({ id: 'room:2:today', sources: ['streamer:2'] });
+      .openSession({ id: 'room:2:today', sources: ['streamer:2'] });
 
     const message = await other.appendMessage({
       role: 'user',

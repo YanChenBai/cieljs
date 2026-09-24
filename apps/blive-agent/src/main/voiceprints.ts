@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { join, parse } from 'node:path';
 
-import type { SpeakerProfile } from '@cieljs/hearing';
+import type { SpeakerProfile } from 'cieljs/hearing';
 
 /** 每次创建感知时重新扫描，文件名就是识别结果中的说话人名称。 */
 export function loadVoiceprints(dataDir: string): SpeakerProfile[] {

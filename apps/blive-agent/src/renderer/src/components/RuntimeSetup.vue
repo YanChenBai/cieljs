@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { ASRModelId } from '@cieljs/hearing';
 import { Download, LoaderCircle } from '@lucide/vue';
 import { Button, Progress } from '@vuetify/v0/components';
+import type { ASRModelId } from 'cieljs/hearing';
 import { computed } from 'vue';
 
 import type { HearingModelStatus, WatchConfigurationStatus } from '../../../shared/types.ts';

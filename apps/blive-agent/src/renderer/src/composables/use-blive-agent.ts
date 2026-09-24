@@ -1,4 +1,3 @@
-import type { ASRModelId } from '@cieljs/hearing';
 import type { WatchBridgeEvent, WatchSnapshot } from '@shared/ipc.ts';
 import type {
   Account,
@@ -10,6 +9,7 @@ import type {
   WatchEvent,
 } from '@shared/types.ts';
 import { useTimer } from '@vuetify/v0';
+import type { ASRModelId } from 'cieljs/hearing';
 import { computed, onMounted, onUnmounted, shallowRef } from 'vue';
 
 import { watchBridge } from '../rpc.ts';

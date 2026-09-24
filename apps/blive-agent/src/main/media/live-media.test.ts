@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 
-import type { Perception } from '@cieljs/perception';
+import type { Perception } from 'cieljs/perception';
 import { beforeEach, expect, it, vi } from 'vite-plus/test';
 
 import { ffmpegArguments, LiveMedia } from './live-media.ts';

@@ -8,7 +8,6 @@ export { estimateContextTokens, estimateAgentMessageTokens } from './tokens.ts';
 export type { ContextTokenEstimate } from './tokens.ts';
 
 export type {
-  AppendCompactionInput,
   CompactionOptions,
   EmbeddingOptions,
   EmbeddingProvider,

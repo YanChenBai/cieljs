@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { ASR_MODELS, DEFAULT_ASR_MODEL, type ASRModelId } from '@cieljs/hearing';
+import { ASR_MODELS, DEFAULT_ASR_MODEL, type ASRModelId } from 'cieljs/hearing';
 import * as z from 'zod';
 
 const settingsSchema = z.object({ model: z.enum(Object.keys(ASR_MODELS) as ASRModelId[]) });

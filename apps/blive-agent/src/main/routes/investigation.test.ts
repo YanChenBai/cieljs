@@ -1,17 +1,25 @@
-import { SessionManager, sessionStorage } from '@cieljs/session';
-import { Storage } from '@cieljs/storage';
 import { createRouterClient } from '@orpc/server';
+import type { CielData } from 'cieljs';
+import { SessionManager, sessionStorage } from 'cieljs/session';
+import { Storage } from 'cieljs/storage';
 import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test';
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(async () => {}),
   investigate: vi.fn(async () => {}),
   close: vi.fn(async () => {}),
-  defineCiel: vi.fn(),
+  constructCiel: vi.fn(),
   completeSimple: vi.fn(),
 }));
 
-vi.mock('cieljs', () => ({ defineCiel: mocks.defineCiel }));
+vi.mock('cieljs', () => ({
+  Ciel: class {
+    constructor(options: unknown) {
+      return mocks.constructCiel(options);
+    }
+  },
+}));
+
 vi.mock('@earendil-works/pi-ai/compat', () => ({ completeSimple: mocks.completeSimple }));
 
 import type { RoomInfo } from '../../shared/types.ts';
@@ -36,7 +44,7 @@ beforeEach(async () => {
   storage = await Storage.open({ dataDir: 'memory://', modules: [sessionStorage] });
   sessions = await SessionManager.open({ storage, namespace: 'investigation' });
 
-  mocks.defineCiel.mockReturnValue({
+  mocks.constructCiel.mockReturnValue({
     start: mocks.start,
     investigate: mocks.investigate,
     close: mocks.close,
@@ -56,6 +64,7 @@ afterEach(async () => {
 function createRoutes(current: { room?: RoomInfo; sessionId?: string } = {}) {
   return createInvestigationRoutes({
     storage,
+    data: { storage } as CielData,
     sessions,
     resolveModel: () => ({ model: { id: 'test' } as never }),
     api: { room: vi.fn(async () => room) } as never,
@@ -164,13 +173,14 @@ it('同一调查拒绝并发回答', async () => {
 });
 
 it('从 Session 恢复 Investigation 标题并允许继续提问', async () => {
-  await sessions.space('global').session({
+  await sessions.space('global').openSession({
     id: 'investigation:global:history',
     title: '持久化调查标题',
   });
 
   const routes = createInvestigationRoutes({
     storage,
+    data: { storage } as CielData,
     sessions,
     resolveModel: () => ({ model: { id: 'test' } as never }),
     api: { room: vi.fn(async () => room) } as never,
@@ -202,19 +212,19 @@ it('创建、自动标题与手动改名都会写入 Session', async () => {
   const conversation = await client.create({ target: { type: 'global' } });
 
   await expect(
-    (await sessions.getAnySession(conversation.sessionId))?.getInfo(),
+    (await sessions.getSessionAcrossSpaces(conversation.sessionId))?.getInfo(),
   ).resolves.toMatchObject({ title: '新调查' });
 
   await client.prompt({ sessionId: conversation.sessionId, content: '比较所有直播间' });
 
   await expect(
-    (await sessions.getAnySession(conversation.sessionId))?.getInfo(),
+    (await sessions.getSessionAcrossSpaces(conversation.sessionId))?.getInfo(),
   ).resolves.toMatchObject({ title: '跨直播间观看比较' });
 
   await client.rename({ sessionId: conversation.sessionId, title: '手动标题' });
 
   await expect(
-    (await sessions.getAnySession(conversation.sessionId))?.getInfo(),
+    (await sessions.getSessionAcrossSpaces(conversation.sessionId))?.getInfo(),
   ).resolves.toMatchObject({ title: '手动标题' });
 });
 
@@ -226,5 +236,5 @@ it('删除调查会话并从列表与 Session 存储中移除', async () => {
   await client.delete({ sessionId: conversation.sessionId });
 
   await expect(client.list()).resolves.toEqual([]);
-  await expect(sessions.getAnySession(conversation.sessionId)).resolves.toBeNull();
+  await expect(sessions.getSessionAcrossSpaces(conversation.sessionId)).resolves.toBeNull();
 });

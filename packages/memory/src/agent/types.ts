@@ -28,7 +28,7 @@ export interface MemoryToolsOptions {
   rememberDaily?: boolean;
   rememberLongTerm?: boolean;
   update?: boolean;
-  forget?: boolean;
+  archive?: boolean;
   searchLimit?: number;
   maxReadChars?: number;
   crossSpace?: CrossSpaceMemoryOptions;
@@ -40,7 +40,7 @@ export interface GlobalMemoryToolsOptions {
   sourcesMode?: 'append' | 'replace';
   remember?: boolean;
   update?: boolean;
-  forget?: boolean;
+  archive?: boolean;
   maxReadChars?: number;
 }
 

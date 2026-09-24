@@ -1,4 +1,4 @@
-import { DEFAULT_VISION_PROMPT, type PerceptionContextInput } from '@cieljs/perception';
+import { DEFAULT_VISION_PROMPT, type PerceptionContextInput } from 'cieljs/perception';
 
 /** 视觉使用包的默认 context；听觉分支同时注入转写说明和可靠性规则。 */
 

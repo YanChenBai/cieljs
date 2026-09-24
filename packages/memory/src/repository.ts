@@ -201,7 +201,7 @@ export class MemoryRepository {
     return result;
   }
 
-  async forget(selector: MemorySelector, id: string, expectedRevision: number): Promise<void> {
+  async archive(selector: MemorySelector, id: string, expectedRevision: number): Promise<void> {
     integerOption(expectedRevision, 'expectedRevision', 1, 2147483646);
 
     await this.db.transaction(async transaction => {

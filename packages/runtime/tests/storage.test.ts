@@ -21,17 +21,17 @@ test('同库业务隔离、跨业务缓存复用与调试投影重放', async ()
   });
   await using sessions = await SessionManager.open({ storage, namespace: 'session', vectors });
   await using investigations = await SessionManager.open({ storage, namespace: 'investigation' });
-  await using memory = await MemoryManager.open({ storage, vectors });
-  const session = await sessions.space('room').session();
-  const investigation = await investigations.space('room').session();
+  await using memory = await MemoryManager.open({ storage, timeZone: 'Asia/Shanghai', vectors });
+  const session = await sessions.space('room').openSession();
+  const investigation = await investigations.space('room').openSession();
   const message = { role: 'user' as const, content: 'shared text', timestamp: 1 };
 
-  const record = await session.record({ type: 'message_end', message });
+  const record = await session.recordEvent({ type: 'message_end', message });
   await memory.space('room').longTerm.remember({ content: 'shared text' });
   await Promise.all([sessions.flushIndexes(), memory.flushIndexes()]);
   expect(embedBatch.mock.calls.flatMap(([texts]) => texts)).toEqual(['shared text']);
-  expect(await sessions.getAnySession(investigation.id)).toBeNull();
-  expect(await investigations.getAnySession(session.id)).toBeNull();
+  expect(await sessions.getSessionAcrossSpaces(investigation.id)).toBeNull();
+  expect(await investigations.getSessionAcrossSpaces(session.id)).toBeNull();
   expect(await session.search('shared text', { mode: 'vector' })).not.toHaveLength(0);
 
   const host = await TraceHost.open({ storage });

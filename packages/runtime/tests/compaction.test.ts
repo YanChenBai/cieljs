@@ -12,11 +12,11 @@ test('会话超过预算后自动压缩，并把摘要同步给 Agent', async ()
     modules: [sessionStorage, memoryStorage],
   });
   await using sessions = await SessionManager.open({ storage, namespace: 'session' });
-  await using memory = await MemoryManager.open({ storage });
+  await using memory = await MemoryManager.open({ storage, timeZone: 'Asia/Shanghai' });
   const faux = registerFauxProvider();
 
   try {
-    const session = await sessions.space('room:1').session({ id: 'compaction' });
+    const session = await sessions.space('room:1').openSession({ id: 'compaction' });
     const filler = '直播间里发生的一段历史对话内容。'.repeat(20);
 
     for (let index = 0; index < 6; index += 1) {
@@ -68,11 +68,11 @@ test('手动压缩忽略阈值并同步 Agent 转录', async () => {
     modules: [sessionStorage, memoryStorage],
   });
   await using sessions = await SessionManager.open({ storage, namespace: 'session' });
-  await using memory = await MemoryManager.open({ storage });
+  await using memory = await MemoryManager.open({ storage, timeZone: 'Asia/Shanghai' });
   const faux = registerFauxProvider();
 
   try {
-    const session = await sessions.space('room:2').session({ id: 'manual-compaction' });
+    const session = await sessions.space('room:2').openSession({ id: 'manual-compaction' });
 
     for (let index = 0; index < 3; index += 1) {
       await session.appendMessage({

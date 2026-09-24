@@ -1,7 +1,7 @@
-import type { ASRModelId, KWS, WakeEvent } from '@cieljs/hearing';
-import type { Perception } from '@cieljs/perception';
-import type { TraceHost } from '@cieljs/trace/host';
 import type { CielSession } from 'cieljs';
+import type { ASRModelId, KWS, WakeEvent } from 'cieljs/hearing';
+import type { Perception } from 'cieljs/perception';
+import type { TraceHost } from 'cieljs/trace/host';
 
 import type { RoomInfo, WatchEvent, WatchMode } from '../shared/types.ts';
 import type { LiveMedia } from './media/live-media.ts';

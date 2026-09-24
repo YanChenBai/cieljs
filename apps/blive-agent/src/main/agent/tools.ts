@@ -1,5 +1,5 @@
-import { defineTool } from '@cieljs/agent-kit';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import { defineTool } from 'cieljs/agent-kit';
 import { Type, type Static } from 'typebox';
 
 import type { DanmakuDelivery, RoomInfo, WatchEvent } from '../../shared/types.ts';

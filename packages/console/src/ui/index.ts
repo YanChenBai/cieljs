@@ -7,13 +7,8 @@ export { default as ToolCallRenderer } from './components/content/ToolCallView.v
 export { default as SessionStatus } from './components/session/SessionStatusBar.vue';
 export { default as SessionToolbar } from './components/session/SessionToolbar.vue';
 export { useConsole } from './composables/use-console.ts';
-export type {
-  TraceClient,
-  TraceEntry,
-  TraceSession,
-  TraceUsage,
-  TraceUsageState,
-} from '@cieljs/trace';
+export type { TraceEntry, TraceSession, TraceUsage, TraceUsageState } from '@cieljs/trace/protocol';
+export type { TraceClient } from '@cieljs/trace/client';
 export type { ToolRendererProps, ToolRenderers } from './tool-renderers.ts';
 export type {
   MessageRenderer,

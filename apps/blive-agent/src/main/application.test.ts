@@ -4,9 +4,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vite-plus/test';
 
 const mocks = vi.hoisted(() => ({
   order: [] as string[],
-  openStorage: vi.fn(),
+  openData: vi.fn(),
   openTrace: vi.fn(),
-  openSessions: vi.fn(),
   createMcp: vi.fn(),
   createRuntime: vi.fn(),
   checkpoint: vi.fn(),
@@ -17,23 +16,16 @@ const mocks = vi.hoisted(() => ({
   resolveConfig: vi.fn(),
 }));
 
-vi.mock('@cieljs/storage', () => ({ Storage: { open: mocks.openStorage } }));
+vi.mock('cieljs', () => ({ openCielData: mocks.openData }));
 
-vi.mock('@cieljs/trace/host', () => ({
+vi.mock('cieljs/trace/host', () => ({
   TraceHost: { open: mocks.openTrace },
   traceStorage: {},
   createTraceRouter: () => ({}),
 }));
 
-vi.mock('@cieljs/mcp', () => ({ createMcp: mocks.createMcp }));
-vi.mock('@cieljs/memory', () => ({ memoryStorage: {} }));
-
-vi.mock('@cieljs/session', () => ({
-  sessionStorage: {},
-  SessionManager: { open: mocks.openSessions },
-}));
-
-vi.mock('@cieljs/vector', () => ({ vectorStorage: {} }));
+vi.mock('cieljs/mcp', () => ({ createMcp: mocks.createMcp }));
+vi.mock('cieljs/vector', () => ({ vectorStorage: {} }));
 
 vi.mock('./config.ts', () => ({
   watchDataDirectory: () => '/watch-test',
@@ -84,9 +76,16 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.useFakeTimers();
   mocks.order.length = 0;
-  mocks.openStorage.mockResolvedValue({ ...resource('storage'), checkpoint: mocks.checkpoint });
+
+  mocks.openData.mockResolvedValue({
+    storage: { checkpoint: mocks.checkpoint },
+    investigations: resource('sessions'),
+    [Symbol.asyncDispose]: async () => {
+      mocks.order.push('sessions', 'storage');
+    },
+  });
+
   mocks.openTrace.mockResolvedValue({ ...resource('trace'), record: vi.fn() });
-  mocks.openSessions.mockResolvedValue(resource('sessions'));
   mocks.createMcp.mockResolvedValue(resource('mcp'));
   mocks.resolveConfig.mockReturnValue({ ai: {}, wake: false });
 
@@ -134,8 +133,8 @@ it('账号和快照无需 AI 配置，首次观看只创建一次运行时，关
     'runtime',
     'page',
     'mcp',
-    'sessions',
     'trace',
+    'sessions',
     'storage',
   ]);
 
@@ -161,7 +160,7 @@ it('手动压缩路由转发给运行时，尚未启动时拒绝', async () => {
 it('初始化中途失败时释放已打开资源和 checkpoint 定时器', async () => {
   mocks.createMcp.mockRejectedValue(new Error('MCP 配置无效'));
   await expect(createWatchApplication(window)).rejects.toThrow('MCP 配置无效');
-  expect(mocks.order).toEqual(['sessions', 'trace', 'storage']);
+  expect(mocks.order).toEqual(['trace', 'sessions', 'storage']);
   expect(vi.getTimerCount()).toBe(0);
 });
 

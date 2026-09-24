@@ -53,6 +53,10 @@ describe('qwen', () => {
   });
 
   test('应该从 ModelScope 下载模型且不转发 Hugging Face 凭据', async () => {
+    await qwen({ cacheDir: '.cache', dimensions: 2 }).embed('初始化下载', {
+      purpose: 'query',
+    });
+
     const headers = new Headers({ authorization: 'Bearer test', 'user-agent': 'test' });
 
     await env.fetch(
@@ -72,6 +76,10 @@ describe('qwen', () => {
   });
 
   test('应该保留其他模型的下载请求', async () => {
+    await qwen({ cacheDir: '.cache', dimensions: 2 }).embed('初始化下载', {
+      purpose: 'query',
+    });
+
     const url = 'https://huggingface.co/other/model/resolve/main/config.json';
     const options = { headers: { authorization: 'Bearer test' } };
 

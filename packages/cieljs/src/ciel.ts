@@ -1,18 +1,16 @@
 import { Runtime } from '@cieljs/runtime';
 
-import { CielResources } from './resources.ts';
-import type { Ciel, DefineCielOptions, InvestigateOptions, OpenSessionOptions } from './types.ts';
+import type { CielOptions, CielStatus, InvestigateOptions, OpenSessionOptions } from './types.ts';
 
-class CielInstance implements Ciel {
-  private currentStatus: Ciel['status'] = 'idle';
+export class Ciel implements AsyncDisposable {
+  private currentStatus: CielStatus = 'idle';
   private startPromise: Promise<void> | undefined;
   private closePromise: Promise<void> | undefined;
-  private resources: CielResources | undefined;
   private runtime: Runtime | undefined;
 
-  constructor(private readonly options: DefineCielOptions) {}
+  constructor(private readonly options: CielOptions) {}
 
-  get status(): Ciel['status'] {
+  get status(): CielStatus {
     return this.currentStatus;
   }
 
@@ -55,7 +53,9 @@ class CielInstance implements Ciel {
 
   private async startResources(): Promise<void> {
     try {
-      const resources = await CielResources.open(this.options);
+      if (this.options.data.isClosed) {
+        throw new Error('CielData 已关闭');
+      }
 
       const runtime = new Runtime({
         model: this.options.model,
@@ -63,12 +63,11 @@ class CielInstance implements Ciel {
         systemPrompt: this.options.systemPrompt,
         tools: [...(this.options.tools ?? []), ...(this.options.mcp?.tools ?? [])],
         investigation: this.options.investigation,
-        sessionManager: resources.sessionManager,
-        investigationManager: resources.investigationManager,
-        memoryManager: resources.memoryManager,
+        sessionManager: this.options.data.sessions,
+        investigationManager: this.options.data.investigations,
+        memoryManager: this.options.data.memories,
       });
 
-      this.resources = resources;
       this.runtime = runtime;
 
       await runtime.start();
@@ -77,17 +76,13 @@ class CielInstance implements Ciel {
         this.currentStatus = 'running';
       }
     } catch (error) {
-      const cleanupResults = await Promise.allSettled([
-        this.runtime?.close(),
-        this.resources?.[Symbol.asyncDispose](),
-      ]);
+      const cleanupResults = await Promise.allSettled([this.runtime?.close()]);
 
       const cleanupFailures = cleanupResults
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
         .map(result => result.reason);
 
       this.runtime = undefined;
-      this.resources = undefined;
       this.startPromise = undefined;
 
       if (this.currentStatus !== 'closing') {
@@ -119,15 +114,13 @@ class CielInstance implements Ciel {
       this.currentStatus = 'closing';
     }
 
-    // Runtime 先停止所有 Agent，再释放它们依赖的 Session 与 Memory managers。
+    // 数据层由 CielData 持有，可供下一个 Ciel 实例复用。
     const runtimeResults = await Promise.allSettled([this.runtime?.close()]);
-    const resourceResults = await Promise.allSettled([this.resources?.[Symbol.asyncDispose]()]);
 
     this.runtime = undefined;
-    this.resources = undefined;
     this.currentStatus = 'closed';
 
-    const failures = [...runtimeResults, ...resourceResults]
+    const failures = runtimeResults
       .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
       .map(result => result.reason);
 
@@ -143,8 +136,4 @@ class CielInstance implements Ciel {
 
     return this.runtime;
   }
-}
-
-export function defineCiel(options: DefineCielOptions): Ciel {
-  return new CielInstance(options);
 }

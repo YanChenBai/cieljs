@@ -91,7 +91,7 @@ export const readAnyMemoryTool = defineTool(
       '在宿主授权的记忆库中，按记忆 ID 只读返回全局层或任意空间中当前有效记忆的一页正文及来源、revision，无需先发现空间。首次 offset 为 0，继续使用 nextOffset 直到 null；不存在、已归档或已过期时返回 memory: null。',
     execute: async (params, { signal }) => {
       signal?.throwIfAborted();
-      const memory = await manager.getAny(params.id);
+      const memory = await manager.getAcrossSpaces(params.id);
 
       return memoryResult(
         memory ? pageMemory(memory, params.offset ?? 0, resolved.maxReadChars) : { memory: null },

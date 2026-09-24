@@ -9,7 +9,6 @@ import type { SessionRepository } from './repository.ts';
 import type { SessionRetrieval } from './retrieval.ts';
 import { estimateContextTokens } from './tokens.ts';
 import type {
-  AppendCompactionInput,
   CompactionOptions,
   SessionInfo,
   SessionMessageListOptions,
@@ -57,7 +56,7 @@ export class Session {
     });
   }
 
-  record(event: RuntimeEvent, metadata?: RuntimeMetadata) {
+  recordEvent(event: RuntimeEvent, metadata?: RuntimeMetadata) {
     return this.services.operate(async () => {
       const record = await this.services.storage.journal.record(
         this.id,
@@ -88,10 +87,6 @@ export class Session {
     );
   }
 
-  getMessagesAfter(afterSeq: number) {
-    return this.getMessages({ afterSeq });
-  }
-
   getMessagesRange(fromSeq: number, toSeq: number) {
     return this.services.operate(() =>
       this.services.repository.getMessagesRange(this.selector, fromSeq, toSeq),
@@ -104,18 +99,8 @@ export class Session {
     );
   }
 
-  appendCompaction(input: AppendCompactionInput) {
-    return this.services.operate(() =>
-      this.services.repository.appendCompaction(this.selector, input),
-    );
-  }
-
   getLatestCompaction() {
     return this.services.operate(() => this.services.repository.getLatestCompaction(this.selector));
-  }
-
-  getLastMessage() {
-    return this.services.operate(() => this.services.repository.getLastMessage(this.selector));
   }
 
   context(): Promise<AgentMessage[]> {
@@ -131,17 +116,6 @@ export class Session {
       return compaction
         ? [createSummaryMessage(compaction.summary, compaction.createdAt.getTime()), ...messages]
         : messages;
-    });
-  }
-
-  /** 返回尚未压缩的消息行，供需要消息序号的历史检查工具使用。 */
-  getActiveMessageRows() {
-    return this.services.operate(async () => {
-      const compaction = await this.services.repository.getLatestCompaction(this.selector);
-
-      return this.services.repository.getMessages(this.selector, {
-        afterSeq: compaction?.throughSeq ?? 0,
-      });
     });
   }
 
@@ -218,7 +192,7 @@ export class Session {
       ).tokens;
 
       // 压缩也要进事实流水，Trace 与其他消费者才能看到这一步并回放。
-      await this.record({
+      await this.recordEvent({
         type: 'session_compaction',
         summary: compaction.summary,
         throughSeq: compaction.throughSeq,

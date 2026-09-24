@@ -1,5 +1,5 @@
-import type { TraceHost } from '@cieljs/trace/host';
 import type { Ciel } from 'cieljs';
+import type { TraceHost } from 'cieljs/trace/host';
 
 import type { WatchEvent } from '../../shared/types.ts';
 import type { BilibiliApi } from '../bilibili/api.ts';

@@ -1,6 +1,6 @@
-import type { WakeEvent } from '@cieljs/hearing';
-import type { Perception } from '@cieljs/perception';
 import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
+import type { WakeEvent } from 'cieljs/hearing';
+import type { Perception } from 'cieljs/perception';
 
 import type { WatchWakeOptions } from './wake.ts';
 

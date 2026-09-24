@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   check: vi.fn(async () => ({ valid: false, missingFiles: ['encoder'], modelsPath: '/models' })),
 }));
 
-vi.mock('@cieljs/hearing', () => ({
+vi.mock('cieljs/hearing', () => ({
   DEFAULT_ASR_MODEL: 'qwen3-asr-1.7b-int8',
   ASR_MODELS: { 'qwen3-asr-1.7b-int8': {}, 'sensevoice-small': {} },
   installModels: mocks.install,

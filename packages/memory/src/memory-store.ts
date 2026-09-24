@@ -3,7 +3,7 @@ import type { MemoryRepository } from './repository.ts';
 import type { MemoryRetrieval } from './retrieval.ts';
 import type {
   DailyRememberInput,
-  ForgetMemoryOptions,
+  ArchiveMemoryOptions,
   LongTermRememberInput,
   MemoryEntryFor,
   MemoryHistoryOptions,
@@ -34,7 +34,7 @@ export interface MemoryLayerStore<Layer extends MemoryLayer, RememberInput> {
     options?: Omit<MemorySourceSearchOptions, 'layers'>,
   ): Promise<MemorySourceSearchHit<Layer>[]>;
   update(id: string, input: UpdateMemoryInput): Promise<MemoryEntryFor<Layer>>;
-  forget(id: string, options: ForgetMemoryOptions): Promise<void>;
+  archive(id: string, options: ArchiveMemoryOptions): Promise<void>;
   history(id: string, options?: MemoryHistoryOptions): Promise<MemoryRevision[]>;
   getRevision(id: string, revision: number): Promise<MemoryRevision | null>;
 }
@@ -60,7 +60,7 @@ export interface SpaceMemory {
     options?: SpaceMemorySourceSearchOptions,
   ): Promise<MemorySourceSearchHit<'space.long_term' | 'space.daily'>[]>;
   update(id: string, input: UpdateMemoryInput): Promise<SpaceMemoryEntry>;
-  forget(id: string, options: ForgetMemoryOptions): Promise<void>;
+  archive(id: string, options: ArchiveMemoryOptions): Promise<void>;
   history(id: string, options?: MemoryHistoryOptions): Promise<MemoryRevision[]>;
   getRevision(id: string, revision: number): Promise<MemoryRevision | null>;
 }
@@ -124,9 +124,9 @@ class MemoryLayerStoreImplementation<
     ) as Promise<MemoryEntryFor<Layer>>;
   }
 
-  forget(id: string, options: ForgetMemoryOptions): Promise<void> {
+  archive(id: string, options: ArchiveMemoryOptions): Promise<void> {
     return this.services.operate(() =>
-      this.services.repository.forget(this.selector, id, options.expectedRevision),
+      this.services.repository.archive(this.selector, id, options.expectedRevision),
     );
   }
 
@@ -186,8 +186,8 @@ export function createSpaceMemory(services: MemoryStoreServices, spaceId: string
       services.operate(() =>
         services.repository.update(selector, id, input),
       ) as Promise<SpaceMemoryEntry>,
-    forget: (id, options) =>
-      services.operate(() => services.repository.forget(selector, id, options.expectedRevision)),
+    archive: (id, options) =>
+      services.operate(() => services.repository.archive(selector, id, options.expectedRevision)),
     history: (id, options) =>
       services.operate(() => services.repository.history(selector, id, options)),
     getRevision: (id, revision) =>
